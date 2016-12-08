@@ -2638,6 +2638,7 @@
         <module>kubernetes/docker-minimal-bundle</module>
         <module>kubernetes/integration-tests</module>
         <module>kubernetes/integration-tests-spark-jobs</module>
+        <module>kubernetes/integration-tests-spark-jobs-helpers</module>
       </modules>  
     </profile>
 
