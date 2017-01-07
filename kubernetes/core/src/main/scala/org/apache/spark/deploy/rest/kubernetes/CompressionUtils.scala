@@ -27,13 +27,25 @@ import org.apache.commons.io.IOUtils
 import scala.collection.mutable
 
 import org.apache.spark.deploy.rest.TarGzippedData
+import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ByteBufferOutputStream, Utils}
 
-private[spark] object CompressionUtils {
+private[spark] object CompressionUtils extends Logging {
+  // Defaults from TarArchiveOutputStream
   private val BLOCK_SIZE = 10240
   private val RECORD_SIZE = 512
   private val ENCODING = CharsetNames.UTF_8
 
+  /**
+   * Compresses all of the given paths into a gzipped-tar archive, returning the compressed data in
+   * memory as an instance of {@link TarGzippedData}. The files are taken without consideration to their
+   * original folder structure, and are added to the tar archive in a flat hierarchy. Directories are
+   * not allowed, and duplicate file names are de-duplicated by appending a numeric suffix to the file name,
+   * before the file extension. For example, if paths a/b.txt and b/b.txt were provided, then the files added
+   * to the tar archive would be b.txt and b-1.txt.
+   * @param paths A list of file paths to be archived
+   * @return An in-memory representation of the compressed data.
+   */
   def createTarGzip(paths: Iterable[String]): TarGzippedData = {
     val compressedBytesStream = Utils.tryWithResource(new ByteBufferOutputStream()) { raw =>
       Utils.tryWithResource(new GZIPOutputStream(raw)) { gzipping =>
@@ -54,7 +66,10 @@ private[spark] object CompressionUtils {
             val nameWithoutExtension = Files.getNameWithoutExtension(file.getName)
             var deduplicationCounter = 1
             while (usedFileNames.contains(resolvedFileName)) {
+              val oldResolvedFileName = resolvedFileName
               resolvedFileName = s"$nameWithoutExtension-$deduplicationCounter.$extension"
+              logWarning(s"File with name $oldResolvedFileName already exists. Trying to add with" +
+                s" file name $resolvedFileName instead.")
               deduplicationCounter += 1
             }
             usedFileNames += resolvedFileName
@@ -78,13 +93,24 @@ private[spark] object CompressionUtils {
     )
   }
 
+  /**
+   * Decompresses the provided tar archive to a directory.
+   * @param compressedData In-memory representation of the compressed data, ideally created via
+   *                       {@link createTarGzip}.
+   * @param rootOutputDir  Directory to write the output files to. All files from the tarball
+   *                       are written here in a flat hierarchy.
+   * @return List of file paths for each file that was unpacked from the archive.
+   */
   def unpackAndWriteCompressedFiles(
       compressedData: TarGzippedData,
       rootOutputDir: File): Seq[String] = {
     val paths = mutable.Buffer.empty[String]
     val compressedBytes = Base64.decodeBase64(compressedData.dataBase64)
     if (!rootOutputDir.exists) {
-      rootOutputDir.mkdir
+      if (!rootOutputDir.mkdirs) {
+        throw new IllegalStateException(s"Failed to create output directory for unpacking" +
+          s" files at ${rootOutputDir.getAbsolutePath}")
+      }
     } else if (rootOutputDir.isFile) {
       throw new IllegalArgumentException(s"Root dir for writing decompressed files: " +
          s"${rootOutputDir.getAbsolutePath} exists and is not a directory.")

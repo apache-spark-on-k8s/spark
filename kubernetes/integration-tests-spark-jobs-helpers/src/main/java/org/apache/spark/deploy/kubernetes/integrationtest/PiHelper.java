@@ -16,6 +16,10 @@
  */
 package org.apache.spark.deploy.kubernetes.integrationtest;
 
+/**
+ * Primarily extracted so that a separate jar can be added as a dependency for the
+ * test Spark job.
+ */
 public class PiHelper {
   public static int helpPi() {
     double x = Math.random() * 2 - 1;
