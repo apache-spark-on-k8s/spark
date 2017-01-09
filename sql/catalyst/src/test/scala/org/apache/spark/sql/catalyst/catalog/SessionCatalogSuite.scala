@@ -433,24 +433,24 @@ class SessionCatalogSuite extends SparkFunSuite {
     sessionCatalog.setCurrentDatabase("db2")
     // If we explicitly specify the database, we'll look up the relation in that database
     assert(sessionCatalog.lookupRelation(TableIdentifier("tbl1", Some("db2")))
-      == SubqueryAlias("tbl1", SimpleCatalogRelation("db2", metastoreTable1), None))
+      == SubqueryAlias("tbl1", SimpleCatalogRelation(metastoreTable1), None))
     // Otherwise, we'll first look up a temporary table with the same name
     assert(sessionCatalog.lookupRelation(TableIdentifier("tbl1"))
       == SubqueryAlias("tbl1", tempTable1, Some(TableIdentifier("tbl1"))))
     // Then, if that does not exist, look up the relation in the current database
     sessionCatalog.dropTable(TableIdentifier("tbl1"), ignoreIfNotExists = false, purge = false)
     assert(sessionCatalog.lookupRelation(TableIdentifier("tbl1"))
-      == SubqueryAlias("tbl1", SimpleCatalogRelation("db2", metastoreTable1), None))
+      == SubqueryAlias("tbl1", SimpleCatalogRelation(metastoreTable1), None))
   }
 
   test("lookup table relation with alias") {
     val catalog = new SessionCatalog(newBasicCatalog())
     val alias = "monster"
     val tableMetadata = catalog.getTableMetadata(TableIdentifier("tbl1", Some("db2")))
-    val relation = SubqueryAlias("tbl1", SimpleCatalogRelation("db2", tableMetadata), None)
+    val relation = SubqueryAlias("tbl1", SimpleCatalogRelation(tableMetadata), None)
     val relationWithAlias =
       SubqueryAlias(alias,
-        SimpleCatalogRelation("db2", tableMetadata), None)
+        SimpleCatalogRelation(tableMetadata), None)
     assert(catalog.lookupRelation(
       TableIdentifier("tbl1", Some("db2")), alias = None) == relation)
     assert(catalog.lookupRelation(
@@ -878,6 +878,31 @@ class SessionCatalogSuite extends SparkFunSuite {
       "the partition spec (a, b) defined in table '`db2`.`tbl1`'"))
   }
 
+  test("list partition names") {
+    val catalog = new SessionCatalog(newBasicCatalog())
+    val expectedPartitionNames = Seq("a=1/b=2", "a=3/b=4")
+    assert(catalog.listPartitionNames(TableIdentifier("tbl2", Some("db2"))) ==
+      expectedPartitionNames)
+    // List partition names without explicitly specifying database
+    catalog.setCurrentDatabase("db2")
+    assert(catalog.listPartitionNames(TableIdentifier("tbl2")) == expectedPartitionNames)
+  }
+
+  test("list partition names with partial partition spec") {
+    val catalog = new SessionCatalog(newBasicCatalog())
+    assert(
+      catalog.listPartitionNames(TableIdentifier("tbl2", Some("db2")), Some(Map("a" -> "1"))) ==
+        Seq("a=1/b=2"))
+  }
+
+  test("list partition names with invalid partial partition spec") {
+    val catalog = new SessionCatalog(newBasicCatalog())
+    intercept[AnalysisException] {
+      catalog.listPartitionNames(TableIdentifier("tbl2", Some("db2")),
+        Some(Map("unknown" -> "unknown")))
+    }
+  }
+
   test("list partitions") {
     val catalog = new SessionCatalog(newBasicCatalog())
     assert(catalogPartitionsEqual(
@@ -885,6 +910,20 @@ class SessionCatalogSuite extends SparkFunSuite {
     // List partitions without explicitly specifying database
     catalog.setCurrentDatabase("db2")
     assert(catalogPartitionsEqual(catalog.listPartitions(TableIdentifier("tbl2")), part1, part2))
+  }
+
+  test("list partitions with partial partition spec") {
+    val catalog = new SessionCatalog(newBasicCatalog())
+    assert(catalogPartitionsEqual(
+      catalog.listPartitions(TableIdentifier("tbl2", Some("db2")), Some(Map("a" -> "1"))), part1))
+  }
+
+  test("list partitions with invalid partial partition spec") {
+    val catalog = new SessionCatalog(newBasicCatalog())
+    intercept[AnalysisException] {
+      catalog.listPartitions(
+        TableIdentifier("tbl2", Some("db2")), Some(Map("unknown" -> "unknown")))
+    }
   }
 
   test("list partitions when database/table does not exist") {
