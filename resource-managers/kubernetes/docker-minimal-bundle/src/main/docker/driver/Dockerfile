@@ -1,10 +1,5 @@
 FROM anapsix/alpine-java:8
 
-# Upgrade package index
-# Remove unneeded /var/lib/apt/lists/* after install to reduce the
-# docker image size (by ~30MB)
-RUN apk add --update vim
-
 RUN mkdir -p /opt/spark
 RUN mkdir -p /opt/spark/ui-resources/org/apache/spark/ui/static
 RUN touch /opt/spark/RELEASE
