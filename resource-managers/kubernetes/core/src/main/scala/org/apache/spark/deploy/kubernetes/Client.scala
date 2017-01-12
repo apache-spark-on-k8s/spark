@@ -217,22 +217,24 @@ private[spark] class Client(
               .endSpec()
             .done()
           try {
-            submitCompletedFuture.get(30, TimeUnit.SECONDS)
+            submitCompletedFuture.get(LAUNCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
           } catch {
             case e: TimeoutException =>
               val driverPod = try {
                 kubernetesClient.pods().withName(kubernetesAppId).get()
               } catch {
                 case throwable: Throwable =>
-                  logError("Timed out while waiting for the driver pod to start, but the driver" +
-                     " pod could not be found.", throwable)
-                  throw new SparkException("Timed out while waiting for the driver pod to start." +
-                    " Unfortunately, in attempting to fetch the latest state of the pod, another" +
-                    " error was thrown. Check the logs for the error that was thrown in looking" +
-                    " up the driver pod.", e)
+                  logError(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS seconds for the" +
+                    " driver pod to start, but an error occurred while fetching the driver" +
+                    " pod's details.", throwable)
+                  throw new SparkException(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS" +
+                    " seconds for the driver pod to start. Unfortunately, in attempting to fetch" +
+                    " the latest state of the pod, another error was thrown. Check the logs for" +
+                    " the error that was thrown in looking up the driver pod.", e)
               }
               val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
-                s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in 30 seconds."
+                s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in" +
+                s" $LAUNCH_TIMEOUT_SECONDS seconds."
               val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
                 s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
               } else {
@@ -271,6 +273,7 @@ private[spark] class Client(
               val finalErrorMessage = s"$topLevelMessage\n" +
                 s"$podStatusPhase\n" +
                 s"$podStatusMessage\n\n$failedDriverContainerStatusString"
+              logError(finalErrorMessage, e)
               try {
                 kubernetesClient.pods.delete(driverPod)
               } catch {
@@ -400,6 +403,7 @@ private object Client {
   private val DRIVER_LAUNCHER_CONTAINER_NAME = "spark-kubernetes-driver-launcher"
   private val SECURE_RANDOM = new SecureRandom()
   private val SPARK_SUBMISSION_SECRET_BASE_DIR = "/var/run/secrets/spark-submission"
+  private val LAUNCH_TIMEOUT_SECONDS = 30
 
   def main(args: Array[String]): Unit = {
     require(args.length >= 2, s"Too few arguments. Usage: ${getClass.getName} <mainAppResource>" +
