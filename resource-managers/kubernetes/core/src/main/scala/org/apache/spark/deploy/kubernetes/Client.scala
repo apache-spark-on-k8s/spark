@@ -232,8 +232,13 @@ private[spark] class Client(
                     " up the driver pod.", e)
               }
               val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
-                s" in namespace ${driverPod.getMetadata.getNamespace} exited with status Failed."
-              val podMessage = if (driverPod.getStatus.getMessage != null) {
+                s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in 30 seconds."
+              val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
+                s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
+              } else {
+                "The pod had no final phase."
+              }
+              val podStatusMessage = if (driverPod.getStatus.getMessage != null) {
                 s"Latest message from the pod is: ${driverPod.getStatus.getMessage}"
               } else {
                 "The pod had no final message."
@@ -244,27 +249,28 @@ private[spark] class Client(
                 .find(_.getName == DRIVER_LAUNCHER_CONTAINER_NAME)
                 .map(status => {
                   val lastState = status.getState
-                  val containerStatusMessage = if (lastState.getRunning != null) {
-                    "Container last state: Running\n" +
-                    s"Container started at: ${lastState.getRunning.getStartedAt}"
+                  if (lastState.getRunning != null) {
+                    "Driver container last state: Running\n" +
+                    s"Driver container started at: ${lastState.getRunning.getStartedAt}"
                   } else if (lastState.getWaiting != null) {
-                    "Container last state: Waiting\n" +
-                    s"Container wait reason: ${lastState.getWaiting.getReason}\n" +
-                    s"Container message: ${lastState.getWaiting.getMessage}\n"
+                    "Driver container last state: Waiting\n" +
+                    s"Driver container wait reason: ${lastState.getWaiting.getReason}\n" +
+                    s"Driver container message: ${lastState.getWaiting.getMessage}\n"
                   } else if (lastState.getTerminated != null) {
-                    "Container last state: Terminated\n" +
-                    s"Container started at: ${lastState.getTerminated.getStartedAt}\n" +
-                    s"Container finished at: ${lastState.getTerminated.getFinishedAt}\n" +
-                    s"Container exit reason: ${lastState.getTerminated.getReason}\n" +
-                    s"Container exit code: ${lastState.getTerminated.getExitCode}\n" +
-                    s"Container message: ${lastState.getTerminated.getMessage}"
+                    "Driver container last state: Terminated\n" +
+                    s"Driver container started at: ${lastState.getTerminated.getStartedAt}\n" +
+                    s"Driver container finished at: ${lastState.getTerminated.getFinishedAt}\n" +
+                    s"Driver container exit reason: ${lastState.getTerminated.getReason}\n" +
+                    s"Driver container exit code: ${lastState.getTerminated.getExitCode}\n" +
+                    s"Driver container message: ${lastState.getTerminated.getMessage}"
                   } else {
-                    "Container last state: Unknown"
+                    "Driver container last state: Unknown"
                   }
-                  s"Driver container final state:\n$containerStatusMessage"
-                }).getOrElse("The driver container wasn't found in the pod.")
+                }).getOrElse("The driver container wasn't found in the pod; expected to find container" +
+                  s" with name $DRIVER_LAUNCHER_CONTAINER_NAME")
               val finalErrorMessage = s"$topLevelMessage\n" +
-                s"$podMessage\n\n$failedDriverContainerStatusString"
+                s"$podStatusPhase\n" +
+                s"$podStatusMessage\n\n$failedDriverContainerStatusString"
               try {
                 kubernetesClient.pods.delete(driverPod)
               } catch {
