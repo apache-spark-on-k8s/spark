@@ -216,6 +216,7 @@ private[spark] class Client(
                 .endContainer()
               .endSpec()
             .done()
+          var submitSucceeded = false
           try {
             submitCompletedFuture.get(LAUNCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
           } catch {
@@ -268,19 +269,22 @@ private[spark] class Client(
                   } else {
                     "Driver container last state: Unknown"
                   }
-                }).getOrElse("The driver container wasn't found in the pod; expected to find container" +
-                  s" with name $DRIVER_LAUNCHER_CONTAINER_NAME")
+                }).getOrElse("The driver container wasn't found in the pod; expected to find" +
+                  " container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
               val finalErrorMessage = s"$topLevelMessage\n" +
                 s"$podStatusPhase\n" +
                 s"$podStatusMessage\n\n$failedDriverContainerStatusString"
               logError(finalErrorMessage, e)
-              try {
-                kubernetesClient.pods.delete(driverPod)
-              } catch {
-                case throwable: Throwable =>
-                  logError("Failed to delete driver pod after it failed to run.", throwable)
-              }
               throw new SparkException(finalErrorMessage, e)
+            } finally {
+              if (!submitSucceeded) {
+                try {
+                  kubernetesClient.pods.withName(kubernetesAppId).delete
+                } catch {
+                  case throwable: Throwable =>
+                    logError("Failed to delete driver pod after it failed to run.", throwable)
+                }
+              }
             }
           }
 
