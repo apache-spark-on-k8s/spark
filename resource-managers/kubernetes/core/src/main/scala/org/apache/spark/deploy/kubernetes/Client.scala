@@ -219,6 +219,7 @@ private[spark] class Client(
           var submitSucceeded = false
           try {
             submitCompletedFuture.get(LAUNCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            submitSucceeded = true
           } catch {
             case e: TimeoutException =>
               val driverPod = try {
