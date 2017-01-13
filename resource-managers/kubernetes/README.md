@@ -5,7 +5,10 @@ title: Spark on Kubernetes Development
 
 [Kubernetes](https://kubernetes.io/) is a framework for easily deploying, scaling, and managing containerized
 applications. It would be useful for a user to run their Spark jobs on a Kubernetes cluster alongside their
-other Kubernetes-managed applications. This submodule is an initial implementation of allowing Kubernetes to be a
+other Kubernetes-managed applications. For more about the motivations for adding this feature, see the umbrella JIRA
+ticket that tracks this project: [SPARK-18278](https://issues.apache.org/jira/browse/SPARK-18278).
+
+This submodule is an initial implementation of allowing Kubernetes to be a
 supported cluster manager for Spark, along with Mesos, Hadoop YARN, and Standalone. This document provides a summary of
 important matters to keep in mind when developing this feature.
 
@@ -45,7 +48,7 @@ on the `resource-managers/kubernetes/integration-tests` module:
   build/mvn pre-integration-test -Pkubernetes -Pkubernetes-integration-tests -pl resource-managers/kubernetes/integration-tests -am
  
 Afterwards, the integration tests can be executed with Maven or your IDE. Note that when running tests from an IDE, the
-`pre-integration-test` phase must be run every time the core Kubernetes code changes. When running tests from the
+`pre-integration-test` phase must be run every time the Spark main code changes. When running tests from the
 command line, the `pre-integration-test` phase should automatically be invoked if the `integration-test` phase is run.
 
 # Usage Guide
