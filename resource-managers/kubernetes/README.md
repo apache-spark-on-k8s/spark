@@ -43,3 +43,11 @@ order to prepare the environment for running the integration tests, the `pre-int
 on the `resource-managers/kubernetes/integration-tests` module:
 
   build/mvn pre-integration-test -Pkubernetes -Pkubernetes-integration-tests -pl resource-managers/kubernetes/integration-tests -am
+ 
+Afterwards, the integration tests can be executed with Maven or your IDE. Note that when running tests from an IDE, the
+`pre-integration-test` phase must be run every time the core Kubernetes code changes. When running tests from the
+command line, the `pre-integration-test` phase should automatically be invoked if the `integration-test` phase is run.
+
+# Usage Guide
+
+See the [usage guide](../../docs/running-on-kubernetes.md) for more information.
