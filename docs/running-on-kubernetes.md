@@ -9,7 +9,7 @@ currently limited and not well-tested. This should not be used in production env
 ## Setting Up Docker Images
 
 Kubernetes requires users to supply images that can be deployed into containers within pods. The images are built to
-be run in a virtual runtime environment that Kubernetes supports. Docker is a virtual runtime environment that is
+be run in a container runtime environment that Kubernetes supports. Docker is a container runtime environment that is
 frequently used with Kubernetes, so Spark provides some support for working with Docker to get started quickly.
 
 To use Spark on Kubernetes with Docker, images for the driver and the executors need to built and published to an
