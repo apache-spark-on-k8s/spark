@@ -8,10 +8,15 @@ currently limited and not well-tested. This should not be used in production env
 
 ## Setting Up Docker Images
 
-In order to run Spark on Kubernetes, a Docker image must be built and available on an accessible Docker registry. Spark
-distributions include the Docker files for the driver and the executor at `dockerfiles/driver/Dockerfile` and
-`docker/executor/Dockerfile`, respectively. Use these Docker files to build the Docker images, and then tag them with
-the registry that the images should be sent to. Finally, push the images to the registry.
+Kubernetes requires users to supply images that can be deployed into containers within pods. The images are built to
+be run in a virtual runtime environment that Kubernetes supports. Docker is a virtual runtime environment that is
+frequently used with Kubernetes, so Spark provides some support for working with Docker to get started quickly.
+
+To use Spark on Kubernetes with Docker, images for the driver and the executors need to built and published to an
+accessible Docker registry. Spark distributions include the Docker files for the driver and the executor at
+`dockerfiles/driver/Dockerfile` and `docker/executor/Dockerfile`, respectively. Use these Docker files to build the
+Docker images, and then tag them with the registry that the images should be sent to. Finally, push the images to the
+registry.
 
 For example, if the registry host is `registry-host` and the registry is listening on port 5000:
 
@@ -23,8 +28,8 @@ For example, if the registry host is `registry-host` and the registry is listeni
     
 ## Submitting Applications to Kubernetes
 
-Kubernetes applications can be executed via `spark-submit`. For example, to compute the value of pi, assuming the
-Docker images were set up as described above:
+Kubernetes applications can be executed via `spark-submit`. For example, to compute the value of pi, assuming the images
+are set up as described above:
 
     bin/spark-submit 
       --deploy-mode cluster 
@@ -39,9 +44,9 @@ Docker images were set up as described above:
 
 <!-- TODO master should default to https if no scheme is specified -->
 The Spark master, specified either via passing the `--master` command line argument to `spark-submit` or by setting
-`spark.master` in the application's configuration, must be a URL with the format `k8s://<api_server_url`. Prefixing the
-master string with `k8s://` will cause the Spark application to launch on a Kubernetes cluster, where the API server is
-contacted  at the appropriate inner URL. The HTTP protocol must also be specified.
+`spark.master` in the application's configuration, must be a URL with the format `k8s://<api_server_url>`. Prefixing the
+master string with `k8s://` will cause the Spark application to launch on the Kubernetes cluster, with the API server
+being contacted at `api_server_url`. The HTTP protocol must also be specified.
 
 Note that applications can currently only be executed in cluster mode, where the driver and its executors are running on
 the cluster.
