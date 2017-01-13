@@ -271,7 +271,7 @@ private[spark] class Client(
                     "Driver container last state: Unknown"
                   }
                 }).getOrElse("The driver container wasn't found in the pod; expected to find" +
-                  " container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
+                  s" container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
               val finalErrorMessage = s"$topLevelMessage\n" +
                 s"$podStatusPhase\n" +
                 s"$podStatusMessage\n\n$failedDriverContainerStatusString"
