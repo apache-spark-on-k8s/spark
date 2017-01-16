@@ -35,7 +35,7 @@ import scala.concurrent.duration.DurationInt
 import scala.util.Success
 
 import org.apache.spark.{SPARK_VERSION, SparkConf, SparkException}
-import org.apache.spark.deploy.rest.{AppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
+import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
@@ -47,13 +47,8 @@ private[spark] class Client(
     appArgs: Array[String]) extends Logging {
   import Client._
 
-  private val namespace = sparkConf.getOption("spark.kubernetes.namespace").getOrElse(
-    throw new IllegalArgumentException("Namespace must be provided in spark.kubernetes.namespace"))
-  private val rawMaster = sparkConf.get("spark.master")
-  if (!rawMaster.startsWith("k8s://")) {
-    throw new IllegalArgumentException("Master should be a URL with scheme k8s://")
-  }
-  private val master = rawMaster.replaceFirst("k8s://", "")
+  private val namespace = sparkConf.get("spark.kubernetes.namespace", "default")
+  private val master = resolveK8sMaster(sparkConf.get("spark.master"))
 
   private val launchTime = System.currentTimeMillis
   private val kubernetesAppId = sparkConf.getOption("spark.app.name")
@@ -64,8 +59,6 @@ private[spark] class Client(
   private val driverLauncherSelectorValue = s"driver-launcher-$launchTime"
   private val driverDockerImage = sparkConf.get(
     "spark.kubernetes.driver.docker.image", s"spark-driver:$SPARK_VERSION")
-  private val uploadedDriverExtraClasspath = sparkConf
-    .getOption("spark.kubernetes.driver.uploads.driverExtraClasspath")
   private val uploadedJars = sparkConf.getOption("spark.kubernetes.driver.uploads.jars")
 
   private val secretBase64String = {
@@ -351,10 +344,10 @@ private[spark] class Client(
         val fileBytes = Files.toByteArray(appFile)
         val fileBase64 = Base64.encodeBase64String(fileBytes)
         UploadedAppResource(resourceBase64Contents = fileBase64, name = appFile.getName)
+      case "container" => ContainerAppResource(appResourceUri.getPath)
       case other => RemoteAppResource(other)
     }
 
-    val uploadDriverExtraClasspathBase64Contents = compressJars(uploadedDriverExtraClasspath)
     val uploadJarsBase64Contents = compressJars(uploadedJars)
     KubernetesCreateSubmissionRequest(
       appResource = resolvedAppResource,
@@ -362,7 +355,6 @@ private[spark] class Client(
       appArgs = appArgs,
       secret = secretBase64String,
       sparkProperties = sparkConf.getAll.toMap,
-      uploadedDriverExtraClasspathBase64Contents = uploadDriverExtraClasspathBase64Contents,
       uploadedJarsBase64Contents = uploadJarsBase64Contents)
   }
 
@@ -393,7 +385,7 @@ private[spark] class Client(
   }
 }
 
-private object Client {
+private[spark] object Client extends Logging {
 
   private val SUBMISSION_SERVER_SECRET_NAME = "spark-submission-server-secret"
   private val DRIVER_LAUNCHER_SELECTOR_LABEL = "driver-launcher-selector"
@@ -422,5 +414,21 @@ private object Client {
       mainClass = mainClass,
       sparkConf = sparkConf,
       appArgs = appArgs).run()
+  }
+
+  def resolveK8sMaster(rawMasterString: String): String = {
+    if (!rawMasterString.startsWith("k8s://")) {
+      throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")
+    }
+    val masterWithoutK8sPrefix = rawMasterString.replaceFirst("k8s://", "")
+    if (masterWithoutK8sPrefix.startsWith("http://")
+        || masterWithoutK8sPrefix.startsWith("https://")) {
+      masterWithoutK8sPrefix
+    } else {
+      val resolvedURL = s"https://$masterWithoutK8sPrefix"
+      logDebug(s"No scheme specified for kubernetes master URL, so defaulting to https. Resolved" +
+        s" URL is $resolvedURL")
+      resolvedURL
+    }
   }
 }
