@@ -139,7 +139,31 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     expectationsForStaticAllocation(sparkMetricsService)
   }
 
-  test("Run using spark-submit") {
+  test("Run with spark-submit") {
+    val args = Array(
+      "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
+      "--deploy-mode", "cluster",
+      "--kubernetes-namespace", NAMESPACE,
+      "--name", "spark-pi",
+      "--executor-memory", "512m",
+      "--executor-cores", "1",
+      "--num-executors", "1",
+      "--upload-jars", HELPER_JAR,
+      "--class", MAIN_CLASS,
+      "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
+      "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
+      "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
+      "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
+      "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
+      EXAMPLES_JAR
+    )
+    SparkSubmit.main(args)
+    val sparkMetricsService = Minikube.getService[SparkRestApiV1](
+      "spark-pi", NAMESPACE, "spark-ui-port")
+    expectationsForStaticAllocation(sparkMetricsService)
+  }
+
+  test("Run with custom labels") {
     val args = Array(
       "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
       "--deploy-mode", "cluster",
@@ -171,26 +195,5 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       " selector label to be present.")
     assert(driverPodLabels.get("label1") == "label1value", "Unexpected value for label1")
     assert(driverPodLabels.get("label2") == "label2value", "Unexpected value for label2")
-  }
-
-  test("Run driver with custom labels") {
-    val args = Array(
-      "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
-      "--deploy-mode", "cluster",
-      "--kubernetes-namespace", NAMESPACE,
-      "--name", "spark-pi",
-      "--executor-memory", "512m",
-      "--executor-cores", "1",
-      "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
-      "--class", MAIN_CLASS,
-      "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
-      "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
-      "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
-      "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
-      "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
-      EXAMPLES_JAR
-    )
-    SparkSubmit.main(args)
   }
 }
