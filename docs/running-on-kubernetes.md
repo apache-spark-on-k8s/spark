@@ -218,7 +218,7 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td>(none)</td>
   <td>
     Custom labels that will be added to the driver pod. This should be a comma-separated list of label key-value pairs,
-    where each label is in the format <code>&ltkey&gt=&ltvalue&gt</code>.
+    where each label is in the format <code>key=value</code>.
   </td>
 </tr>
 </table>

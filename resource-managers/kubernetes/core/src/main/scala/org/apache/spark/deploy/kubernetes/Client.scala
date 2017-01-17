@@ -188,7 +188,7 @@ private[spark] class Client(
           kubernetesClient.pods().createNew()
             .withNewMetadata()
               .withName(kubernetesAppId)
-              .addToLabels(resolvedSelectors)
+              .withLabels(resolvedSelectors)
               .endMetadata()
             .withNewSpec()
               .withRestartPolicy("OnFailure")
@@ -397,22 +397,20 @@ private[spark] class Client(
   }
 
   private def parseCustomLabels(labels: String): Map[String, String] = {
-    val parsedCustomLabels = labels.split(",").map(label => {
-      if (!label.contains("=")) {
-        throw new IllegalArgumentException("Custom labels set by spark.kubernetes.driver.labels" +
-          " must be a comma-separated list of key-value pairs, with format <key>=<value>." +
-          s" Got label: $label. All labels: $labels")
-      } else {
-        (label.split("=")(0), label.split("=")(1))
+    labels.split(",").map(_.trim).filterNot(_.isEmpty).map(label => {
+      label.split("=", 2).toSeq match {
+        case Seq(k, v) =>
+          require(k != DRIVER_LAUNCHER_SELECTOR_LABEL, "Label with key" +
+            s" $DRIVER_LAUNCHER_SELECTOR_LABEL cannot be used in" +
+            " spark.kubernetes.driver.labels, as it is reserved for Spark's" +
+            " internal configuration.")
+          (k, v)
+        case _ =>
+          throw new SparkException("Custom labels set by spark.kubernetes.driver.labels" +
+            " must be a comma-separated list of key-value pairs, with format <key>=<value>." +
+            s" Got label: $label. All labels: $labels")
       }
     }).toMap
-    // Unlikely, but throw a useful error if the reserved label is used
-    if (parsedCustomLabels.contains(DRIVER_LAUNCHER_SELECTOR_LABEL)) {
-      throw new IllegalArgumentException(s"Label with key $DRIVER_LAUNCHER_SELECTOR_LABEL" +
-        " cannot be used in spark.kubernetes.driver.labels, as it is reserved for Spark's" +
-        " internal configuration.")
-    }
-    parsedCustomLabels
   }
 }
 
