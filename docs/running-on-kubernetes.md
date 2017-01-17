@@ -122,7 +122,7 @@ Spark property, the above will behave identically to this command:
       --conf spark.jars=file:///opt/spark-plugins/app-plugin.jar \
       --conf spark.kubernetes.driver.docker.image=registry-host:5000/spark-driver-custom:latest \
       --conf spark.kubernetes.executor.docker.image=registry-host:5000/spark-executor:latest \
-      http://example.com:8080/applications/sparkpluggable/app.jar \
+      http://example.com:8080/applications/sparkpluggable/app.jar
       
 ### Spark Properties
 
