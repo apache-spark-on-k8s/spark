@@ -155,8 +155,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
       "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
-      EXAMPLES_JAR
-    )
+      EXAMPLES_JAR)
     SparkSubmit.main(args)
     val sparkMetricsService = Minikube.getService[SparkRestApiV1](
       "spark-pi", NAMESPACE, "spark-ui-port")
