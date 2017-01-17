@@ -139,7 +139,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     expectationsForStaticAllocation(sparkMetricsService)
   }
 
-  test("Run with spark-submit") {
+  test("Run using spark-submit") {
     val args = Array(
       "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
       "--deploy-mode", "cluster",
