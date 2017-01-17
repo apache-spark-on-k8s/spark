@@ -31,16 +31,16 @@ For example, if the registry host is `registry-host` and the registry is listeni
 Kubernetes applications can be executed via `spark-submit`. For example, to compute the value of pi, assuming the images
 are set up as described above:
 
-    bin/spark-submit 
-      --deploy-mode cluster 
-      --class org.apache.spark.examples.SparkPi 
-      --master k8s://https://<k8s-apiserver-host>:<k8s-apiserver-port>
-      --kubernetes-namespace default
-      --conf spark.executor.instances=5 
-      --conf spark.app.name=spark-pi
-      --conf spark.kubernetes.driver.docker.image=registry-host:5000/spark-driver:latest
-      --conf spark.kubernetes.executor.docker.image=registry-host:5000/spark-executor:latest
-      examples/jars/spark_2.11-2.2.0.jar
+    bin/spark-submit \
+      --deploy-mode cluster \
+      --class org.apache.spark.examples.SparkPi \
+      --master k8s://https://<k8s-apiserver-host>:<k8s-apiserver-port> \
+      --kubernetes-namespace default \
+      --conf spark.executor.instances=5 \
+      --conf spark.app.name=spark-pi \
+      --conf spark.kubernetes.driver.docker.image=registry-host:5000/spark-driver:latest \
+      --conf spark.kubernetes.executor.docker.image=registry-host:5000/spark-executor:latest \
+      examples/jars/spark_examples_2.11-2.2.0.jar
 
 <!-- TODO master should default to https if no scheme is specified -->
 The Spark master, specified either via passing the `--master` command line argument to `spark-submit` or by setting
