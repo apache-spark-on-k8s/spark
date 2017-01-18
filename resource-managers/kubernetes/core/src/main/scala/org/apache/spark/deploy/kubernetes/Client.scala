@@ -19,17 +19,14 @@ package org.apache.spark.deploy.kubernetes
 import java.io.File
 import java.security.SecureRandom
 import java.util.concurrent.{Executors, TimeoutException, TimeUnit}
-import javax.net.ssl.X509TrustManager
 
 import com.google.common.io.Files
 import com.google.common.util.concurrent.{SettableFuture, ThreadFactoryBuilder}
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{Config, ConfigBuilder, DefaultKubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
-import io.fabric8.kubernetes.client.internal.SSLUtils
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 import scala.util.Success
@@ -60,6 +57,7 @@ private[spark] class Client(
   private val driverDockerImage = sparkConf.get(
     "spark.kubernetes.driver.docker.image", s"spark-driver:$SPARK_VERSION")
   private val uploadedJars = sparkConf.getOption("spark.kubernetes.driver.uploads.jars")
+  private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
 
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
@@ -109,7 +107,13 @@ private[spark] class Client(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
-        val (servicePorts, containerPorts) = configurePorts()
+        val selectors = Map(DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue).asJava
+        val containerPorts = configureContainerPorts()
+        val driverLauncherServicePort = new ServicePortBuilder()
+          .withName(DRIVER_LAUNCHER_SERVICE_PORT_NAME)
+          .withPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
+          .withNewTargetPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
+          .build()
         val service = kubernetesClient.services().createNew()
           .withNewMetadata()
             .withName(kubernetesAppId)
@@ -117,30 +121,29 @@ private[spark] class Client(
             .endMetadata()
           .withNewSpec()
             .withSelector(resolvedSelectors)
-            .withPorts(servicePorts.asJava)
+            .withType("NodePort")
+            .withPorts(driverLauncherServicePort)
             .endSpec()
           .done()
         sparkConf.set("spark.kubernetes.driver.service.name", service.getMetadata.getName)
         sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
         sparkConf.setIfMissing("spark.blockmanager.port", DEFAULT_BLOCKMANAGER_PORT.toString)
-        val submitRequest = buildSubmissionRequest()
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
 
         val podWatcher = new Watcher[Pod] {
-          override def eventReceived(action: Action, t: Pod): Unit = {
+          override def eventReceived(action: Action, pod: Pod): Unit = {
             if ((action == Action.ADDED || action == Action.MODIFIED)
-                && t.getStatus.getPhase == "Running"
+                && pod.getStatus.getPhase == "Running"
                 && !submitCompletedFuture.isDone) {
-              t.getStatus
+              pod.getStatus
                 .getContainerStatuses
                 .asScala
                 .find(status =>
                   status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
                 case Some(_) =>
                   try {
-                    val driverLauncher = getDriverLauncherService(
-                      k8ClientConfig, master)
+                    val driverLauncher = getDriverLauncherService(kubernetesClient, kubernetesAppId)
                     val ping = Retry.retry(5, 5.seconds) {
                       driverLauncher.ping()
                     }
@@ -152,8 +155,25 @@ private[spark] class Client(
                     }
                     val submitComplete = ping andThen {
                       case Success(_) =>
+                        sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
+                        val submitRequest = buildSubmissionRequest()
                         driverLauncher.create(submitRequest)
                         submitCompletedFuture.set(true)
+                        // After submitting, adjust the service to only expose the Spark UI
+                        val uiServicePort = new ServicePortBuilder()
+                          .withName(UI_PORT_NAME)
+                          .withPort(uiPort)
+                          .withNewTargetPort(uiPort)
+                          .build
+                        kubernetesClient
+                          .services
+                          .withName(kubernetesAppId)
+                          .edit()
+                            .editSpec()
+                              .withType("ClusterIP")
+                              .withPorts(uiServicePort)
+                              .endSpec
+                            .done
                     }
                     submitComplete onFailure {
                       case t: Throwable =>
@@ -222,59 +242,7 @@ private[spark] class Client(
             submitSucceeded = true
           } catch {
             case e: TimeoutException =>
-              val driverPod = try {
-                kubernetesClient.pods().withName(kubernetesAppId).get()
-              } catch {
-                case throwable: Throwable =>
-                  logError(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS seconds for the" +
-                    " driver pod to start, but an error occurred while fetching the driver" +
-                    " pod's details.", throwable)
-                  throw new SparkException(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS" +
-                    " seconds for the driver pod to start. Unfortunately, in attempting to fetch" +
-                    " the latest state of the pod, another error was thrown. Check the logs for" +
-                    " the error that was thrown in looking up the driver pod.", e)
-              }
-              val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
-                s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in" +
-                s" $LAUNCH_TIMEOUT_SECONDS seconds."
-              val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
-                s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
-              } else {
-                "The pod had no final phase."
-              }
-              val podStatusMessage = if (driverPod.getStatus.getMessage != null) {
-                s"Latest message from the pod is: ${driverPod.getStatus.getMessage}"
-              } else {
-                "The pod had no final message."
-              }
-              val failedDriverContainerStatusString = driverPod.getStatus
-                .getContainerStatuses
-                .asScala
-                .find(_.getName == DRIVER_LAUNCHER_CONTAINER_NAME)
-                .map(status => {
-                  val lastState = status.getState
-                  if (lastState.getRunning != null) {
-                    "Driver container last state: Running\n" +
-                    s"Driver container started at: ${lastState.getRunning.getStartedAt}"
-                  } else if (lastState.getWaiting != null) {
-                    "Driver container last state: Waiting\n" +
-                    s"Driver container wait reason: ${lastState.getWaiting.getReason}\n" +
-                    s"Driver container message: ${lastState.getWaiting.getMessage}\n"
-                  } else if (lastState.getTerminated != null) {
-                    "Driver container last state: Terminated\n" +
-                    s"Driver container started at: ${lastState.getTerminated.getStartedAt}\n" +
-                    s"Driver container finished at: ${lastState.getTerminated.getFinishedAt}\n" +
-                    s"Driver container exit reason: ${lastState.getTerminated.getReason}\n" +
-                    s"Driver container exit code: ${lastState.getTerminated.getExitCode}\n" +
-                    s"Driver container message: ${lastState.getTerminated.getMessage}"
-                  } else {
-                    "Driver container last state: Unknown"
-                  }
-                }).getOrElse("The driver container wasn't found in the pod; expected to find" +
-                  s" container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
-              val finalErrorMessage = s"$topLevelMessage\n" +
-                s"$podStatusPhase\n" +
-                s"$podStatusMessage\n\n$failedDriverContainerStatusString"
+              val finalErrorMessage: String = getSubmitErrorMessage(kubernetesClient, e)
               logError(finalErrorMessage, e)
               throw new SparkException(finalErrorMessage, e)
             } finally {
@@ -284,6 +252,12 @@ private[spark] class Client(
                 } catch {
                   case throwable: Throwable =>
                     logError("Failed to delete driver pod after it failed to run.", throwable)
+                }
+                try {
+                  kubernetesClient.services.delete(service)
+                } catch {
+                  case throwable: Throwable =>
+                    logError("Failed to delete driver service after it failed to run.", throwable)
                 }
               }
             }
@@ -299,44 +273,78 @@ private[spark] class Client(
     })
   }
 
-  private def configurePorts(): (Seq[ServicePort], Seq[ContainerPort]) = {
-    val servicePorts = new ArrayBuffer[ServicePort]
-    val containerPorts = new ArrayBuffer[ContainerPort]
-
-    def addPortToServiceAndContainer(portName: String, portValue: Int): Unit = {
-      servicePorts += new ServicePortBuilder()
-        .withName(portName)
-        .withPort(portValue)
-        .withNewTargetPort(portValue)
-        .build()
-      containerPorts += new ContainerPortBuilder()
-        .withContainerPort(portValue)
-        .build()
+  private def getSubmitErrorMessage(
+      kubernetesClient: DefaultKubernetesClient,
+      e: TimeoutException): String = {
+    val driverPod = try {
+      kubernetesClient.pods().withName(kubernetesAppId).get()
+    } catch {
+      case throwable: Throwable =>
+        logError(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS seconds for the" +
+          " driver pod to start, but an error occurred while fetching the driver" +
+          " pod's details.", throwable)
+        throw new SparkException(s"Timed out while waiting $LAUNCH_TIMEOUT_SECONDS" +
+          " seconds for the driver pod to start. Unfortunately, in attempting to fetch" +
+          " the latest state of the pod, another error was thrown. Check the logs for" +
+          " the error that was thrown in looking up the driver pod.", e)
     }
+    val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
+      s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in" +
+      s" $LAUNCH_TIMEOUT_SECONDS seconds."
+    val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
+      s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
+    } else {
+      "The pod had no final phase."
+    }
+    val podStatusMessage = if (driverPod.getStatus.getMessage != null) {
+      s"Latest message from the pod is: ${driverPod.getStatus.getMessage}"
+    } else {
+      "The pod had no final message."
+    }
+    val failedDriverContainerStatusString = driverPod.getStatus
+      .getContainerStatuses
+      .asScala
+      .find(_.getName == DRIVER_LAUNCHER_CONTAINER_NAME)
+      .map(status => {
+        val lastState = status.getState
+        if (lastState.getRunning != null) {
+          "Driver container last state: Running\n" +
+            s"Driver container started at: ${lastState.getRunning.getStartedAt}"
+        } else if (lastState.getWaiting != null) {
+          "Driver container last state: Waiting\n" +
+            s"Driver container wait reason: ${lastState.getWaiting.getReason}\n" +
+            s"Driver container message: ${lastState.getWaiting.getMessage}\n"
+        } else if (lastState.getTerminated != null) {
+          "Driver container last state: Terminated\n" +
+            s"Driver container started at: ${lastState.getTerminated.getStartedAt}\n" +
+            s"Driver container finished at: ${lastState.getTerminated.getFinishedAt}\n" +
+            s"Driver container exit reason: ${lastState.getTerminated.getReason}\n" +
+            s"Driver container exit code: ${lastState.getTerminated.getExitCode}\n" +
+            s"Driver container message: ${lastState.getTerminated.getMessage}"
+        } else {
+          "Driver container last state: Unknown"
+        }
+      }).getOrElse("The driver container wasn't found in the pod; expected to find" +
+      s" container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
+    s"$topLevelMessage\n" +
+      s"$podStatusPhase\n" +
+      s"$podStatusMessage\n\n$failedDriverContainerStatusString"
+  }
 
-    addPortToServiceAndContainer(
-      DRIVER_LAUNCHER_SERVICE_PORT_NAME,
-      DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
-    addPortToServiceAndContainer(
-      DRIVER_PORT_NAME,
-      sparkConf
-        .getOption("spark.driver.port")
-        .map(_.toInt)
-        .getOrElse(DEFAULT_DRIVER_PORT))
-    addPortToServiceAndContainer(
-      BLOCKMANAGER_PORT_NAME,
-      sparkConf
-        .getOption("spark.blockmanager.port")
-        .map(_.toInt)
-        .getOrElse(DEFAULT_BLOCKMANAGER_PORT))
-
-    addPortToServiceAndContainer(
-      UI_PORT_NAME,
-      sparkConf
-        .getOption("spark.ui.port")
-        .map(_.toInt)
-        .getOrElse(DEFAULT_UI_PORT))
-    (servicePorts, containerPorts)
+  private def configureContainerPorts(): Seq[ContainerPort] = {
+    Seq(
+      new ContainerPortBuilder()
+        .withContainerPort(sparkConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT))
+        .build(),
+      new ContainerPortBuilder()
+        .withContainerPort(sparkConf.getInt("spark.blockmanager.port", DEFAULT_BLOCKMANAGER_PORT))
+        .build(),
+      new ContainerPortBuilder()
+        .withContainerPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
+        .build(),
+      new ContainerPortBuilder()
+        .withContainerPort(uiPort)
+        .build())
   }
 
   private def buildSubmissionRequest(): KubernetesCreateSubmissionRequest = {
@@ -372,23 +380,22 @@ private[spark] class Client(
   }
 
   private def getDriverLauncherService(
-      k8ClientConfig: Config,
-      kubernetesMaster: String): KubernetesSparkRestApi = {
-    val url = s"${
-      Array[String](
-        kubernetesMaster,
-        "api", "v1", "proxy",
-        "namespaces", namespace,
-        "services", kubernetesAppId).mkString("/")}" +
-      s":$DRIVER_LAUNCHER_SERVICE_PORT_NAME/"
-
-    val sslContext = SSLUtils.sslContext(k8ClientConfig)
-    val trustManager = SSLUtils.trustManagers(
-      k8ClientConfig)(0).asInstanceOf[X509TrustManager]
-    HttpClientUtil.createClient[KubernetesSparkRestApi](
-      uri = url,
-      sslSocketFactory = sslContext.getSocketFactory,
-      trustContext = trustManager)
+      kubernetesClient: KubernetesClient,
+      serviceName: String): KubernetesSparkRestApi = {
+    val service = kubernetesClient.services.withName(serviceName).get
+    val servicePort = service
+      .getSpec
+      .getPorts
+      .asScala
+      .filter(_.getName == DRIVER_LAUNCHER_SERVICE_PORT_NAME)
+      .head
+      .getNodePort
+    // NodePort is exposed on every node, so just pick one of them.
+    // TODO be resilient to node failures and try all of them
+    val node = kubernetesClient.nodes.list.getItems.asScala.head
+    val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
+    val url = s"http://$nodeAddress:$servicePort"
+    HttpClientUtil.createClient[KubernetesSparkRestApi](uri = url)
   }
 
   private def parseCustomLabels(labels: String): Map[String, String] = {

@@ -92,7 +92,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   protected var totalExpectedExecutors = new AtomicInteger(0)
 
   private val driverUrl = RpcEndpointAddress(
-    System.getenv(s"${convertToEnvMode(kubernetesDriverServiceName)}_SERVICE_HOST"),
+    sc.getConf.get("spark.driver.host"),
     sc.getConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT),
     CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
 
