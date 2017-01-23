@@ -51,10 +51,10 @@ private[spark] class Client(
   private val master = resolveK8sMaster(sparkConf.get("spark.master"))
 
   private val launchTime = System.currentTimeMillis
-  private val kubernetesAppId = sparkConf.getOption("spark.app.name")
+  private val appName = sparkConf.getOption("spark.app.name")
     .orElse(sparkConf.getOption("spark.app.id"))
-    .getOrElse(s"spark-$launchTime")
-
+    .getOrElse("spark")
+  private val kubernetesAppId = s"$appName-$launchTime"
   private val secretName = s"spark-submission-server-secret-$kubernetesAppId"
   private val driverLauncherSelectorValue = s"driver-launcher-$launchTime"
   private val driverDockerImage = sparkConf.get(
@@ -70,6 +70,8 @@ private[spark] class Client(
   private val serviceAccount = sparkConf.get("spark.kubernetes.submit.serviceAccountName",
     "default")
 
+  private val customLabels = sparkConf.get("spark.kubernetes.driver.labels", "")
+
   private implicit val retryableExecutionContext = ExecutionContext
     .fromExecutorService(
       Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
@@ -78,6 +80,7 @@ private[spark] class Client(
         .build()))
 
   def run(): Unit = {
+    val parsedCustomLabels = parseCustomLabels(customLabels)
     var k8ConfBuilder = new ConfigBuilder()
       .withApiVersion("v1")
       .withMasterUrl(master)
@@ -102,14 +105,18 @@ private[spark] class Client(
         .withType("Opaque")
         .done()
       try {
-        val selectors = Map(DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue).asJava
+        val resolvedSelectors = (Map(
+            DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
+            SPARK_APP_NAME_LABEL -> appName)
+          ++ parsedCustomLabels).asJava
         val (servicePorts, containerPorts) = configurePorts()
         val service = kubernetesClient.services().createNew()
           .withNewMetadata()
             .withName(kubernetesAppId)
+            .withLabels(Map(SPARK_APP_NAME_LABEL -> appName).asJava)
             .endMetadata()
           .withNewSpec()
-            .withSelector(selectors)
+            .withSelector(resolvedSelectors)
             .withPorts(servicePorts.asJava)
             .endSpec()
           .done()
@@ -130,7 +137,7 @@ private[spark] class Client(
                 .asScala
                 .find(status =>
                   status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
-                case Some(status) =>
+                case Some(_) =>
                   try {
                     val driverLauncher = getDriverLauncherService(
                       k8ClientConfig, master)
@@ -177,7 +184,7 @@ private[spark] class Client(
           kubernetesClient.pods().createNew()
             .withNewMetadata()
               .withName(kubernetesAppId)
-              .withLabels(selectors)
+              .withLabels(resolvedSelectors)
               .endMetadata()
             .withNewSpec()
               .withRestartPolicy("OnFailure")
@@ -284,7 +291,7 @@ private[spark] class Client(
 
         Utils.tryWithResource(kubernetesClient
           .pods()
-          .withLabels(selectors)
+          .withLabels(resolvedSelectors)
           .watch(podWatcher)) { createDriverPod }
       } finally {
         kubernetesClient.secrets().delete(secret)
@@ -329,7 +336,7 @@ private[spark] class Client(
         .getOption("spark.ui.port")
         .map(_.toInt)
         .getOrElse(DEFAULT_UI_PORT))
-    (servicePorts.toSeq, containerPorts.toSeq)
+    (servicePorts, containerPorts)
   }
 
   private def buildSubmissionRequest(): KubernetesCreateSubmissionRequest = {
@@ -358,7 +365,7 @@ private[spark] class Client(
       uploadedJarsBase64Contents = uploadJarsBase64Contents)
   }
 
-  def compressJars(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
+  private def compressJars(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
     maybeFilePaths
       .map(_.split(","))
       .map(CompressionUtils.createTarGzip(_))
@@ -383,6 +390,23 @@ private[spark] class Client(
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager)
   }
+
+  private def parseCustomLabels(labels: String): Map[String, String] = {
+    labels.split(",").map(_.trim).filterNot(_.isEmpty).map(label => {
+      label.split("=", 2).toSeq match {
+        case Seq(k, v) =>
+          require(k != DRIVER_LAUNCHER_SELECTOR_LABEL, "Label with key" +
+            s" $DRIVER_LAUNCHER_SELECTOR_LABEL cannot be used in" +
+            " spark.kubernetes.driver.labels, as it is reserved for Spark's" +
+            " internal configuration.")
+          (k, v)
+        case _ =>
+          throw new SparkException("Custom labels set by spark.kubernetes.driver.labels" +
+            " must be a comma-separated list of key-value pairs, with format <key>=<value>." +
+            s" Got label: $label. All labels: $labels")
+      }
+    }).toMap
+  }
 }
 
 private[spark] object Client extends Logging {
@@ -401,6 +425,7 @@ private[spark] object Client extends Logging {
   private val SECURE_RANDOM = new SecureRandom()
   private val SPARK_SUBMISSION_SECRET_BASE_DIR = "/var/run/secrets/spark-submission"
   private val LAUNCH_TIMEOUT_SECONDS = 30
+  private val SPARK_APP_NAME_LABEL = "spark-app-name"
 
   def main(args: Array[String]): Unit = {
     require(args.length >= 2, s"Too few arguments. Usage: ${getClass.getName} <mainAppResource>" +

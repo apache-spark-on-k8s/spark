@@ -104,6 +104,17 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     }
   }
 
+  private def getSparkMetricsService(sparkBaseAppName: String): SparkRestApiV1 = {
+    val serviceName = minikubeKubernetesClient.services()
+      .withLabel("spark-app-name", sparkBaseAppName)
+      .list()
+      .getItems
+      .get(0)
+      .getMetadata
+      .getName
+    Minikube.getService[SparkRestApiV1](serviceName, NAMESPACE, "spark-ui-port")
+  }
+
   private def expectationsForStaticAllocation(sparkMetricsService: SparkRestApiV1): Unit = {
     val apps = Eventually.eventually(TIMEOUT, INTERVAL) {
       val result = sparkMetricsService
@@ -148,8 +159,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       mainClass = MAIN_CLASS,
       mainAppResource = mainAppResource,
       appArgs = Array.empty[String]).run()
-    val sparkMetricsService = Minikube.getService[SparkRestApiV1](
-      "spark-pi", NAMESPACE, "spark-ui-port")
+    val sparkMetricsService = getSparkMetricsService("spark-pi")
     expectationsForStaticAllocation(sparkMetricsService)
   }
 
@@ -171,8 +181,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
       EXAMPLES_JAR)
     SparkSubmit.main(args)
-    val sparkMetricsService = Minikube.getService[SparkRestApiV1](
-      "spark-pi", NAMESPACE, "spark-ui-port")
+    val sparkMetricsService = getSparkMetricsService("spark-pi")
     expectationsForStaticAllocation(sparkMetricsService)
   }
 
@@ -185,7 +194,6 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
       "--class", "org.apache.spark.examples.SparkPi",
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
@@ -221,13 +229,56 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     Utils.tryWithResource(
       minikubeKubernetesClient
         .pods
-        .withName("spark-pi")
-        .watch(watcher)) { unused =>
+        .withLabel("spark-app-name", "spark-pi")
+        .watch(watcher)) { _ =>
       SparkSubmit.main(args)
       assert(allContainersSucceeded.get(2, TimeUnit.MINUTES),
           "Some containers exited with a non-zero status.")
     }
-    val jobLog = minikubeKubernetesClient.pods.withName("spark-pi").getLog
+    val driverPod = minikubeKubernetesClient.pods
+      .withLabel("spark-app-name", "spark-pi")
+      .list
+      .getItems
+      .get(0)
+    val jobLog = minikubeKubernetesClient.pods.withName(driverPod.getMetadata.getName).getLog
     assert(jobLog.contains("Pi is roughly"), "Pi was not computed by the job...")
+  }
+
+  test("Run with custom labels") {
+    val args = Array(
+      "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
+      "--deploy-mode", "cluster",
+      "--kubernetes-namespace", NAMESPACE,
+      "--name", "spark-pi",
+      "--executor-memory", "512m",
+      "--executor-cores", "1",
+      "--num-executors", "1",
+      "--upload-jars", HELPER_JAR,
+      "--class", MAIN_CLASS,
+      "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
+      "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
+      "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
+      "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
+      "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
+      "--conf", "spark.kubernetes.driver.labels=label1=label1value,label2=label2value",
+      EXAMPLES_JAR)
+    SparkSubmit.main(args)
+    val driverPodLabels = minikubeKubernetesClient
+      .pods
+      .withLabel("spark-app-name", "spark-pi")
+      .list()
+      .getItems
+      .get(0)
+      .getMetadata
+      .getLabels
+    // We can't match all of the selectors directly since one of the selectors is based on the
+    // launch time.
+    assert(driverPodLabels.size == 4, "Unexpected number of pod labels.")
+    assert(driverPodLabels.containsKey("driver-launcher-selector"), "Expected driver launcher" +
+      " selector label to be present.")
+    assert(driverPodLabels.get("spark-app-name") == "spark-pi", "Unexpected value for" +
+      " spark-app-name label.")
+    assert(driverPodLabels.get("label1") == "label1value", "Unexpected value for label1")
+    assert(driverPodLabels.get("label2") == "label2value", "Unexpected value for label2")
   }
 }
