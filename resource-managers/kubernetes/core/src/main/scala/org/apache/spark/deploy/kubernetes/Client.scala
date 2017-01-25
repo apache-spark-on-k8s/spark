@@ -109,7 +109,6 @@ private[spark] class Client(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
-        val selectors = Map(DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue).asJava
         val containerPorts = configureContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
@@ -134,10 +133,11 @@ private[spark] class Client(
                     val service = kubernetesClient.services().createNew()
                       .withNewMetadata()
                         .withName(kubernetesAppId)
+                        .withLabels(resolvedSelectors)
                         .endMetadata()
                       .withNewSpec()
                         .withType("NodePort")
-                        .withSelector(selectors)
+                        .withSelector(resolvedSelectors)
                         .withPorts(driverLauncherServicePort)
                         .endSpec()
                       .done()
