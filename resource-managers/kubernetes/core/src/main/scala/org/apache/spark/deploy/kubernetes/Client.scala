@@ -16,11 +16,13 @@
  */
 package org.apache.spark.deploy.kubernetes
 
-import java.io.File
-import java.security.SecureRandom
+import java.io.{File, FileInputStream}
+import java.security.{KeyStore, SecureRandom}
 import java.util.concurrent.{Executors, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
+import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.{SettableFuture, ThreadFactoryBuilder}
 import io.fabric8.kubernetes.api.model._
@@ -28,10 +30,11 @@ import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, Kub
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
 
-import org.apache.spark.{SPARK_VERSION, SparkConf, SparkException}
+import org.apache.spark.{SPARK_VERSION, SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
@@ -53,11 +56,16 @@ private[spark] class Client(
     .getOrElse("spark")
   private val kubernetesAppId = s"$appName-$launchTime"
   private val secretName = s"spark-submission-server-secret-$kubernetesAppId"
+  private val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
+  private val sslSecretsDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId-ssl"
+  private val sslSecretsName = s"spark-submission-server-ssl-$kubernetesAppId"
   private val driverLauncherSelectorValue = s"driver-launcher-$launchTime"
   private val driverDockerImage = sparkConf.get(
     "spark.kubernetes.driver.docker.image", s"spark-driver:$SPARK_VERSION")
   private val uploadedJars = sparkConf.getOption("spark.kubernetes.driver.uploads.jars")
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
+
+  private val (driverLaunchSslOptions, isKeyStoreLocalFile) = parseDriverLaunchSslOptions()
 
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
@@ -95,10 +103,10 @@ private[spark] class Client(
 
     val k8ClientConfig = k8ConfBuilder.build
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig))(kubernetesClient => {
-      val secret = kubernetesClient.secrets().createNew()
+      val submitServerSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
-        .withName(secretName)
-        .endMetadata()
+          .withName(secretName)
+          .endMetadata()
         .withData(Map((SUBMISSION_SERVER_SECRET_NAME, secretBase64String)).asJava)
         .withType("Opaque")
         .done()
@@ -107,10 +115,9 @@ private[spark] class Client(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
-        val selectors = Map(DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue).asJava
+        val (sslEnvs, sslVolumes, sslVolumeMounts) = configureSsl(kubernetesClient)
         val containerPorts = configureContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
-        val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
         val submitPending = new AtomicBoolean(false)
         val podWatcher = new Watcher[Pod] {
           override def eventReceived(action: Action, pod: Pod): Unit = {
@@ -135,7 +142,7 @@ private[spark] class Client(
                         .endMetadata()
                       .withNewSpec()
                         .withType("NodePort")
-                        .withSelector(selectors)
+                        .withSelector(resolvedSelectors)
                         .withPorts(driverLauncherServicePort)
                         .endSpec()
                       .done()
@@ -227,9 +234,10 @@ private[spark] class Client(
               .addNewVolume()
                 .withName(s"spark-submission-secret-volume")
                   .withNewSecret()
-                  .withSecretName(secret.getMetadata.getName)
+                  .withSecretName(submitServerSecret.getMetadata.getName)
                   .endSecret()
                 .endVolume
+              .addToVolumes(sslVolumes: _*)
               .withServiceAccount(serviceAccount)
               .addNewContainer()
                 .withName(DRIVER_LAUNCHER_CONTAINER_NAME)
@@ -240,6 +248,7 @@ private[spark] class Client(
                   .withMountPath(secretDirectory)
                   .withReadOnly(true)
                   .endVolumeMount()
+                .addToVolumeMounts(sslVolumeMounts: _*)
                 .addNewEnv()
                   .withName("SPARK_SUBMISSION_SECRET_LOCATION")
                   .withValue(s"$secretDirectory/$SUBMISSION_SERVER_SECRET_NAME")
@@ -248,6 +257,7 @@ private[spark] class Client(
                   .withName("SPARK_DRIVER_LAUNCHER_SERVER_PORT")
                   .withValue(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT.toString)
                   .endEnv()
+                .addToEnv(sslEnvs: _*)
                 .withPorts(containerPorts.asJava)
                 .endContainer()
               .endSpec()
@@ -278,9 +288,113 @@ private[spark] class Client(
           .withLabels(resolvedSelectors)
           .watch(podWatcher)) { createDriverPod }
       } finally {
-        kubernetesClient.secrets().delete(secret)
+        kubernetesClient.secrets().delete(submitServerSecret)
       }
     })
+  }
+
+  private def parseDriverLaunchSslOptions(): (SSLOptions, Boolean) = {
+    val maybeKeyStore = sparkConf.getOption("spark.ssl.kubernetes.driverlaunch.keyStore")
+    val resolvedSparkConf = sparkConf.clone()
+    val (isLocalKeyStore, resolvedKeyStore) = maybeKeyStore.map(keyStore => {
+      val keyStoreURI = Utils.resolveURI(keyStore)
+      val isProvidedKeyStoreLocal = keyStoreURI.getScheme match {
+        case "file" | null => true
+        case "container" => false
+        case _ => throw new SparkException(s"Invalid KeyStore URI $keyStore; keyStore URI" +
+          " for submit server must have scheme file:// or container:// (no scheme defaults" +
+          " to file://)")
+      }
+      (isProvidedKeyStoreLocal, Option.apply(keyStoreURI.getPath))
+    }).getOrElse((true, Option.empty[String]))
+    resolvedKeyStore.foreach {
+      resolvedSparkConf.set("spark.ssl.kubernetes.driverlaunch.keyStore", _)
+    }
+    sparkConf.getOption("spark.ssl.kubernetes.driverlaunch.trustStore").foreach { trustStore =>
+      val trustStoreURI = Utils.resolveURI(trustStore)
+      trustStoreURI.getScheme match {
+        case "file" | null =>
+          resolvedSparkConf.set("spark.ssl.kubernetes.driverlaunch.trustStore",
+            trustStoreURI.getPath)
+        case _ => throw new SparkException(s"Invalid trustStore URI $trustStore; trustStore URI" +
+          " for submit server must have no scheme, or scheme file://")
+      }
+    }
+    val securityManager = new SecurityManager(resolvedSparkConf)
+    (securityManager.getSSLOptions("kubernetes.driverlaunch"), isLocalKeyStore)
+  }
+
+  private def configureSsl(kubernetesClient: KubernetesClient)
+      : (Array[EnvVar], Array[Volume], Array[VolumeMount]) = {
+    if (driverLaunchSslOptions.enabled) {
+      val sslSecretsMap = mutable.HashMap[String, String]()
+      val sslEnvs = mutable.Buffer[EnvVar]()
+      driverLaunchSslOptions.keyStore.foreach(store => {
+        val resolvedKeyStoreFile = if (isKeyStoreLocalFile) {
+          if (!store.isFile) {
+            throw new SparkException(s"KeyStore specified at $store is not a file or" +
+              s" does not exist.")
+          }
+          val keyStoreBytes = Files.toByteArray(store)
+          val keyStoreBase64 = Base64.encodeBase64String(keyStoreBytes)
+          sslSecretsMap += (SSL_KEYSTORE_SECRET_NAME -> keyStoreBase64)
+          s"$sslSecretsDirectory/$SSL_KEYSTORE_SECRET_NAME"
+        } else {
+          store.getAbsolutePath
+        }
+        sslEnvs += new EnvVarBuilder()
+          .withName("SPARK_SUBMISSION_KEYSTORE_FILE")
+          .withValue(resolvedKeyStoreFile)
+          .build()
+      })
+      driverLaunchSslOptions.keyStorePassword.foreach(password => {
+        val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
+        sslSecretsMap += (SSL_KEYSTORE_PASSWORD_SECRET_NAME -> passwordBase64)
+        sslEnvs += new EnvVarBuilder()
+          .withName("SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE")
+          .withValue(s"$sslSecretsDirectory/$SSL_KEYSTORE_PASSWORD_SECRET_NAME")
+          .build()
+      })
+      driverLaunchSslOptions.keyPassword.foreach(password => {
+        val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
+        sslSecretsMap += (SSL_KEY_PASSWORD_SECRET_NAME -> passwordBase64)
+        sslEnvs += new EnvVarBuilder()
+          .withName("SPARK_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE")
+          .withValue(s"$sslSecretsDirectory/$SSL_KEY_PASSWORD_SECRET_NAME")
+          .build()
+      })
+      driverLaunchSslOptions.keyStoreType.foreach(storeType => {
+        sslEnvs += new EnvVarBuilder()
+          .withName("SPARK_SUBMISSION_KEYSTORE_TYPE")
+          .withValue(storeType)
+          .build()
+      })
+      sslEnvs += new EnvVarBuilder()
+        .withName("SPARK_SUBMISSION_USE_SSL")
+        .withValue("true")
+        .build()
+      val sslSecrets = kubernetesClient.secrets().createNew()
+        .withNewMetadata()
+        .withName(sslSecretsName)
+        .endMetadata()
+        .withData(sslSecretsMap.asJava)
+        .withType("Opaque")
+        .done()
+      val sslVolume = new VolumeBuilder()
+        .withName("spark-submission-server-ssl-secrets")
+        .withNewSecret()
+          .withSecretName(sslSecrets.getMetadata.getName)
+          .endSecret()
+        .build()
+      val sslVolumeMount = new VolumeMountBuilder()
+        .withName("spark-submission-server-ssl-secrets")
+        .withReadOnly(true)
+        .withMountPath(sslSecretsDirectory)
+        .build()
+      (sslEnvs.toArray, Array(sslVolume), Array(sslVolumeMount))
+    } else {
+      (Array[EnvVar](), Array[Volume](), Array[VolumeMount]())
+    }
   }
 
   private def getSubmitErrorMessage(
@@ -403,8 +517,41 @@ private[spark] class Client(
     // TODO be resilient to node failures and try all of them
     val node = kubernetesClient.nodes.list.getItems.asScala.head
     val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
-    val url = s"http://$nodeAddress:$servicePort"
-    HttpClientUtil.createClient[KubernetesSparkRestApi](uri = url)
+    val urlScheme = if (driverLaunchSslOptions.enabled) "https" else "http"
+    val (trustManager: X509TrustManager, sslContext: SSLContext) =
+      if (driverLaunchSslOptions.enabled) {
+        driverLaunchSslOptions.trustStore match {
+          case Some(trustStoreFile) =>
+            val trustManagerFactory = TrustManagerFactory.getInstance(
+              TrustManagerFactory.getDefaultAlgorithm)
+            val trustStore = KeyStore.getInstance(
+              driverLaunchSslOptions.trustStoreType.getOrElse(KeyStore.getDefaultType))
+            if (!trustStoreFile.isFile) {
+              throw new SparkException(s"TrustStore file at ${trustStoreFile.getAbsolutePath}" +
+                s" does not exist or is not a file.")
+            }
+            Utils.tryWithResource(new FileInputStream(trustStoreFile)) { trustStoreStream =>
+              driverLaunchSslOptions.trustStorePassword match {
+                case Some(password) =>
+                  trustStore.load(trustStoreStream, password.toCharArray)
+                case None => trustStore.load(trustStoreStream, null)
+              }
+            }
+            trustManagerFactory.init(trustStore)
+            val trustManagers = trustManagerFactory.getTrustManagers
+            val sslContext = SSLContext.getInstance("TLSv1.2")
+            sslContext.init(null, trustManagers, SECURE_RANDOM)
+            (trustManagers(0).asInstanceOf[X509TrustManager], sslContext)
+          case None => (null, SSLContext.getDefault)
+        }
+      } else {
+        (null, SSLContext.getDefault)
+      }
+    val url = s"$urlScheme://$nodeAddress:$servicePort"
+    HttpClientUtil.createClient[KubernetesSparkRestApi](
+      url,
+      sslSocketFactory = sslContext.getSocketFactory,
+      trustContext = trustManager)
   }
 
   private def parseCustomLabels(labels: String): Map[String, String] = {
@@ -428,6 +575,9 @@ private[spark] class Client(
 private[spark] object Client extends Logging {
 
   private val SUBMISSION_SERVER_SECRET_NAME = "spark-submission-server-secret"
+  private val SSL_KEYSTORE_SECRET_NAME = "spark-submission-server-keystore"
+  private val SSL_KEYSTORE_PASSWORD_SECRET_NAME = "spark-submission-server-keystore-password"
+  private val SSL_KEY_PASSWORD_SECRET_NAME = "spark-submission-server-key-password"
   private val DRIVER_LAUNCHER_SELECTOR_LABEL = "driver-launcher-selector"
   private val DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT = 7077
   private val DEFAULT_DRIVER_PORT = 7078

@@ -60,6 +60,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     .getOrElse(throw new IllegalStateException("Expected to find spark-examples jar; was the" +
         " pre-integration-test phase run?"))
 
+  private val KEYSTORE_FILE = Paths.get("ssl", "keyStore.jks")
+    .toFile
+    .getAbsolutePath
+  private val TRUSTSTORE_FILE = Paths.get("ssl", "trustStore.jks")
+    .toFile
+    .getAbsolutePath
+
   private val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   private val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
   private val MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
@@ -280,5 +287,31 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       " spark-app-name label.")
     assert(driverPodLabels.get("label1") == "label1value", "Unexpected value for label1")
     assert(driverPodLabels.get("label2") == "label2value", "Unexpected value for label2")
+  }
+
+  test("Enable SSL on the driver submit server") {
+    val args = Array(
+      "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
+      "--deploy-mode", "cluster",
+      "--kubernetes-namespace", NAMESPACE,
+      "--name", "spark-pi",
+      "--executor-memory", "512m",
+      "--executor-cores", "1",
+      "--num-executors", "1",
+      "--upload-jars", HELPER_JAR,
+      "--class", MAIN_CLASS,
+      "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
+      "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
+      "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
+      "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
+      "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
+      "--conf", "spark.ssl.kubernetes.driverlaunch.enabled=true",
+      "--conf", s"spark.ssl.kubernetes.driverlaunch.keyStore=file://$KEYSTORE_FILE",
+      "--conf", "spark.ssl.kubernetes.driverlaunch.keyStorePassword=changeit",
+      "--conf", "spark.ssl.kubernetes.driverlaunch.keyPassword=changeit",
+      "--conf", s"spark.ssl.kubernetes.driverlaunch.trustStore=file://$TRUSTSTORE_FILE",
+      "--conf", s"spark.ssl.kubernetes.driverlaunch.trustStorePassword=changeit",
+      EXAMPLES_JAR)
+    SparkSubmit.main(args)
   }
 }

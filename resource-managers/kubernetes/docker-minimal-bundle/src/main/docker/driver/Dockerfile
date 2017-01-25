@@ -1,4 +1,4 @@
-FROM anapsix/alpine-java:8
+FROM anapsix/alpine-java:8_jdk_unlimited
 
 # If this docker file is being used in the context of building your images from a Spark distribution, the docker build
 # command should be invoked from the top level directory of the Spark distribution. E.g.:
@@ -17,5 +17,14 @@ ENV SPARK_HOME /opt/spark
 
 WORKDIR /opt/spark
 
-# This class will also require setting a secret via the SPARK_APP_SECRET environment variable
-CMD exec bin/spark-class org.apache.spark.deploy.rest.kubernetes.KubernetesSparkRestServer --hostname $HOSTNAME --port $SPARK_DRIVER_LAUNCHER_SERVER_PORT --secret-file $SPARK_SUBMISSION_SECRET_LOCATION
+CMD SSL_ARGS="" && \
+    if ! [ -z ${SPARK_SUBMISSION_USE_SSL+x} ]; then SSL_ARGS="$SSL_ARGS --use-ssl $SPARK_SUBMISSION_USE_SSL"; fi && \
+    if ! [ -z ${SPARK_SUBMISSION_KEYSTORE_FILE+x} ]; then SSL_ARGS="$SSL_ARGS --keystore-file $SPARK_SUBMISSION_KEYSTORE_FILE"; fi && \
+    if ! [ -z ${SPARK_SUBMISSION_KEYSTORE_TYPE+x} ]; then SSL_ARGS="$SSL_ARGS --keystore-type $SPARK_SUBMISSION_KEYSTORE_TYPE"; fi && \
+    if ! [ -z ${SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE+x} ]; then SSL_ARGS="$SSL_ARGS --keystore-password-file $SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE"; fi && \
+    if ! [ -z ${SPARK_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE+x} ]; then SSL_ARGS="$SSL_ARGS --keystore-key-password-file $SPARK_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE"; fi && \
+    exec bin/spark-class org.apache.spark.deploy.rest.kubernetes.KubernetesSparkRestServer \
+      --hostname $HOSTNAME \
+      --port $SPARK_DRIVER_LAUNCHER_SERVER_PORT \
+      --secret-file $SPARK_SUBMISSION_SECRET_LOCATION \
+      ${SSL_ARGS}
