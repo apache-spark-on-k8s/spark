@@ -141,6 +141,7 @@ private[spark] class Client(
                     val service = kubernetesClient.services().createNew()
                       .withNewMetadata()
                         .withName(kubernetesAppId)
+                        .withLabels(resolvedSelectors)
                         .endMetadata()
                       .withNewSpec()
                         .withType("NodePort")
