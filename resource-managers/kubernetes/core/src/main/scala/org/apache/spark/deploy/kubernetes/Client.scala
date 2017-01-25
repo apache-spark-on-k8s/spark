@@ -175,12 +175,12 @@ private[spark] class Client(
                             .withName(UI_PORT_NAME)
                             .withPort(uiPort)
                             .withNewTargetPort(uiPort)
-                            .build
+                            .build()
                           kubernetesClient.services().withName(kubernetesAppId).edit()
                             .editSpec()
                               .withType("ClusterIP")
                               .withPorts(uiServicePort)
-                              .endSpec
+                              .endSpec()
                             .done
                         }
                       }
