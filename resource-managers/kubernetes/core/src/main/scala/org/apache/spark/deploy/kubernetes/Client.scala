@@ -61,7 +61,7 @@ private[spark] class Client(
     "spark.kubernetes.driver.docker.image", s"spark-driver:$SPARK_VERSION")
   private val uploadedJars = sparkConf.getOption("spark.kubernetes.driver.uploads.jars")
   private val driverLaunchTimeoutSecs = sparkConf.getTimeAsSeconds(
-    "spark.kubernetes.driverLaunchTimeout", s"${LAUNCH_TIMEOUT_SECONDS}s")
+    "spark.kubernetes.driverLaunchTimeout", s"${DEFAULT_LAUNCH_TIMEOUT_SECONDS}s")
 
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
@@ -426,7 +426,7 @@ private[spark] object Client extends Logging {
   private val DRIVER_LAUNCHER_CONTAINER_NAME = "spark-kubernetes-driver-launcher"
   private val SECURE_RANDOM = new SecureRandom()
   private val SPARK_SUBMISSION_SECRET_BASE_DIR = "/var/run/secrets/spark-submission"
-  private val LAUNCH_TIMEOUT_SECONDS = 60
+  private val DEFAULT_LAUNCH_TIMEOUT_SECONDS = 60
   private val SPARK_APP_NAME_LABEL = "spark-app-name"
 
   def main(args: Array[String]): Unit = {
