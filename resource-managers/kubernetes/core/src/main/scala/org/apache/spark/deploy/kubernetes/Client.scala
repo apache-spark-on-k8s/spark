@@ -302,7 +302,7 @@ private[spark] class Client(
     }
     val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
       s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in" +
-      s" $LAUNCH_TIMEOUT_SECONDS seconds."
+      s" $driverLaunchTimeoutSecs seconds."
     val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
       s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
     } else {
