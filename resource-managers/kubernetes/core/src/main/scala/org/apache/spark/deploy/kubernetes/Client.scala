@@ -524,32 +524,30 @@ private[spark] class Client(
     val node = kubernetesClient.nodes.list.getItems.asScala.head
     val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
     val urlScheme = if (driverLaunchSslOptions.enabled) "https" else "http"
-    val (trustManager: X509TrustManager, sslContext: SSLContext) =
+    val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverLaunchSslOptions.enabled) {
-        driverLaunchSslOptions.trustStore match {
-          case Some(trustStoreFile) =>
-            val trustManagerFactory = TrustManagerFactory.getInstance(
-              TrustManagerFactory.getDefaultAlgorithm)
-            val trustStore = KeyStore.getInstance(
-              driverLaunchSslOptions.trustStoreType.getOrElse(KeyStore.getDefaultType))
-            if (!trustStoreFile.isFile) {
-              throw new SparkException(s"TrustStore file at ${trustStoreFile.getAbsolutePath}" +
-                s" does not exist or is not a file.")
+        driverLaunchSslOptions.trustStore.map(trustStoreFile => {
+          val trustManagerFactory = TrustManagerFactory.getInstance(
+            TrustManagerFactory.getDefaultAlgorithm)
+          val trustStore = KeyStore.getInstance(
+            driverLaunchSslOptions.trustStoreType.getOrElse(KeyStore.getDefaultType))
+          if (!trustStoreFile.isFile) {
+            throw new SparkException(s"TrustStore file at ${trustStoreFile.getAbsolutePath}" +
+              s" does not exist or is not a file.")
+          }
+          Utils.tryWithResource(new FileInputStream(trustStoreFile)) { trustStoreStream =>
+            driverLaunchSslOptions.trustStorePassword match {
+              case Some(password) =>
+                trustStore.load(trustStoreStream, password.toCharArray)
+              case None => trustStore.load(trustStoreStream, null)
             }
-            Utils.tryWithResource(new FileInputStream(trustStoreFile)) { trustStoreStream =>
-              driverLaunchSslOptions.trustStorePassword match {
-                case Some(password) =>
-                  trustStore.load(trustStoreStream, password.toCharArray)
-                case None => trustStore.load(trustStoreStream, null)
-              }
-            }
-            trustManagerFactory.init(trustStore)
-            val trustManagers = trustManagerFactory.getTrustManagers
-            val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, trustManagers, SECURE_RANDOM)
-            (trustManagers(0).asInstanceOf[X509TrustManager], sslContext)
-          case None => (null, SSLContext.getDefault)
-        }
+          }
+          trustManagerFactory.init(trustStore)
+          val trustManagers = trustManagerFactory.getTrustManagers
+          val sslContext = SSLContext.getInstance("TLSv1.2")
+          sslContext.init(null, trustManagers, SECURE_RANDOM)
+          (trustManagers(0).asInstanceOf[X509TrustManager], sslContext)
+        }).getOrElse((null, SSLContext.getDefault))
       } else {
         (null, SSLContext.getDefault)
       }
