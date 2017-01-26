@@ -84,9 +84,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   before {
     Eventually.eventually(TIMEOUT, INTERVAL) {
       val podsList = minikubeKubernetesClient.pods().list()
-      assert(podsList == null || podsList.getItems == null || podsList.getItems.isEmpty)
+      assert(podsList == null
+        || podsList.getItems == null
+        || podsList.getItems.isEmpty
+      )
       val servicesList = minikubeKubernetesClient.services().list()
-      assert(servicesList == null || servicesList.getItems == null || servicesList.getItems.isEmpty)
+      assert(servicesList == null
+        || servicesList.getItems == null
+        || servicesList.getItems.isEmpty)
     }
   }
 
