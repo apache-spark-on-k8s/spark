@@ -223,6 +223,7 @@
     <PermGen>64m</PermGen>
     <MaxPermGen>512m</MaxPermGen>
     <CodeCacheSize>512m</CodeCacheSize>
+    <extraTestArgLine></extraTestArgLine>
   </properties>
   <repositories>
     <repository>
