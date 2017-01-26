@@ -187,6 +187,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--num-executors", "1",
       "--upload-jars", HELPER_JAR,
       "--class", MAIN_CLASS,
+      "--conf", "spark.ui.enabled=true",
+      "--conf", "spark.testing=false",
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
       "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
