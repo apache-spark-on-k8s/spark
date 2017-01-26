@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import com.google.common.io.Files
 import com.google.common.util.concurrent.{SettableFuture, ThreadFactoryBuilder}
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
@@ -105,132 +105,30 @@ private[spark] class Client(
         .withType("Opaque")
         .done()
       try {
-        val resolvedSelectors = (Map(
+        val driverKubernetesSelectors = (Map(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
-        val containerPorts = configureContainerPorts()
+        val containerPorts = buildContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
         val submitPending = new AtomicBoolean(false)
-        val podWatcher = new Watcher[Pod] {
-          override def eventReceived(action: Action, pod: Pod): Unit = {
-            if ((action == Action.ADDED || action == Action.MODIFIED)
-                && pod.getStatus.getPhase == "Running"
-                && !submitCompletedFuture.isDone) {
-              if (!submitPending.getAndSet(true)) {
-                pod.getStatus
-                  .getContainerStatuses
-                  .asScala
-                  .find(status =>
-                    status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
-                  case Some(_) =>
-                    val driverLauncherServicePort = new ServicePortBuilder()
-                      .withName(DRIVER_LAUNCHER_SERVICE_PORT_NAME)
-                      .withPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
-                      .withNewTargetPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
-                      .build()
-                    val service = kubernetesClient.services().createNew()
-                      .withNewMetadata()
-                        .withName(kubernetesAppId)
-                        .withLabels(resolvedSelectors)
-                        .endMetadata()
-                      .withNewSpec()
-                        .withType("NodePort")
-                        .withSelector(resolvedSelectors)
-                        .withPorts(driverLauncherServicePort)
-                        .endSpec()
-                      .done()
-                    try {
-                      sparkConf.set("spark.kubernetes.driver.service.name",
-                        service.getMetadata.getName)
-                      sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
-                      sparkConf.setIfMissing("spark.blockmanager.port",
-                        DEFAULT_BLOCKMANAGER_PORT.toString)
-                      val driverLauncher = getDriverLauncherClient(kubernetesClient, service)
-                      val ping = Retry.retry(5, 5.seconds) {
-                        driverLauncher.ping()
-                      }
-                      ping onFailure {
-                        case t: Throwable =>
-                          submitCompletedFuture.setException(t)
-                          kubernetesClient.services().delete(service)
-                      }
-                      val submitComplete = ping.flatMap { _ =>
-                        Future {
-                          sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
-                          val submitRequest = buildSubmissionRequest()
-                          driverLauncher.create(submitRequest)
-                        }
-                      }
-                      submitComplete onFailure {
-                        case t: Throwable =>
-                          submitCompletedFuture.setException(t)
-                          kubernetesClient.services().delete(service)
-                      }
-                      val adjustServicePort = submitComplete.flatMap { _ =>
-                        Future {
-                          // After submitting, adjust the service to only expose the Spark UI
-                          val uiServicePort = new ServicePortBuilder()
-                            .withName(UI_PORT_NAME)
-                            .withPort(uiPort)
-                            .withNewTargetPort(uiPort)
-                            .build()
-                          kubernetesClient.services().withName(kubernetesAppId).edit()
-                            .editSpec()
-                              .withType("ClusterIP")
-                              .withPorts(uiServicePort)
-                              .endSpec()
-                            .done
-                        }
-                      }
-                      adjustServicePort onSuccess {
-                        case _ =>
-                          submitCompletedFuture.set(true)
-                      }
-                      adjustServicePort onFailure {
-                        case throwable: Throwable =>
-                          submitCompletedFuture.setException(throwable)
-                          kubernetesClient.services().delete(service)
-                      }
-                    } catch {
-                      case e: Throwable =>
-                        submitCompletedFuture.setException(e)
-                        try {
-                          kubernetesClient.services().delete(service)
-                        } catch {
-                          case throwable: Throwable =>
-                            logError("Submitting the job failed but failed to" +
-                              " clean up the created service.", throwable)
-                        }
-                        throw e
-                    }
-                  case None =>
-                }
-              }
-            }
-          }
-
-          override def onClose(e: KubernetesClientException): Unit = {
-            if (!submitCompletedFuture.isDone) {
-              submitCompletedFuture.setException(e)
-            }
-          }
-        }
-
-        def createDriverPod(unused: Watch): Unit = {
+        val podWatcher = new DriverPodWatcher(submitCompletedFuture, submitPending,
+          kubernetesClient, driverKubernetesSelectors)
+        Utils.tryWithResource(kubernetesClient
+            .pods()
+            .withLabels(driverKubernetesSelectors)
+            .watch(podWatcher)) { _ =>
           kubernetesClient.pods().createNew()
             .withNewMetadata()
               .withName(kubernetesAppId)
-              .withLabels(resolvedSelectors)
+              .withLabels(driverKubernetesSelectors)
               .endMetadata()
             .withNewSpec()
               .withRestartPolicy("OnFailure")
               .addNewVolume()
                 .withName(s"spark-submission-secret-volume")
-                  .withNewSecret()
-                  .withSecretName(secret.getMetadata.getName)
-                  .endSecret()
+                .withNewSecret().withSecretName(secret.getMetadata.getName).endSecret()
                 .endVolume
               .withServiceAccount(serviceAccount)
               .addNewContainer()
@@ -260,32 +158,136 @@ private[spark] class Client(
             submitSucceeded = true
           } catch {
             case e: TimeoutException =>
-              val finalErrorMessage: String = getSubmitErrorMessage(kubernetesClient, e)
+              val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
               logError(finalErrorMessage, e)
               throw new SparkException(finalErrorMessage, e)
-            } finally {
-              if (!submitSucceeded) {
-                try {
-                  kubernetesClient.pods.withName(kubernetesAppId).delete
-                } catch {
-                  case throwable: Throwable =>
-                    logError("Failed to delete driver pod after it failed to run.", throwable)
-                }
+          } finally {
+            if (!submitSucceeded) {
+              try {
+                kubernetesClient.pods.withName(kubernetesAppId).delete
+              } catch {
+                case throwable: Throwable =>
+                  logError("Failed to delete driver pod after it failed to run.", throwable)
               }
             }
           }
-
-        Utils.tryWithResource(kubernetesClient
-          .pods()
-          .withLabels(resolvedSelectors)
-          .watch(podWatcher)) { createDriverPod }
+        }
       } finally {
         kubernetesClient.secrets().delete(secret)
       }
     })
   }
 
-  private def getSubmitErrorMessage(
+  private class DriverPodWatcher(
+      submitCompletedFuture: SettableFuture[Boolean],
+      submitPending: AtomicBoolean,
+      kubernetesClient: KubernetesClient,
+      driverKubernetesSelectors: java.util.Map[String, String]) extends Watcher[Pod] {
+    override def eventReceived(action: Action, pod: Pod): Unit = {
+      if ((action == Action.ADDED || action == Action.MODIFIED)
+        && pod.getStatus.getPhase == "Running"
+        && !submitCompletedFuture.isDone) {
+        if (!submitPending.getAndSet(true)) {
+          pod.getStatus
+            .getContainerStatuses
+            .asScala
+            .find(status =>
+              status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
+            case Some(_) =>
+              val driverLauncherServicePort = new ServicePortBuilder()
+                .withName(DRIVER_LAUNCHER_SERVICE_PORT_NAME)
+                .withPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
+                .withNewTargetPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
+                .build()
+              val service = kubernetesClient.services().createNew()
+                .withNewMetadata()
+                  .withName(kubernetesAppId)
+                  .withLabels(driverKubernetesSelectors)
+                  .endMetadata()
+                .withNewSpec()
+                  .withType("NodePort")
+                  .withSelector(driverKubernetesSelectors)
+                  .withPorts(driverLauncherServicePort)
+                  .endSpec()
+                .done()
+              try {
+                sparkConf.set("spark.kubernetes.driver.service.name",
+                  service.getMetadata.getName)
+                sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
+                sparkConf.setIfMissing("spark.blockmanager.port",
+                  DEFAULT_BLOCKMANAGER_PORT.toString)
+                val driverLauncher = buildDriverLauncherClient(kubernetesClient, service)
+                val ping = Retry.retry(5, 5.seconds) {
+                  driverLauncher.ping()
+                }
+                ping onFailure {
+                  case t: Throwable =>
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val submitComplete = ping.flatMap { _ =>
+                  Future {
+                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
+                    val submitRequest = buildSubmissionRequest()
+                    driverLauncher.create(submitRequest)
+                  }
+                }
+                submitComplete onFailure {
+                  case t: Throwable =>
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val adjustServicePort = submitComplete.flatMap { _ =>
+                  Future {
+                    // After submitting, adjust the service to only expose the Spark UI
+                    val uiServicePort = new ServicePortBuilder()
+                      .withName(UI_PORT_NAME)
+                      .withPort(uiPort)
+                      .withNewTargetPort(uiPort)
+                      .build()
+                    kubernetesClient.services().withName(kubernetesAppId).edit()
+                      .editSpec()
+                        .withType("ClusterIP")
+                        .withPorts(uiServicePort)
+                        .endSpec()
+                      .done
+                  }
+                }
+                adjustServicePort onSuccess {
+                  case _ =>
+                    submitCompletedFuture.set(true)
+                }
+                adjustServicePort onFailure {
+                  case throwable: Throwable =>
+                    submitCompletedFuture.setException(throwable)
+                    kubernetesClient.services().delete(service)
+                }
+              } catch {
+                case e: Throwable =>
+                  submitCompletedFuture.setException(e)
+                  try {
+                    kubernetesClient.services().delete(service)
+                  } catch {
+                    case throwable: Throwable =>
+                      logError("Submitting the job failed but failed to" +
+                        " clean up the created service.", throwable)
+                  }
+                  throw e
+              }
+            case None =>
+          }
+        }
+      }
+    }
+
+    override def onClose(e: KubernetesClientException): Unit = {
+      if (!submitCompletedFuture.isDone) {
+        submitCompletedFuture.setException(e)
+      }
+    }
+  }
+
+  private def buildSubmitFailedErrorMessage(
       kubernetesClient: DefaultKubernetesClient,
       e: TimeoutException): String = {
     val driverPod = try {
@@ -343,7 +345,7 @@ private[spark] class Client(
       s"$podStatusMessage\n\n$failedDriverContainerStatusString"
   }
 
-  private def configureContainerPorts(): Seq[ContainerPort] = {
+  private def buildContainerPorts(): Seq[ContainerPort] = {
     Seq(
       new ContainerPortBuilder()
         .withContainerPort(sparkConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT))
@@ -391,7 +393,7 @@ private[spark] class Client(
       .map(CompressionUtils.createTarGzip(_))
   }
 
-  private def getDriverLauncherClient(
+  private def buildDriverLauncherClient(
       kubernetesClient: KubernetesClient,
       service: Service): KubernetesSparkRestApi = {
     val servicePort = service
