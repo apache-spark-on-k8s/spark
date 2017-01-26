@@ -112,12 +112,12 @@ private[spark] class Client(
         .withData(Map((SUBMISSION_SERVER_SECRET_NAME, secretBase64String)).asJava)
         .withType("Opaque")
         .done()
+      val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(kubernetesClient)
       try {
         val resolvedSelectors = (Map(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
-        val (sslEnvs, sslVolumes, sslVolumeMounts) = configureSsl(kubernetesClient)
         val containerPorts = configureContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val submitPending = new AtomicBoolean(false)
@@ -292,6 +292,7 @@ private[spark] class Client(
           .watch(podWatcher)) { createDriverPod }
       } finally {
         kubernetesClient.secrets().delete(submitServerSecret)
+        kubernetesClient.secrets().delete(sslSecrets: _*)
       }
     })
   }
@@ -328,10 +329,11 @@ private[spark] class Client(
   }
 
   private def configureSsl(kubernetesClient: KubernetesClient)
-      : (Array[EnvVar], Array[Volume], Array[VolumeMount]) = {
+      : (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
     if (driverLaunchSslOptions.enabled) {
       val sslSecretsMap = mutable.HashMap[String, String]()
       val sslEnvs = mutable.Buffer[EnvVar]()
+      val secrets = mutable.Buffer[Secret]()
       driverLaunchSslOptions.keyStore.foreach(store => {
         val resolvedKeyStoreFile = if (isKeyStoreLocalFile) {
           if (!store.isFile) {
@@ -383,6 +385,7 @@ private[spark] class Client(
         .withData(sslSecretsMap.asJava)
         .withType("Opaque")
         .done()
+      secrets += sslSecrets
       val sslVolume = new VolumeBuilder()
         .withName("spark-submission-server-ssl-secrets")
         .withNewSecret()
@@ -394,9 +397,9 @@ private[spark] class Client(
         .withReadOnly(true)
         .withMountPath(sslSecretsDirectory)
         .build()
-      (sslEnvs.toArray, Array(sslVolume), Array(sslVolumeMount))
+      (sslEnvs.toArray, Array(sslVolume), Array(sslVolumeMount), secrets.toArray)
     } else {
-      (Array[EnvVar](), Array[Volume](), Array[VolumeMount]())
+      (Array[EnvVar](), Array[Volume](), Array[VolumeMount](), Array[Secret]())
     }
   }
 
