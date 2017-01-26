@@ -34,11 +34,11 @@ private[kubernetes] class PodStateMonitor(client: DefaultKubernetesClient,
                       interval: Long) extends Logging {
 
   /**
-    * Log the state of the application until it finishes, either successfully or due to a
-    * failure, logging status throughout and on every state change.
-    *
-    * When the application finishes, returns its final state, either "Succeeded" or "Failed".
-    */
+   * Log the state of the application until it finishes, either successfully or due to a
+   * failure, logging status throughout and on every state change.
+   *
+   * When the application finishes, returns its final state, either "Succeeded" or "Failed".
+   */
   def monitorToCompletion(): String = {
 
     var previousPhase: String = null
