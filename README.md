@@ -6,6 +6,12 @@ This repository, located at https://github.com/apache-spark-on-k8s/spark, contai
 
 This is a collaboratively maintained project working on [SPARK-18278](https://issues.apache.org/jira/browse/SPARK-18278). The goal is to bring native support for Spark to use Kubernetes as a cluster manager, in a fully supported way on par with the Spark Standalone, Mesos, and Apache YARN cluster managers.
 
+## Getting Started
+
+- [Usage guide](docs/running-on-kubernetes.md) shows how to run the code
+- [Development docs](resource-managers/kubernetes/README.md) shows how to get set up for development
+- Code is primarily located in the [resource-managers/kubernetes](resource-managers/kubernetes) module
+
 ## Why does this fork exist?
 
 Adding native integration for a new cluster manager is a large undertaking.  If poorly executed, it could introduce bugs into Spark when run on other cluster managers, cause release blockers slowing down the overall Spark project, or require hotfixes which divert attention away from development towards managing additional releases.  Any work this core in Spark needs to be done carefully to minimize the risk of those negative externalities.
