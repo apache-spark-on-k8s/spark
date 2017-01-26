@@ -27,7 +27,7 @@ import org.apache.commons.codec.binary.Base64
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.{SPARK_VERSION, SSLOptions, SecurityManager, SparkConf}
+import org.apache.spark.{SecurityManager, SPARK_VERSION => sparkVersion, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.rest._
 import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
@@ -61,12 +61,12 @@ private object KubernetesSparkRestServerArguments {
         case "--port" :: value :: tail =>
           args = tail
           resolvedArguments.copy(port = Some(value.toInt))
-        case "--use-ssl" :: value :: tail =>
-          args = tail
-          resolvedArguments.copy(useSsl = value.toBoolean)
         case "--secret-file" :: value :: tail =>
           args = tail
           resolvedArguments.copy(secretFile = Some(value))
+        case "--use-ssl" :: value :: tail =>
+          args = tail
+          resolvedArguments.copy(useSsl = value.toBoolean)
         case "--keystore-file" :: value :: tail =>
           args = tail
           resolvedArguments.copy(keyStoreFile = Some(value))
@@ -219,7 +219,7 @@ private[spark] class KubernetesSparkRestServer(
                 response.success = true
                 response.submissionId = null
                 response.message = "success"
-                response.serverSparkVersion = SPARK_VERSION
+                response.serverSparkVersion = sparkVersion
                 response
               }
             case unexpected =>
@@ -282,10 +282,10 @@ private[spark] object KubernetesSparkRestServer {
     val sslOptions = if (parsedArguments.useSsl) {
       val keyStorePassword = parsedArguments
         .keyStorePasswordFile
-        .map(fileToUtf8String)
+        .map(fileToUtf8String(_, "KeyStore Password file"))
       val keyPassword = parsedArguments
         .keyPasswordFile
-        .map(fileToUtf8String)
+        .map(fileToUtf8String(_, "Key Password file"))
       new SSLOptions(
         enabled = true,
         keyStore = parsedArguments.keyStoreFile.map(new File(_)),
@@ -315,10 +315,10 @@ private[spark] object KubernetesSparkRestServer {
     barrier.await()
   }
 
-  private def fileToUtf8String(filePath: String) = {
+  private def fileToUtf8String(filePath: String, fileType: String) = {
     val passwordFile = new File(filePath)
     if (!passwordFile.isFile) {
-      throw new IllegalArgumentException("KeyStore password file does not exist or " +
+      throw new SparkException(s"$fileType at $filePath does not exist or " +
         "is a directory.")
     }
     val passwordBytes = Files.toByteArray(passwordFile)

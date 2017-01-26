@@ -34,7 +34,7 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
 
-import org.apache.spark.{SPARK_VERSION, SecurityManager, SparkConf, SparkException, SSLOptions}
+import org.apache.spark.{SecurityManager, SPARK_VERSION => sparkVersion, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
@@ -61,7 +61,7 @@ private[spark] class Client(
   private val sslSecretsName = s"spark-submission-server-ssl-$kubernetesAppId"
   private val driverLauncherSelectorValue = s"driver-launcher-$launchTime"
   private val driverDockerImage = sparkConf.get(
-    "spark.kubernetes.driver.docker.image", s"spark-driver:$SPARK_VERSION")
+    "spark.kubernetes.driver.docker.image", s"spark-driver:$sparkVersion")
   private val uploadedJars = sparkConf.getOption("spark.kubernetes.driver.uploads.jars")
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverLaunchTimeoutSecs = sparkConf.getTimeAsSeconds(
@@ -223,7 +223,7 @@ private[spark] class Client(
 
   private def configureSsl(kubernetesClient: KubernetesClient)
       : (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
-    if (driverLaunchSslOptions.enabled) {
+    if (!driverLaunchSslOptions.enabled) {
       val sslSecretsMap = mutable.HashMap[String, String]()
       val sslEnvs = mutable.Buffer[EnvVar]()
       val secrets = mutable.Buffer[Secret]()
@@ -525,7 +525,14 @@ private[spark] class Client(
     // TODO be resilient to node failures and try all of them
     val node = kubernetesClient.nodes.list.getItems.asScala.head
     val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
-    val urlScheme = if (driverLaunchSslOptions.enabled) "https" else "http"
+    val urlScheme = if (driverLaunchSslOptions.enabled) {
+      "https"
+    } else {
+      logWarning("Submitting application details and local jars to the cluster" +
+        " over an insecure connection. Consider configuring SSL to secure" +
+        " this step.")
+      "http"
+    }
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverLaunchSslOptions.enabled) {
         driverLaunchSslOptions.trustStore.map(trustStoreFile => {

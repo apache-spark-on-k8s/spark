@@ -19,16 +19,16 @@ package org.apache.spark.deploy.rest
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
-import scala.io.Source
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.eclipse.jetty.http.HttpVersion
-import org.eclipse.jetty.server.{AbstractConnectionFactory, HttpConfiguration, HttpConnectionFactory, Server, ServerConnector, SslConnectionFactory}
+import org.eclipse.jetty.server.{HttpConfiguration, HttpConnectionFactory, Server, ServerConnector, SslConnectionFactory}
 import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
 import org.eclipse.jetty.util.thread.{QueuedThreadPool, ScheduledExecutorScheduler}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
+import scala.io.Source
 
-import org.apache.spark.{SSLOptions, SparkConf, SPARK_VERSION => sparkVersion}
+import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf, SSLOptions}
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
 
