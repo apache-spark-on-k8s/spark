@@ -26,7 +26,7 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.{ConfigBuilder => KConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
@@ -65,6 +65,8 @@ private[spark] class Client(
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
+  private val fireAndForget: Boolean = !sparkConf.get(WAIT_FOR_APP_COMPLETION);
+
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
     SECURE_RANDOM.nextBytes(secretBytes)
@@ -81,7 +83,7 @@ private[spark] class Client(
   def run(): Unit = {
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
     val parsedCustomLabels = parseCustomLabels(customLabels)
-    var k8ConfBuilder = new ConfigBuilder()
+    var k8ConfBuilder = new KConfigBuilder()
       .withApiVersion("v1")
       .withMasterUrl(master)
       .withNamespace(namespace)
@@ -181,6 +183,14 @@ private[spark] class Client(
               }
             }
           }
+        }
+
+        // poll for status
+        if (!fireAndForget) {
+          val reportInterval = sparkConf.get(REPORT_INTERVAL)
+          val finalState = new PodStateMonitor(kubernetesClient, kubernetesAppId, reportInterval)
+            .monitorToCompletion()
+          logInfo(s"Application $kubernetesAppId ended with final phase $finalState")
         }
       } finally {
         Utils.tryLogNonFatalError {
