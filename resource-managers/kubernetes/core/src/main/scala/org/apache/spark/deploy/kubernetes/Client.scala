@@ -67,8 +67,6 @@ private[spark] class Client(
   private val driverLaunchTimeoutSecs = sparkConf.getTimeAsSeconds(
     "spark.kubernetes.driverLaunchTimeout", s"${DEFAULT_LAUNCH_TIMEOUT_SECONDS}s")
 
-  private val (driverLaunchSslOptions, isKeyStoreLocalFile) = parseDriverLaunchSslOptions()
-
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
     SECURE_RANDOM.nextBytes(secretBytes)
@@ -88,6 +86,7 @@ private[spark] class Client(
         .build()))
 
   def run(): Unit = {
+    val (driverLaunchSslOptions, isKeyStoreLocalFile) = parseDriverLaunchSslOptions()
     val parsedCustomLabels = parseCustomLabels(customLabels)
     var k8ConfBuilder = new ConfigBuilder()
       .withApiVersion("v1")
@@ -112,7 +111,9 @@ private[spark] class Client(
         .withData(Map((SUBMISSION_SERVER_SECRET_NAME, secretBase64String)).asJava)
         .withType("Opaque")
         .done()
-      val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(kubernetesClient)
+      val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(kubernetesClient,
+        driverLaunchSslOptions,
+        isKeyStoreLocalFile)
       try {
         val driverKubernetesSelectors = (Map(
             DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
@@ -122,7 +123,7 @@ private[spark] class Client(
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val submitPending = new AtomicBoolean(false)
         val podWatcher = new DriverPodWatcher(submitCompletedFuture, submitPending,
-          kubernetesClient, driverKubernetesSelectors)
+          kubernetesClient, driverKubernetesSelectors, driverLaunchSslOptions)
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
@@ -221,8 +222,9 @@ private[spark] class Client(
     (securityManager.getSSLOptions("kubernetes.driverlaunch"), isLocalKeyStore)
   }
 
-  private def configureSsl(kubernetesClient: KubernetesClient):
-      (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
+  private def configureSsl(kubernetesClient: KubernetesClient, driverLaunchSslOptions: SSLOptions,
+        isKeyStoreLocalFile: Boolean):
+        (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
     if (driverLaunchSslOptions.enabled) {
       val sslSecretsMap = mutable.HashMap[String, String]()
       val sslEnvs = mutable.Buffer[EnvVar]()
@@ -300,7 +302,8 @@ private[spark] class Client(
       submitCompletedFuture: SettableFuture[Boolean],
       submitPending: AtomicBoolean,
       kubernetesClient: KubernetesClient,
-      driverKubernetesSelectors: java.util.Map[String, String]) extends Watcher[Pod] {
+      driverKubernetesSelectors: java.util.Map[String, String],
+      driverLaunchSslOptions: SSLOptions) extends Watcher[Pod] {
     override def eventReceived(action: Action, pod: Pod): Unit = {
       if ((action == Action.ADDED || action == Action.MODIFIED)
         && pod.getStatus.getPhase == "Running"
@@ -334,7 +337,8 @@ private[spark] class Client(
                 sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
                 sparkConf.setIfMissing("spark.blockmanager.port",
                   DEFAULT_BLOCKMANAGER_PORT.toString)
-                val driverLauncher = buildDriverLauncherClient(kubernetesClient, service)
+                val driverLauncher = buildDriverLauncherClient(kubernetesClient, service,
+                    driverLaunchSslOptions)
                 val ping = Retry.retry(5, 5.seconds) {
                   driverLauncher.ping()
                 }
@@ -464,19 +468,10 @@ private[spark] class Client(
   }
 
   private def buildContainerPorts(): Seq[ContainerPort] = {
-    Seq(
-      new ContainerPortBuilder()
-        .withContainerPort(sparkConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT))
-        .build(),
-      new ContainerPortBuilder()
-        .withContainerPort(sparkConf.getInt("spark.blockmanager.port", DEFAULT_BLOCKMANAGER_PORT))
-        .build(),
-      new ContainerPortBuilder()
-        .withContainerPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
-        .build(),
-      new ContainerPortBuilder()
-        .withContainerPort(uiPort)
-        .build())
+    Seq(sparkConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT),
+      sparkConf.getInt("spark.blockManager.port", DEFAULT_BLOCKMANAGER_PORT),
+      DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT,
+      uiPort).map(new ContainerPortBuilder().withContainerPort(_).build())
   }
 
   private def buildSubmissionRequest(): KubernetesCreateSubmissionRequest = {
@@ -513,7 +508,8 @@ private[spark] class Client(
 
   private def buildDriverLauncherClient(
       kubernetesClient: KubernetesClient,
-      service: Service): KubernetesSparkRestApi = {
+      service: Service,
+      driverLaunchSslOptions: SSLOptions): KubernetesSparkRestApi = {
     val servicePort = service
       .getSpec
       .getPorts
@@ -528,35 +524,14 @@ private[spark] class Client(
     val urlScheme = if (driverLaunchSslOptions.enabled) {
       "https"
     } else {
-      logWarning("Submitting application details and local jars to the cluster" +
-        " over an insecure connection. Consider configuring SSL to secure" +
-        " this step.")
+      logWarning("Submitting application details, application secret, and local" +
+        " jars to the cluster over an insecure connection. You should configure SSL" +
+        " to secure this step.")
       "http"
     }
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverLaunchSslOptions.enabled) {
-        driverLaunchSslOptions.trustStore.map(trustStoreFile => {
-          val trustManagerFactory = TrustManagerFactory.getInstance(
-            TrustManagerFactory.getDefaultAlgorithm)
-          val trustStore = KeyStore.getInstance(
-            driverLaunchSslOptions.trustStoreType.getOrElse(KeyStore.getDefaultType))
-          if (!trustStoreFile.isFile) {
-            throw new SparkException(s"TrustStore file at ${trustStoreFile.getAbsolutePath}" +
-              s" does not exist or is not a file.")
-          }
-          Utils.tryWithResource(new FileInputStream(trustStoreFile)) { trustStoreStream =>
-            driverLaunchSslOptions.trustStorePassword match {
-              case Some(password) =>
-                trustStore.load(trustStoreStream, password.toCharArray)
-              case None => trustStore.load(trustStoreStream, null)
-            }
-          }
-          trustManagerFactory.init(trustStore)
-          val trustManagers = trustManagerFactory.getTrustManagers
-          val sslContext = SSLContext.getInstance("TLSv1.2")
-          sslContext.init(null, trustManagers, SECURE_RANDOM)
-          (trustManagers(0).asInstanceOf[X509TrustManager], sslContext)
-        }).getOrElse((null, SSLContext.getDefault))
+        buildSslConnectionConfiguration(driverLaunchSslOptions)
       } else {
         (null, SSLContext.getDefault)
       }
@@ -565,6 +540,31 @@ private[spark] class Client(
       url,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager)
+  }
+
+  private def buildSslConnectionConfiguration(driverLaunchSslOptions: SSLOptions) = {
+    driverLaunchSslOptions.trustStore.map(trustStoreFile => {
+      val trustManagerFactory = TrustManagerFactory.getInstance(
+        TrustManagerFactory.getDefaultAlgorithm)
+      val trustStore = KeyStore.getInstance(
+        driverLaunchSslOptions.trustStoreType.getOrElse(KeyStore.getDefaultType))
+      if (!trustStoreFile.isFile) {
+        throw new SparkException(s"TrustStore file at ${trustStoreFile.getAbsolutePath}" +
+          s" does not exist or is not a file.")
+      }
+      Utils.tryWithResource(new FileInputStream(trustStoreFile)) { trustStoreStream =>
+        driverLaunchSslOptions.trustStorePassword match {
+          case Some(password) =>
+            trustStore.load(trustStoreStream, password.toCharArray)
+          case None => trustStore.load(trustStoreStream, null)
+        }
+      }
+      trustManagerFactory.init(trustStore)
+      val trustManagers = trustManagerFactory.getTrustManagers
+      val sslContext = SSLContext.getInstance("TLSv1.2")
+      sslContext.init(null, trustManagers, SECURE_RANDOM)
+      (trustManagers(0).asInstanceOf[X509TrustManager], sslContext)
+    }).getOrElse((null, SSLContext.getDefault))
   }
 
   private def parseCustomLabels(labels: String): Map[String, String] = {

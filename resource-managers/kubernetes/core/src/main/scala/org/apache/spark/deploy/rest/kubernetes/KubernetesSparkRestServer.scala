@@ -272,6 +272,7 @@ private[spark] class KubernetesSparkRestServer(
 
 private[spark] object KubernetesSparkRestServer {
   private val barrier = new CountDownLatch(1)
+
   def main(args: Array[String]): Unit = {
     val parsedArguments = KubernetesSparkRestServerArguments.fromArgsArray(args)
     val secretFile = new File(parsedArguments.secretFile.get)
@@ -282,10 +283,12 @@ private[spark] object KubernetesSparkRestServer {
     val sslOptions = if (parsedArguments.useSsl) {
       val keyStorePassword = parsedArguments
         .keyStorePasswordFile
-        .map(fileToUtf8String(_, "KeyStore Password file"))
+        .map(new File(_))
+        .map(Files.toString(_, Charsets.UTF_8))
       val keyPassword = parsedArguments
         .keyPasswordFile
-        .map(fileToUtf8String(_, "Key Password file"))
+        .map(new File(_))
+        .map(Files.toString(_, Charsets.UTF_8))
       new SSLOptions(
         enabled = true,
         keyStore = parsedArguments.keyStoreFile.map(new File(_)),
@@ -313,16 +316,6 @@ private[spark] object KubernetesSparkRestServer {
       }
     })
     barrier.await()
-  }
-
-  private def fileToUtf8String(filePath: String, fileType: String) = {
-    val passwordFile = new File(filePath)
-    if (!passwordFile.isFile) {
-      throw new SparkException(s"$fileType at $filePath does not exist or " +
-        "is a directory.")
-    }
-    val passwordBytes = Files.toByteArray(passwordFile)
-    new String(passwordBytes, Charsets.UTF_8)
   }
 }
 
