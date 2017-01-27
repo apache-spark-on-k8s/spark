@@ -37,12 +37,7 @@ import org.apache.spark.deploy.kubernetes.Client
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 import org.apache.spark.deploy.kubernetes.integrationtest.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.restapis.SparkRestApiV1
-<<<<<<< HEAD
 import org.apache.spark.deploy.kubernetes.integrationtest.sslutil.SSLUtils
-||||||| merged common ancestors
-=======
-import org.apache.spark.internal.Logging
->>>>>>> nodeport-upload
 import org.apache.spark.status.api.v1.{ApplicationStatus, StageStatus}
 import org.apache.spark.util.Utils
 
