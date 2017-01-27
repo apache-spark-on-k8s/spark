@@ -96,9 +96,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
     sc.getConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT),
     CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
 
-  private def convertToEnvMode(value: String): String =
-    value.toUpperCase.map { c => if (c == '-') '_' else c }
-
   private val initialExecutors = getInitialTargetExecutorNumber(1)
 
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
