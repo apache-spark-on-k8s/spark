@@ -16,13 +16,13 @@
  */
 package org.apache.spark.deploy.kubernetes
 
+import scala.collection.JavaConverters._
+
 import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
-
-import scala.collection.JavaConverters._
 
 /**
  * A monitor for a running Kubernetes application, logging on state change and interval.
