@@ -122,8 +122,13 @@ private[spark] class Client(
         val containerPorts = buildContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
         val submitPending = new AtomicBoolean(false)
-        val podWatcher = new DriverPodWatcher(submitCompletedFuture, submitPending,
-          kubernetesClient, submitServerSecret, driverKubernetesSelectors)
+        val podWatcher = new DriverPodWatcher(
+          submitCompletedFuture,
+          submitPending,
+          kubernetesClient,
+          driverLaunchSslOptions,
+          Array(submitServerSecret) ++ sslSecrets,
+          driverKubernetesSelectors)
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
@@ -137,15 +142,9 @@ private[spark] class Client(
               .withRestartPolicy("OnFailure")
               .addNewVolume()
                 .withName(s"spark-submission-secret-volume")
-<<<<<<< HEAD
-                .withNewSecret().withSecretName(submitServerSecret.getMetadata.getName).endSecret()
-||||||| merged common ancestors
-                .withNewSecret().withSecretName(secret.getMetadata.getName).endSecret()
-=======
                 .withNewSecret()
-                  .withSecretName(applicationSubmitSecret.getMetadata.getName)
+                  .withSecretName(submitServerSecret.getMetadata.getName)
                   .endSecret()
->>>>>>> nodeport-upload
                 .endVolume
               .addToVolumes(sslVolumes: _*)
               .withServiceAccount(serviceAccount)
@@ -183,24 +182,19 @@ private[spark] class Client(
               throw new SparkException(finalErrorMessage, e)
           } finally {
             if (!submitSucceeded) {
-              try {
+              Utils.tryLogNonFatalError({
                 kubernetesClient.pods.withName(kubernetesAppId).delete
-              } catch {
-                case throwable: Throwable =>
-                  logError("Failed to delete driver pod after it failed to run.", throwable)
-              }
+              })
             }
           }
         }
       } finally {
-<<<<<<< HEAD
-        kubernetesClient.secrets().delete(submitServerSecret)
-        kubernetesClient.secrets().delete(sslSecrets: _*)
-||||||| merged common ancestors
-        kubernetesClient.secrets().delete(secret)
-=======
-        kubernetesClient.secrets().delete(applicationSubmitSecret)
->>>>>>> nodeport-upload
+        Utils.tryLogNonFatalError({
+          kubernetesClient.secrets().delete(submitServerSecret)
+        })
+        Utils.tryLogNonFatalError({
+          kubernetesClient.secrets().delete(sslSecrets: _*)
+        })
       }
     })
   }
@@ -316,15 +310,9 @@ private[spark] class Client(
       submitCompletedFuture: SettableFuture[Boolean],
       submitPending: AtomicBoolean,
       kubernetesClient: KubernetesClient,
-<<<<<<< HEAD
-      driverKubernetesSelectors: java.util.Map[String, String],
-      driverLaunchSslOptions: SSLOptions) extends Watcher[Pod] {
-||||||| merged common ancestors
+      driverLaunchSslOptions: SSLOptions,
+      applicationSecrets: Array[Secret],
       driverKubernetesSelectors: java.util.Map[String, String]) extends Watcher[Pod] {
-=======
-      applicationSubmitSecret: Secret,
-      driverKubernetesSelectors: java.util.Map[String, String]) extends Watcher[Pod] {
->>>>>>> nodeport-upload
     override def eventReceived(action: Action, pod: Pod): Unit = {
       if ((action == Action.ADDED || action == Action.MODIFIED)
         && pod.getStatus.getPhase == "Running"
@@ -344,8 +332,10 @@ private[spark] class Client(
                 .withController(true)
                 .build())
 
-              applicationSubmitSecret.getMetadata.setOwnerReferences(ownerRefs.asJava)
-              kubernetesClient.secrets().createOrReplace(applicationSubmitSecret)
+              applicationSecrets.foreach(secret => {
+                secret.getMetadata.setOwnerReferences(ownerRefs.asJava)
+                kubernetesClient.secrets().createOrReplace(secret)
+              })
 
               val driverLauncherServicePort = new ServicePortBuilder()
                 .withName(DRIVER_LAUNCHER_SERVICE_PORT_NAME)
@@ -421,13 +411,9 @@ private[spark] class Client(
               } catch {
                 case e: Throwable =>
                   submitCompletedFuture.setException(e)
-                  try {
+                  Utils.tryLogNonFatalError({
                     kubernetesClient.services().delete(service)
-                  } catch {
-                    case throwable: Throwable =>
-                      logError("Submitting the job failed but failed to" +
-                        " clean up the created service.", throwable)
-                  }
+                  })
                   throw e
               }
             case None =>
