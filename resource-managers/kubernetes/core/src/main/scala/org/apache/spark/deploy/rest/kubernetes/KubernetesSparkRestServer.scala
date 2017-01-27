@@ -157,11 +157,6 @@ private[spark] class KubernetesSparkRestServer(
               } else {
                 val tempDir = Utils.createTempDir()
                 val appResourcePath = resolvedAppResource(appResource, tempDir)
-                val driverClasspathDirectory = new File(tempDir, "driver-extra-classpath")
-                if (!driverClasspathDirectory.mkdir) {
-                  throw new IllegalStateException("Failed to create driver extra classpath" +
-                    s" dir at ${driverClasspathDirectory.getAbsolutePath}")
-                }
                 val jarsDirectory = new File(tempDir, "jars")
                 if (!jarsDirectory.mkdir) {
                   throw new IllegalStateException("Failed to create jars dir at" +
@@ -195,6 +190,10 @@ private[spark] class KubernetesSparkRestServer(
                 val driverMemory = resolvedSparkProperties.getOrElse("spark.driver.memory", "1g")
                 command += s"-Xms$driverMemory"
                 command += s"-Xmx$driverMemory"
+                val extraJavaOpts = resolvedSparkProperties.get("spark.driver.extraJavaOptions")
+                  .map(Utils.splitCommandString)
+                  .getOrElse(Seq.empty)
+                command ++= extraJavaOpts
                 command += mainClass
                 command ++= appArgs
                 val pb = new ProcessBuilder(command: _*).inheritIO()
