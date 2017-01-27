@@ -221,9 +221,9 @@ private[spark] class Client(
     (securityManager.getSSLOptions("kubernetes.driverlaunch"), isLocalKeyStore)
   }
 
-  private def configureSsl(kubernetesClient: KubernetesClient)
-      : (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
-    if (!driverLaunchSslOptions.enabled) {
+  private def configureSsl(kubernetesClient: KubernetesClient):
+      (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
+    if (driverLaunchSslOptions.enabled) {
       val sslSecretsMap = mutable.HashMap[String, String]()
       val sslEnvs = mutable.Buffer[EnvVar]()
       val secrets = mutable.Buffer[Secret]()

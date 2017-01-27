@@ -16,6 +16,7 @@
  */
 package org.apache.spark.deploy.kubernetes.integrationtest
 
+import java.io.File
 import java.nio.file.Paths
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -36,6 +37,7 @@ import org.apache.spark.deploy.kubernetes.Client
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 import org.apache.spark.deploy.kubernetes.integrationtest.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.restapis.SparkRestApiV1
+import org.apache.spark.deploy.kubernetes.integrationtest.sslutil.SSLUtils
 import org.apache.spark.status.api.v1.{ApplicationStatus, StageStatus}
 import org.apache.spark.util.Utils
 
@@ -60,13 +62,6 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     .getOrElse(throw new IllegalStateException("Expected to find spark-examples jar; was the" +
         " pre-integration-test phase run?"))
 
-  private val KEYSTORE_FILE = Paths.get("ssl", "keyStore.jks")
-    .toFile
-    .getAbsolutePath
-  private val TRUSTSTORE_FILE = Paths.get("ssl", "trustStore.jks")
-    .toFile
-    .getAbsolutePath
-
   private val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   private val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
   private val MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
@@ -74,6 +69,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   private val NAMESPACE = UUID.randomUUID().toString.replaceAll("-", "")
   private var minikubeKubernetesClient: KubernetesClient = _
   private var clientConfig: Config = _
+  private var keyStoreFile: File = _
+  private var trustStoreFile: File = _
 
   override def beforeAll(): Unit = {
     Minikube.startMinikube()
@@ -85,6 +82,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .done()
     minikubeKubernetesClient = Minikube.getKubernetesClient.inNamespace(NAMESPACE)
     clientConfig = minikubeKubernetesClient.getConfiguration
+    val (keyStore, trustStore) = SSLUtils.generateKeyStoreTrustStorePair(
+      Minikube.getMinikubeIp,
+      "changeit",
+      "changeit",
+      "changeit")
+    keyStoreFile = keyStore
+    trustStoreFile = trustStore
   }
 
   before {
@@ -306,10 +310,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
       "--conf", "spark.ssl.kubernetes.driverlaunch.enabled=true",
-      "--conf", s"spark.ssl.kubernetes.driverlaunch.keyStore=file://$KEYSTORE_FILE",
+      "--conf", "spark.ssl.kubernetes.driverlaunch.keyStore=" +
+        s"file://${keyStoreFile.getAbsolutePath}",
       "--conf", "spark.ssl.kubernetes.driverlaunch.keyStorePassword=changeit",
       "--conf", "spark.ssl.kubernetes.driverlaunch.keyPassword=changeit",
-      "--conf", s"spark.ssl.kubernetes.driverlaunch.trustStore=file://$TRUSTSTORE_FILE",
+      "--conf", "spark.ssl.kubernetes.driverlaunch.trustStore=" +
+        s"file://${trustStoreFile.getAbsolutePath}",
       "--conf", s"spark.ssl.kubernetes.driverlaunch.trustStorePassword=changeit",
       EXAMPLES_JAR)
     SparkSubmit.main(args)
