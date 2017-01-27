@@ -51,7 +51,7 @@ private[spark] class Client(
   private val appName = sparkConf.getOption("spark.app.name")
     .orElse(sparkConf.getOption("spark.app.id"))
     .getOrElse("spark")
-  private val kubernetesAppId = s"$appName-$launchTime"
+  private val kubernetesAppId = s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-")
   private val secretName = s"spark-submission-server-secret-$kubernetesAppId"
   private val driverLauncherSelectorValue = s"driver-launcher-$launchTime"
   private val driverDockerImage = sparkConf.get(
@@ -97,7 +97,7 @@ private[spark] class Client(
 
     val k8ClientConfig = k8ConfBuilder.build
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig))(kubernetesClient => {
-      val secret = kubernetesClient.secrets().createNew()
+      val applicationSubmitSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
         .withName(secretName)
         .endMetadata()
@@ -114,7 +114,7 @@ private[spark] class Client(
         val secretDirectory = s"$SPARK_SUBMISSION_SECRET_BASE_DIR/$kubernetesAppId"
         val submitPending = new AtomicBoolean(false)
         val podWatcher = new DriverPodWatcher(submitCompletedFuture, submitPending,
-          kubernetesClient, driverKubernetesSelectors)
+          kubernetesClient, applicationSubmitSecret, driverKubernetesSelectors)
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
@@ -128,7 +128,9 @@ private[spark] class Client(
               .withRestartPolicy("OnFailure")
               .addNewVolume()
                 .withName(s"spark-submission-secret-volume")
-                .withNewSecret().withSecretName(secret.getMetadata.getName).endSecret()
+                .withNewSecret()
+                  .withSecretName(applicationSubmitSecret.getMetadata.getName)
+                  .endSecret()
                 .endVolume
               .withServiceAccount(serviceAccount)
               .addNewContainer()
@@ -173,7 +175,7 @@ private[spark] class Client(
           }
         }
       } finally {
-        kubernetesClient.secrets().delete(secret)
+        kubernetesClient.secrets().delete(applicationSubmitSecret)
       }
     })
   }
@@ -182,6 +184,7 @@ private[spark] class Client(
       submitCompletedFuture: SettableFuture[Boolean],
       submitPending: AtomicBoolean,
       kubernetesClient: KubernetesClient,
+      applicationSubmitSecret: Secret,
       driverKubernetesSelectors: java.util.Map[String, String]) extends Watcher[Pod] {
     override def eventReceived(action: Action, pod: Pod): Unit = {
       if ((action == Action.ADDED || action == Action.MODIFIED)
@@ -194,6 +197,17 @@ private[spark] class Client(
             .find(status =>
               status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
             case Some(_) =>
+              val ownerRefs = Seq(new OwnerReferenceBuilder()
+                .withName(pod.getMetadata.getName)
+                .withUid(pod.getMetadata.getUid)
+                .withApiVersion(pod.getApiVersion)
+                .withKind(pod.getKind)
+                .withController(true)
+                .build())
+
+              applicationSubmitSecret.getMetadata.setOwnerReferences(ownerRefs.asJava)
+              kubernetesClient.secrets().createOrReplace(applicationSubmitSecret)
+
               val driverLauncherServicePort = new ServicePortBuilder()
                 .withName(DRIVER_LAUNCHER_SERVICE_PORT_NAME)
                 .withPort(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT)
@@ -203,6 +217,7 @@ private[spark] class Client(
                 .withNewMetadata()
                   .withName(kubernetesAppId)
                   .withLabels(driverKubernetesSelectors)
+                  .withOwnerReferences(ownerRefs.asJava)
                   .endMetadata()
                 .withNewSpec()
                   .withType("NodePort")
@@ -213,6 +228,7 @@ private[spark] class Client(
               try {
                 sparkConf.set("spark.kubernetes.driver.service.name",
                   service.getMetadata.getName)
+                sparkConf.set("spark.kubernetes.driver.pod.name", kubernetesAppId)
                 sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
                 sparkConf.setIfMissing("spark.blockmanager.port",
                   DEFAULT_BLOCKMANAGER_PORT.toString)
