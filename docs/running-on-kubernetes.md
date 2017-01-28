@@ -238,6 +238,13 @@ from the other deployment modes. See the [configuration page](configuration.html
     where each label is in the format <code>key=value</code>.
   </td>
 </tr>
+<tr>
+  <td><code>spark.kubernetes.driverLaunchTimeout</code></td>
+  <td>60s</td>
+  <td>
+    Time to wait for the driver pod to be initially ready before aborting the job.
+  </td>
+</tr>
 </table>
 
 ## Current Limitations
