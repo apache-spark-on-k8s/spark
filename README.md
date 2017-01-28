@@ -10,13 +10,13 @@ This is a collaboratively maintained project working on [SPARK-18278](https://is
 
 - [Usage guide](docs/running-on-kubernetes.md) shows how to run the code
 - [Development docs](resource-managers/kubernetes/README.md) shows how to get set up for development
-- Code is primarily located in the [resource-managers/kubernetes](resource-managers/kubernetes) module
+- Code is primarily located in the [resource-managers/kubernetes](resource-managers/kubernetes) folder
 
 ## Why does this fork exist?
 
-Adding native integration for a new cluster manager is a large undertaking.  If poorly executed, it could introduce bugs into Spark when run on other cluster managers, cause release blockers slowing down the overall Spark project, or require hotfixes which divert attention away from development towards managing additional releases.  Any work this core in Spark needs to be done carefully to minimize the risk of those negative externalities.
+Adding native integration for a new cluster manager is a large undertaking.  If poorly executed, it could introduce bugs into Spark when run on other cluster managers, cause release blockers slowing down the overall Spark project, or require hotfixes which divert attention away from development towards managing additional releases.  Any work this deep inside Spark needs to be done carefully to minimize the risk of those negative externalities.
 
-At the same time, an increasing number of people from varying companies and organizations desire to work together to natively run Spark on Kubernetes.  The group needs a code repository, communication forum, issue tracking, and continuous integration, all in order to work together effectively on an open source product.
+At the same time, an increasing number of people from various companies and organizations desire to work together to natively run Spark on Kubernetes.  The group needs a code repository, communication forum, issue tracking, and continuous integration, all in order to work together effectively on an open source product.
 
 We've been asked by an Apache Spark Committer to work outside of the Apache infrastructure for a short period of time to allow this feature to be hardened and improved without creating risk for Apache Spark.  The aim is to rapidly bring it to the point where it can be brought into the mainline Apache Spark repository for continued development within the Apache umbrella.  If all goes well, this should be a short-lived fork rather than a long-lived one.
 
