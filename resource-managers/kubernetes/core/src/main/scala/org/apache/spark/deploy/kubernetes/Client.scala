@@ -196,7 +196,7 @@ private[spark] class Client(
           kubernetesClient.secrets().delete(sslSecrets: _*)
         }
       }
-    })
+    }
   }
 
   private def parseDriverLaunchSslOptions(): (SSLOptions, Boolean) = {
