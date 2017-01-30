@@ -18,7 +18,7 @@ package org.apache.spark.deploy.kubernetes
 
 package object constants {
   // Labels
-  private[spark] val DRIVER_LAUNCHER_SELECTOR_LABEL = "driver-launcher-selector"
+  private[spark] val SPARK_APP_ID_LABEL = "spark-app-id"
   private[spark] val SPARK_APP_NAME_LABEL = "spark-app-name"
 
   // Secrets
@@ -29,7 +29,7 @@ package object constants {
   private[spark] val SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME =
       "spark-submission-server-key-password"
   private[spark] val SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME =
-    "spark-submission-server-keystore-password"
+      "spark-submission-server-keystore-password"
   private[spark] val SUBMISSION_SSL_KEYSTORE_SECRET_NAME = "spark-submission-server-keystore"
   private[spark] val SUBMISSION_SSL_SECRETS_PREFIX = "spark-submission-server-ssl"
   private[spark] val SUBMISSION_SSL_SECRETS_VOLUME_NAME = "spark-submission-server-ssl-secrets"
@@ -40,8 +40,19 @@ package object constants {
   private[spark] val DEFAULT_BLOCKMANAGER_PORT = 7079
   private[spark] val DEFAULT_UI_PORT = 4040
   private[spark] val UI_PORT_NAME = "spark-ui-port"
-  private[spark] val DRIVER_LAUNCHER_SERVICE_PORT_NAME = "driver-launcher-port"
+  private[spark] val DRIVER_LAUNCHER_SERVICE_PORT_NAME = "submission-server-port"
+
+  // Environment Variables
+  private[spark] val ENV_SUBMISSION_SECRET_LOCATION = "SPARK_SUBMISSION_SECRET_LOCATION"
+  private[spark] val ENV_DRIVER_LAUNCHER_SERVER_PORT = "SPARK_SUBMISSION_SERVER_PORT"
+  private[spark] val ENV_SUBMISSION_KEYSTORE_FILE = "SPARK_SUBMISSION_KEYSTORE_FILE"
+  private[spark] val ENV_SUBMISSION_KEYSTORE_PASSWORD_FILE =
+      "SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE"
+  private[spark] val ENV_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE =
+      "SPARK_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE"
+  private[spark] val ENV_SUBMISSION_KEYSTORE_TYPE = "SPARK_SUBMISSION_KEYSTORE_TYPE"
+  private[spark] val ENV_SUBMISSION_USE_SSL = "SPARK_SUBMISSION_USE_SSL"
 
   // Miscellaneous
-  private[spark] val DRIVER_LAUNCHER_CONTAINER_NAME = "spark-kubernetes-driver-launcher"
+  private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
 }

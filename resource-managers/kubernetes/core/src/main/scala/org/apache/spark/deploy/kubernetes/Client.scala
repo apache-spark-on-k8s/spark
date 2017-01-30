@@ -114,7 +114,7 @@ private[spark] class Client(
         isKeyStoreLocalFile)
       try {
         val driverKubernetesSelectors = (Map(
-            DRIVER_LAUNCHER_SELECTOR_LABEL -> driverLauncherSelectorValue,
+            SPARK_APP_ID_LABEL -> kubernetesAppId,
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
         val containerPorts = buildContainerPorts()
@@ -147,7 +147,7 @@ private[spark] class Client(
               .addToVolumes(sslVolumes: _*)
               .withServiceAccount(serviceAccount)
               .addNewContainer()
-                .withName(DRIVER_LAUNCHER_CONTAINER_NAME)
+                .withName(DRIVER_CONTAINER_NAME)
                 .withImage(driverDockerImage)
                 .withImagePullPolicy("IfNotPresent")
                 .addNewVolumeMount()
@@ -157,11 +157,11 @@ private[spark] class Client(
                   .endVolumeMount()
                 .addToVolumeMounts(sslVolumeMounts: _*)
                 .addNewEnv()
-                  .withName("SPARK_SUBMISSION_SECRET_LOCATION")
+                  .withName(ENV_SUBMISSION_SECRET_LOCATION)
                   .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
                   .endEnv()
                 .addNewEnv()
-                  .withName("SPARK_DRIVER_LAUNCHER_SERVER_PORT")
+                  .withName(ENV_DRIVER_LAUNCHER_SERVER_PORT)
                   .withValue(DRIVER_LAUNCHER_SERVICE_INTERNAL_PORT.toString)
                   .endEnv()
                 .addToEnv(sslEnvs: _*)
@@ -194,7 +194,7 @@ private[spark] class Client(
           kubernetesClient.secrets().delete(sslSecrets: _*)
         }
       }
-    })
+    }
   }
 
   private def parseDriverLaunchSslOptions(): (SSLOptions, Boolean) = {
@@ -248,7 +248,7 @@ private[spark] class Client(
           store.getAbsolutePath
         }
         sslEnvs += new EnvVarBuilder()
-          .withName("SPARK_SUBMISSION_KEYSTORE_FILE")
+          .withName(ENV_SUBMISSION_KEYSTORE_FILE)
           .withValue(resolvedKeyStoreFile)
           .build()
       })
@@ -256,7 +256,7 @@ private[spark] class Client(
         val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
         sslSecretsMap += (SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME -> passwordBase64)
         sslEnvs += new EnvVarBuilder()
-          .withName("SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE")
+          .withName(ENV_SUBMISSION_KEYSTORE_PASSWORD_FILE)
           .withValue(s"$sslSecretsDirectory/$SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME")
           .build()
       })
@@ -264,18 +264,18 @@ private[spark] class Client(
         val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
         sslSecretsMap += (SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME -> passwordBase64)
         sslEnvs += new EnvVarBuilder()
-          .withName("SPARK_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE")
+          .withName(ENV_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE)
           .withValue(s"$sslSecretsDirectory/$SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME")
           .build()
       })
       driverLaunchSslOptions.keyStoreType.foreach(storeType => {
         sslEnvs += new EnvVarBuilder()
-          .withName("SPARK_SUBMISSION_KEYSTORE_TYPE")
+          .withName(ENV_SUBMISSION_KEYSTORE_TYPE)
           .withValue(storeType)
           .build()
       })
       sslEnvs += new EnvVarBuilder()
-        .withName("SPARK_SUBMISSION_USE_SSL")
+        .withName(ENV_SUBMISSION_USE_SSL)
         .withValue("true")
         .build()
       val sslSecrets = kubernetesClient.secrets().createNew()
@@ -319,7 +319,7 @@ private[spark] class Client(
             .getContainerStatuses
             .asScala
             .find(status =>
-              status.getName == DRIVER_LAUNCHER_CONTAINER_NAME && status.getReady) match {
+              status.getName == DRIVER_CONTAINER_NAME && status.getReady) match {
             case Some(_) =>
               val ownerRefs = Seq(new OwnerReferenceBuilder()
                 .withName(pod.getMetadata.getName)
@@ -455,7 +455,7 @@ private[spark] class Client(
     val failedDriverContainerStatusString = driverPod.getStatus
       .getContainerStatuses
       .asScala
-      .find(_.getName == DRIVER_LAUNCHER_CONTAINER_NAME)
+      .find(_.getName == DRIVER_CONTAINER_NAME)
       .map(status => {
         val lastState = status.getState
         if (lastState.getRunning != null) {
@@ -476,7 +476,7 @@ private[spark] class Client(
           "Driver container last state: Unknown"
         }
       }).getOrElse("The driver container wasn't found in the pod; expected to find" +
-      s" container with name $DRIVER_LAUNCHER_CONTAINER_NAME")
+      s" container with name $DRIVER_CONTAINER_NAME")
     s"$topLevelMessage\n" +
       s"$podStatusPhase\n" +
       s"$podStatusMessage\n\n$failedDriverContainerStatusString"
@@ -587,8 +587,8 @@ private[spark] class Client(
       labels.split(",").map(_.trim).filterNot(_.isEmpty).map(label => {
         label.split("=", 2).toSeq match {
           case Seq(k, v) =>
-            require(k != DRIVER_LAUNCHER_SELECTOR_LABEL, "Label with key" +
-              s" $DRIVER_LAUNCHER_SELECTOR_LABEL cannot be used in" +
+            require(k != SPARK_APP_ID_LABEL, "Label with key" +
+              s" $SPARK_APP_ID_LABEL cannot be used in" +
               " spark.kubernetes.driver.labels, as it is reserved for Spark's" +
               " internal configuration.")
             (k, v)
