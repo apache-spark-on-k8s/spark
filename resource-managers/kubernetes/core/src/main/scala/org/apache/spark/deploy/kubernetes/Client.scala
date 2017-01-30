@@ -103,7 +103,7 @@ private[spark] class Client(
     }
 
     val k8ClientConfig = k8ConfBuilder.build
-    Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig))(kubernetesClient => {
+    Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig)) { kubernetesClient =>
       val submitServerSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
           .withName(secretName)
@@ -182,19 +182,19 @@ private[spark] class Client(
               throw new SparkException(finalErrorMessage, e)
           } finally {
             if (!submitSucceeded) {
-              Utils.tryLogNonFatalError({
-                kubernetesClient.pods.withName(kubernetesAppId).delete
-              })
+              Utils.tryLogNonFatalError {
+                kubernetesClient.pods.withName(kubernetesAppId).delete()
+              }
             }
           }
         }
       } finally {
-        Utils.tryLogNonFatalError({
+        Utils.tryLogNonFatalError {
           kubernetesClient.secrets().delete(submitServerSecret)
-        })
-        Utils.tryLogNonFatalError({
+        }
+        Utils.tryLogNonFatalError {
           kubernetesClient.secrets().delete(sslSecrets: _*)
-        })
+        }
       }
     })
   }
