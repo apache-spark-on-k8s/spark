@@ -101,6 +101,8 @@ package object config {
       .stringConf
       .createOptional
 
+  // Note that while we set a default for this in practice, it's
+  // dynamically determined based on the executor memory.
   private[spark] val KUBERNETES_EXECUTOR_MEMORY_OVERHEAD =
     ConfigBuilder("spark.kubernetes.executor.memoryOverhead")
       .doc("""
@@ -110,6 +112,8 @@ package object config {
           | overheads, etc. This tends to grow with the executor size
           | (typically 6-10%).
         """.stripMargin)
+      .stringConf
+      .createOptional
 
   private[spark] val KUBERNETES_DRIVER_LABELS =
     ConfigBuilder("spark.kubernetes.driver.labels")
@@ -121,8 +125,8 @@ package object config {
       .stringConf
       .createOptional
 
-  private[spark] val KUBERNETES_DRIVER_LAUNCH_TIMEOUT =
-    ConfigBuilder("spark.kubernetes.driverLaunchTimeout")
+  private[spark] val KUBERNETES_DRIVER_SUBMIT_TIMEOUT =
+    ConfigBuilder("spark.kubernetes.driverSubmitTimeout")
       .doc("""
           | Time to wait for the driver pod to be initially ready
           | before aborting the job.
@@ -130,22 +134,42 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .createWithDefault(60L)
 
-  private[spark] val KUBERNETES_DRIVER_LAUNCH_KEYSTORE =
-    ConfigBuilder("spark.ssl.kubernetes.driverlaunch.keyStore")
+  private[spark] val KUBERNETES_DRIVER_SUBMIT_KEYSTORE =
+    ConfigBuilder("spark.ssl.kubernetes.submit.keyStore")
       .doc("""
-          | KeyStore file for the driver launch server listening
+          | KeyStore file for the driver submission server listening
           | on SSL. Can be pre-mounted on the driver container
           | or uploaded from the submitting client.
         """.stripMargin)
       .stringConf
       .createOptional
 
-  private[spark] val KUBERNETES_DRIVER_LAUNCH_TRUSTSTORE =
-    ConfigBuilder("spark.ssl.kubernetes.driverlaunch.trustStore")
+  private[spark] val KUBERNETES_DRIVER_SUBMIT_TRUSTSTORE =
+    ConfigBuilder("spark.ssl.kubernetes.submit.trustStore")
       .doc("""
           | TrustStore containing certificates for communicating
-          | to the driver launch server over SSL.
+          | to the driver submission server over SSL.
         """.stripMargin)
       .stringConf
       .createOptional
+
+  private[spark] val KUBERNETES_DRIVER_SERVICE_NAME =
+    ConfigBuilder("spark.kubernetes.driver.service.name")
+        .doc("""
+            | Kubernetes service that is in front of the driver
+            | pod.
+          """.stripMargin)
+        .internal()
+        .stringConf
+        .createOptional
+
+  private[spark] val KUBERNETES_DRIVER_POD_NAME =
+    ConfigBuilder("spark.kubernetes.driver.pod.name")
+      .doc("""
+          | Name of the driver pod.
+        """.stripMargin)
+      .internal()
+      .stringConf
+      .createOptional
+
 }
