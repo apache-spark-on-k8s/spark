@@ -16,28 +16,25 @@
  */
 package org.apache.spark.deploy.kubernetes
 
-import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import scala.collection.JavaConverters._
 
-import com.google.common.util.concurrent.AbstractScheduledService.Scheduler
-import com.google.common.util.concurrent.SettableFuture
-import io.fabric8.kubernetes.api.model.{Pod, PodStatus}
+import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 
-import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
 
 /**
  * A monitor for the running Kubernetes pod of a Spark application. Status logging occurs on
  * every state change and also at an interval for liveness.
  *
- * @param podCompletedFuture a SettableFuture that is set to true when the watched pod finishes
+ * @param podCompletedFuture a CountDownLatch that is set to true when the watched pod finishes
  * @param appId
  * @param interval ms between each state request
  */
-private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: SettableFuture[Boolean],
+private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownLatch,
                                                   appId: String,
                                                   interval: Long)
     extends Watcher[Pod] with Logging {
@@ -63,7 +60,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: SettableFu
     prevPhase = phase
 
     if (phase == "Succeeded" || phase == "Failed") {
-      podCompletedFuture.set(true)
+      podCompletedFuture.countDown()
     }
   }
 

@@ -18,7 +18,7 @@ package org.apache.spark.deploy.kubernetes
 
 import java.io.{File, FileInputStream}
 import java.security.{KeyStore, SecureRandom}
-import java.util.concurrent.{TimeoutException, TimeUnit}
+import java.util.concurrent.{CountDownLatch, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
@@ -120,8 +120,8 @@ private[spark] class Client(
         val containerPorts = buildContainerPorts()
 
         // start outer watch for status logging of driver pod
-        val driverPodCompletedFuture = SettableFuture.create[Boolean]
-        val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedFuture, kubernetesAppId,
+        val driverPodCompletedLatch = new CountDownLatch(1)
+        val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedLatch, kubernetesAppId,
                                                        sparkConf.get(REPORT_INTERVAL))
         Utils.tryWithResource(kubernetesClient
             .pods()
@@ -201,7 +201,7 @@ private[spark] class Client(
           // wait if configured to do so
           if (waitForAppCompletion) {
             logInfo(s"Waiting for application $kubernetesAppId to finish...")
-            driverPodCompletedFuture.get()
+            driverPodCompletedLatch.await()
             logInfo(s"Application $kubernetesAppId finished.")
           }
         }
