@@ -16,61 +16,68 @@
  */
 package org.apache.spark.deploy.kubernetes
 
+import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
+
 import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model.Pod
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import com.google.common.util.concurrent.AbstractScheduledService.Scheduler
+import com.google.common.util.concurrent.SettableFuture
+import io.fabric8.kubernetes.api.model.{Pod, PodStatus}
+import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.Watcher.Action
 
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
 
 /**
- * A monitor for a running Kubernetes application, logging on state change and interval.
+ * A monitor for the running Kubernetes pod of a Spark application. Status logging occurs on
+ * every state change and also at an interval for liveness.
  *
- * @param client Kubernetes client
+ * @param podCompletedFuture a SettableFuture that is set to true when the watched pod finishes
  * @param appId
  * @param interval ms between each state request
  */
-private[kubernetes] class PodStateMonitor(client: DefaultKubernetesClient,
-                      appId: String,
-                      interval: Long) extends Logging {
+private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: SettableFuture[Boolean],
+                                                  appId: String,
+                                                  interval: Long)
+    extends Watcher[Pod] with Logging {
 
-  /**
-   * Log the state of the application until it finishes, either successfully or due to a
-   * failure, logging status throughout and on every state change.
-   *
-   * When the application finishes, returns its final state, either "Succeeded" or "Failed".
-   */
-  def monitorToCompletion(): String = {
+  // start timer for periodic logging
+  private val scheduler = Executors.newScheduledThreadPool(1)
+  private val logRunnable: Runnable = new Runnable {
+    override def run() = logShortStatus()
+  }
+  scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
 
-    var previousPhase: String = null
+  private var pod: Option[Pod] = Option.empty
+  private var prevPhase: String = null
+  private def phase: String = pod.map(_.getStatus().getPhase()).getOrElse("unknown")
 
-    while (true) {
-      Thread.sleep(interval)
+  override def eventReceived(action: Action, pod: Pod): Unit = {
+    this.pod = Option(pod)
 
-      val pod = requestCurrentPodState()
-      val phase = pod.getStatus().getPhase()
-
-      // log a short message every interval, plus full details on every state change
-      logInfo(s"Application status for $appId (phase: $phase)")
-      if (previousPhase != phase) {
-        logInfo("Phase changed, new state: " + formatPodState(pod))
-      }
-
-      // terminal state -- return
-      if (phase == "Succeeded" || phase == "Failed") {
-        return phase
-      }
-
-      previousPhase = phase
+    logShortStatus()
+    if (prevPhase != phase) {
+      logLongStatus()
     }
+    prevPhase = phase
 
-    // Never reached, but keeps compiler happy
-    throw new SparkException("While loop is depleted! This should never happen...")
+    if (phase == "Succeeded" || phase == "Failed") {
+      podCompletedFuture.set(true)
+    }
   }
 
-  private def requestCurrentPodState(): Pod = {
-    client.pods().withName(appId).get()
+  override def onClose(e: KubernetesClientException): Unit = {
+    scheduler.shutdown()
+    logInfo(s"Application $appId ended with final phase $phase")
+  }
+
+  private def logShortStatus() = {
+    logInfo(s"Application status for $appId (phase: $phase)")
+  }
+
+  private def logLongStatus() = {
+    logInfo("Phase changed, new state: " + pod.map(formatPodState(_)).getOrElse("unknown"))
   }
 
   private def formatPodState(pod: Pod): String = {

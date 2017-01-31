@@ -65,7 +65,7 @@ private[spark] class Client(
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
-  private val fireAndForget: Boolean = !sparkConf.get(WAIT_FOR_APP_COMPLETION)
+  private val waitForAppCompletion: Boolean = sparkConf.get(WAIT_FOR_APP_COMPLETION)
 
   private val secretBase64String = {
     val secretBytes = new Array[Byte](128)
@@ -81,7 +81,9 @@ private[spark] class Client(
       ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-client-retryable-futures"))
 
   def run(): Unit = {
+    logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
+
     val parsedCustomLabels = parseCustomLabels(customLabels)
     var k8ConfBuilder = new K8SConfigBuilder()
       .withApiVersion("v1")
@@ -116,81 +118,92 @@ private[spark] class Client(
             SPARK_APP_NAME_LABEL -> appName)
           ++ parsedCustomLabels).asJava
         val containerPorts = buildContainerPorts()
-        val submitCompletedFuture = SettableFuture.create[Boolean]
-        val submitPending = new AtomicBoolean(false)
-        val podWatcher = new DriverPodWatcher(
-          submitCompletedFuture,
-          submitPending,
-          kubernetesClient,
-          driverSubmitSslOptions,
-          Array(submitServerSecret) ++ sslSecrets,
-          driverKubernetesSelectors)
+
+        // start outer watch for status logging of driver pod
+        val driverPodCompletedFuture = SettableFuture.create[Boolean]
+        val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedFuture, kubernetesAppId,
+                                                       sparkConf.get(REPORT_INTERVAL))
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
-            .watch(podWatcher)) { _ =>
-          kubernetesClient.pods().createNew()
-            .withNewMetadata()
-              .withName(kubernetesAppId)
+            .watch(loggingWatch)) { _ =>
+
+          // launch driver pod with inner watch to upload jars when it's ready
+          val submitCompletedFuture = SettableFuture.create[Boolean]
+          val submitPending = new AtomicBoolean(false)
+          val podWatcher = new DriverPodWatcher(
+            submitCompletedFuture,
+            submitPending,
+            kubernetesClient,
+            driverSubmitSslOptions,
+            Array(submitServerSecret) ++ sslSecrets,
+            driverKubernetesSelectors)
+          Utils.tryWithResource(kubernetesClient
+              .pods()
               .withLabels(driverKubernetesSelectors)
-              .endMetadata()
-            .withNewSpec()
-              .withRestartPolicy("OnFailure")
-              .addNewVolume()
-                .withName(SUBMISSION_APP_SECRET_VOLUME_NAME)
-                .withNewSecret()
-                  .withSecretName(submitServerSecret.getMetadata.getName)
-                  .endSecret()
-                .endVolume
-              .addToVolumes(sslVolumes: _*)
-              .withServiceAccount(serviceAccount)
-              .addNewContainer()
-                .withName(DRIVER_CONTAINER_NAME)
-                .withImage(driverDockerImage)
-                .withImagePullPolicy("IfNotPresent")
-                .addNewVolumeMount()
+              .watch(podWatcher)) { _ =>
+            kubernetesClient.pods().createNew()
+              .withNewMetadata()
+                .withName(kubernetesAppId)
+                .withLabels(driverKubernetesSelectors)
+                .endMetadata()
+              .withNewSpec()
+                .withRestartPolicy("OnFailure")
+                .addNewVolume()
                   .withName(SUBMISSION_APP_SECRET_VOLUME_NAME)
-                  .withMountPath(secretDirectory)
-                  .withReadOnly(true)
-                  .endVolumeMount()
-                .addToVolumeMounts(sslVolumeMounts: _*)
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SECRET_LOCATION)
-                  .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
-                  .endEnv()
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SERVER_PORT)
-                  .withValue(SUBMISSION_SERVER_PORT.toString)
-                  .endEnv()
-                .addToEnv(sslEnvs: _*)
-                .withPorts(containerPorts.asJava)
-                .endContainer()
-              .endSpec()
-            .done()
-          var submitSucceeded = false
-          try {
-            submitCompletedFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-            submitSucceeded = true
-          } catch {
-            case e: TimeoutException =>
-              val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
-              logError(finalErrorMessage, e)
-              throw new SparkException(finalErrorMessage, e)
-          } finally {
-            if (!submitSucceeded) {
-              Utils.tryLogNonFatalError {
-                kubernetesClient.pods.withName(kubernetesAppId).delete()
+                  .withNewSecret()
+                    .withSecretName(submitServerSecret.getMetadata.getName)
+                    .endSecret()
+                  .endVolume
+                .addToVolumes(sslVolumes: _*)
+                .withServiceAccount(serviceAccount)
+                .addNewContainer()
+                  .withName(DRIVER_CONTAINER_NAME)
+                  .withImage(driverDockerImage)
+                  .withImagePullPolicy("IfNotPresent")
+                  .addNewVolumeMount()
+                    .withName(SUBMISSION_APP_SECRET_VOLUME_NAME)
+                    .withMountPath(secretDirectory)
+                    .withReadOnly(true)
+                    .endVolumeMount()
+                  .addToVolumeMounts(sslVolumeMounts: _*)
+                  .addNewEnv()
+                    .withName(ENV_SUBMISSION_SECRET_LOCATION)
+                    .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
+                    .endEnv()
+                  .addNewEnv()
+                    .withName(ENV_SUBMISSION_SERVER_PORT)
+                    .withValue(SUBMISSION_SERVER_PORT.toString)
+                    .endEnv()
+                  .addToEnv(sslEnvs: _*)
+                  .withPorts(containerPorts.asJava)
+                  .endContainer()
+                .endSpec()
+              .done()
+            var submitSucceeded = false
+            try {
+              submitCompletedFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
+              submitSucceeded = true
+            } catch {
+              case e: TimeoutException =>
+                val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
+                logError(finalErrorMessage, e)
+                throw new SparkException(finalErrorMessage, e)
+            } finally {
+              if (!submitSucceeded) {
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.pods.withName(kubernetesAppId).delete()
+                }
               }
             }
           }
-        }
 
-        // poll for status
-        if (!fireAndForget) {
-          val reportInterval = sparkConf.get(REPORT_INTERVAL)
-          val finalState = new PodStateMonitor(kubernetesClient, kubernetesAppId, reportInterval)
-            .monitorToCompletion()
-          logInfo(s"Application $kubernetesAppId ended with final phase $finalState")
+          // wait if configured to do so
+          if (waitForAppCompletion) {
+            logInfo(s"Waiting for application $kubernetesAppId to finish...")
+            driverPodCompletedFuture.get()
+            logInfo(s"Application $kubernetesAppId finished.")
+          }
         }
       } finally {
         Utils.tryLogNonFatalError {
