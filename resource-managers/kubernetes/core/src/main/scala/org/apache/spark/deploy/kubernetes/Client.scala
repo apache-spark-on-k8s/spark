@@ -24,7 +24,7 @@ import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
 import com.google.common.base.Charsets
 import com.google.common.io.Files
-import com.google.common.util.concurrent.{SettableFuture}
+import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
