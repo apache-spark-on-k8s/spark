@@ -18,13 +18,13 @@ package org.apache.spark.deploy.kubernetes
 
 import java.io.{File, FileInputStream}
 import java.security.{KeyStore, SecureRandom}
-import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
 import com.google.common.base.Charsets
 import com.google.common.io.Files
-import com.google.common.util.concurrent.{SettableFuture, ThreadFactoryBuilder}
+import com.google.common.util.concurrent.{SettableFuture}
 import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
@@ -34,7 +34,7 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
 
-import org.apache.spark.{SSLOptions, SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
@@ -76,7 +76,7 @@ private[spark] class Client(
 
   private implicit val retryableExecutionContext = ExecutionContext
     .fromExecutorService(
-      ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-client-retryable-futures-%d"))
+      ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-client-retryable-futures"))
 
   def run(): Unit = {
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()

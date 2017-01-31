@@ -74,7 +74,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorCores = conf.getOption("spark.executor.cores").getOrElse("1")
 
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
-    ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-executor-requests-%d"))
+    ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
   private val kubernetesClient = KubernetesClientBuilder
     .buildFromWithinPod(kubernetesMaster, kubernetesNamespace)
