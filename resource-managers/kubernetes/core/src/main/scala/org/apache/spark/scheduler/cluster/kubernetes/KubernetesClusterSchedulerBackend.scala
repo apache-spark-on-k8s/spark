@@ -123,9 +123,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  override def applicationId(): String = conf
-      .getOption("spark.app.id")
-      .getOrElse(super.applicationId())
+  override def applicationId(): String = conf.get("spark.app.id", super.applicationId())
 
   override def sufficientResourcesRegistered(): Boolean = {
     totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
