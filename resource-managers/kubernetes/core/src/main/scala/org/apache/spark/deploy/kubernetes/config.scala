@@ -101,8 +101,9 @@ package object config {
       .stringConf
       .createOptional
 
-  // Note that while we set a default for this in practice, it's
-  // dynamically determined based on the executor memory.
+  // Note that while we set a default for this when we start up the
+  // scheduler, the specific default value is dynamically determined
+  // based on the executor memory.
   private[spark] val KUBERNETES_EXECUTOR_MEMORY_OVERHEAD =
     ConfigBuilder("spark.kubernetes.executor.memoryOverhead")
       .doc("""
@@ -120,7 +121,9 @@ package object config {
       .doc("""
           | Custom labels that will be added to the driver pod.
           | This should be a comma-separated list of label key-value
-          | pairs, where each label is in the format key=value.
+          | pairs, where each label is in the format key=value. Note
+          | that Spark also adds its own labels to the driver pod
+          | for bookkeeping purposes.
         """.stripMargin)
       .stringConf
       .createOptional
@@ -128,8 +131,8 @@ package object config {
   private[spark] val KUBERNETES_DRIVER_SUBMIT_TIMEOUT =
     ConfigBuilder("spark.kubernetes.driverSubmitTimeout")
       .doc("""
-          | Time to wait for the driver pod to be initially ready
-          | before aborting the job.
+          | Time to wait for the driver process to start running
+          | before aborting its execution.
         """.stripMargin)
       .timeConf(TimeUnit.SECONDS)
       .createWithDefault(60L)
@@ -156,8 +159,8 @@ package object config {
   private[spark] val KUBERNETES_DRIVER_SERVICE_NAME =
     ConfigBuilder("spark.kubernetes.driver.service.name")
         .doc("""
-            | Kubernetes service that is in front of the driver
-            | pod.
+            | Kubernetes service that exposes the driver pod
+            | for external access.
           """.stripMargin)
         .internal()
         .stringConf
@@ -171,5 +174,4 @@ package object config {
       .internal()
       .stringConf
       .createOptional
-
 }

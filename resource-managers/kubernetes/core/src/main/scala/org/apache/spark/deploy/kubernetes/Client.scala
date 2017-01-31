@@ -18,7 +18,7 @@ package org.apache.spark.deploy.kubernetes
 
 import java.io.{File, FileInputStream}
 import java.security.{KeyStore, SecureRandom}
-import java.util.concurrent.{Executors, TimeoutException, TimeUnit}
+import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
@@ -34,13 +34,13 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
 
-import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
+import org.apache.spark.{SSLOptions, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 private[spark] class Client(
     sparkConf: SparkConf,
@@ -54,10 +54,8 @@ private[spark] class Client(
 
   private val launchTime = System.currentTimeMillis
   private val appName = sparkConf.getOption("spark.app.name")
-    .orElse(sparkConf.getOption("spark.app.id"))
     .getOrElse("spark")
-  private val kubernetesAppId = sparkConf
-    .get("spark.app.id", s"$appName-$launchTime").toLowerCase.replaceAll("\\.", "-")
+  private val kubernetesAppId = s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-")
   private val secretName = s"$SUBMISSION_APP_SECRET_PREFIX-$kubernetesAppId"
   private val secretDirectory = s"$DRIVER_CONTAINER_SECRETS_BASE_DIR/$kubernetesAppId"
   private val sslSecretsDirectory = s"$DRIVER_CONTAINER_SECRETS_BASE_DIR/$kubernetesAppId-ssl"
@@ -78,10 +76,7 @@ private[spark] class Client(
 
   private implicit val retryableExecutionContext = ExecutionContext
     .fromExecutorService(
-      Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
-        .setNameFormat("kubernetes-client-retryable-futures-%d")
-        .setDaemon(true)
-        .build()))
+      ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-client-retryable-futures-%d"))
 
   def run(): Unit = {
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
@@ -353,9 +348,13 @@ private[spark] class Client(
                   .endSpec()
                 .done()
               try {
+                sparkConf.getOption("spark.app.id").foreach { id =>
+                  logWarning(s"Warning: Provided app id in spark.app.id as $id will be" +
+                    s" overridden as $kubernetesAppId")
+                }
                 sparkConf.set(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
                 sparkConf.set(KUBERNETES_DRIVER_SERVICE_NAME, service.getMetadata.getName)
-                sparkConf.setIfMissing("spark.app.id", kubernetesAppId)
+                sparkConf.set("spark.app.id", kubernetesAppId)
                 sparkConf.setIfMissing("spark.app.name", appName)
                 sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
                 sparkConf.setIfMissing("spark.blockmanager.port",
