@@ -32,7 +32,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 private[spark] class KubernetesClusterSchedulerBackend(
     scheduler: TaskSchedulerImpl,
@@ -74,11 +74,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorCores = conf.getOption("spark.executor.cores").getOrElse("1")
 
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
-    Executors.newCachedThreadPool(
-      new ThreadFactoryBuilder()
-        .setDaemon(true)
-        .setNameFormat("kubernetes-executor-requests-%d")
-        .build))
+    ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-executor-requests-%d"))
 
   private val kubernetesClient = KubernetesClientBuilder
     .buildFromWithinPod(kubernetesMaster, kubernetesNamespace)
