@@ -86,13 +86,13 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: SettableFu
       // pod metadata
       ("pod name", pod.getMetadata.getName()),
       ("namespace", pod.getMetadata.getNamespace()),
-      ("labels", pod.getMetadata.getLabels().asScala.mkString(",")),
+      ("labels", pod.getMetadata.getLabels().asScala.mkString(", ")),
       ("pod uid", pod.getMetadata.getUid),
       ("creation time", pod.getMetadata.getCreationTimestamp()),
 
       // spec details
       ("service account name", pod.getSpec.getServiceAccountName()),
-      ("volumes", pod.getSpec.getVolumes().asScala.map(_.getName).mkString(",")),
+      ("volumes", pod.getSpec.getVolumes().asScala.map(_.getName).mkString(", ")),
       ("node name", pod.getSpec.getNodeName()),
 
       // status
@@ -101,7 +101,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: SettableFu
         pod.getStatus.getContainerStatuses()
             .asScala
             .map(_.getImage)
-            .mkString(",")),
+            .mkString(", ")),
       ("phase", pod.getStatus.getPhase())
     )
 
