@@ -34,9 +34,9 @@ private[kubernetes] class MultiServerFeignTarget[T : ClassTag](
   override def url(): String = threadLocalShuffledServers.get.head
 
   /**
-    * Cloning the target is done on every request, for use on the current
-    * thread - thus it's important that clone returns a "fresh" target.
-    */
+   * Cloning the target is done on every request, for use on the current
+   * thread - thus it's important that clone returns a "fresh" target.
+   */
   override def clone(): Retryer = {
     reset()
     this
