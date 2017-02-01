@@ -176,8 +176,7 @@ package object config {
       .createOptional
 
   private[spark] val WAIT_FOR_APP_COMPLETION =
-    ConfigBuilder(
-      "spark.kubernetes.submit.waitAppCompletion")
+    ConfigBuilder("spark.kubernetes.submit.waitAppCompletion")
       .doc(
         """
           | In cluster mode, whether to wait for the application to finish before exiting the
