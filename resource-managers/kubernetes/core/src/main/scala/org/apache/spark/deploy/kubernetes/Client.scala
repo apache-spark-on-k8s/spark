@@ -532,17 +532,6 @@ private[spark] class Client(
       kubernetesClient: KubernetesClient,
       service: Service,
       driverSubmitSslOptions: SSLOptions): KubernetesSparkRestApi = {
-    val servicePort = service
-      .getSpec
-      .getPorts
-      .asScala
-      .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
-      .head
-      .getNodePort
-    // NodePort is exposed on every node, so just pick one of them.
-    // TODO be resilient to node failures and try all of them
-    val node = kubernetesClient.nodes.list.getItems.asScala.head
-    val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
     val urlScheme = if (driverSubmitSslOptions.enabled) {
       "https"
     } else {
@@ -551,15 +540,22 @@ private[spark] class Client(
         " to secure this step.")
       "http"
     }
+    val servicePort = service.getSpec.getPorts.asScala
+      .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
+      .head.getNodePort
+    val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
+      .flatMap(_.getStatus.getAddresses.asScala.map(address => {
+        s"$urlScheme://${address.getAddress}:$servicePort"
+      })).toArray
+    require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {
         buildSslConnectionConfiguration(driverSubmitSslOptions)
       } else {
         (null, SSLContext.getDefault)
       }
-    val url = s"$urlScheme://$nodeAddress:$servicePort"
     HttpClientUtil.createClient[KubernetesSparkRestApi](
-      url,
+      uris = nodeUrls,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager)
   }
