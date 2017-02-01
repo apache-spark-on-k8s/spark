@@ -361,11 +361,13 @@ private[spark] class Client(
                   DEFAULT_BLOCKMANAGER_PORT.toString)
                 val driverSubmitter = buildDriverSubmissionClient(kubernetesClient, service,
                     driverSubmitSslOptions)
-                val ping = Retry.retry(5, 5.seconds) {
+                val ping = Retry.retry(5, 5.seconds,
+                    Some("Failed to contact the driver server")) {
                   driverSubmitter.ping()
                 }
                 ping onFailure {
                   case t: Throwable =>
+                    logError("Ping failed to the driver server", t)
                     submitCompletedFuture.setException(t)
                     kubernetesClient.services().delete(service)
                 }
@@ -544,6 +546,7 @@ private[spark] class Client(
       .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
       .head.getNodePort
     val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
+      .filterNot(_.getSpec.getUnschedulable)
       .flatMap(_.getStatus.getAddresses.asScala.map(address => {
         s"$urlScheme://${address.getAddress}:$servicePort"
       })).toArray

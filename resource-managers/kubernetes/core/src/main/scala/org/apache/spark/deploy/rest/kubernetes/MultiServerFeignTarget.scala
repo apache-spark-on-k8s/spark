@@ -22,6 +22,7 @@ import scala.util.Random
 
 private[kubernetes] class MultiServerFeignTarget[T : ClassTag](
     private val servers: Seq[String]) extends Target[T] with Retryer {
+  require(servers.nonEmpty, "Must provide at least one server URI.")
 
   private val threadLocalShuffledServers = new ThreadLocal[Seq[String]] {
     override def initialValue(): Seq[String] = Random.shuffle(servers)
