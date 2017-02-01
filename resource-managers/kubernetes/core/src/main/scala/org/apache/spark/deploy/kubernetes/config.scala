@@ -94,7 +94,17 @@ package object config {
   private[spark] val KUBERNETES_DRIVER_UPLOAD_JARS =
     ConfigBuilder("spark.kubernetes.driver.uploads.jars")
       .doc("""
-          | Comma-separated list of jars to sent to the driver and
+          | Comma-separated list of jars to send to the driver and
+          | all executors when submitting the application in cluster
+          | mode.
+        """.stripMargin)
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_DRIVER_UPLOAD_FILES =
+    ConfigBuilder("spark.kubernetes.driver.uploads.files")
+      .doc("""
+          | Comma-separated list of files to send to the driver and
           | all executors when submitting the application in cluster
           | mode.
         """.stripMargin)
