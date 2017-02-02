@@ -27,7 +27,7 @@ import org.apache.commons.codec.binary.Base64
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.{SecurityManager, SPARK_VERSION => sparkVersion, SparkConf, SparkException, SSLOptions}
+import org.apache.spark.{SecurityManager, SPARK_VERSION => sparkVersion, SparkConf, SSLOptions}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.rest._
 import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
@@ -174,8 +174,7 @@ private[spark] class KubernetesSparkRestServer(
                 val sparkJars = new File(sparkHome, "jars").listFiles().map(_.getAbsolutePath)
                 val driverClasspath = driverExtraClasspath ++
                   resolvedJars ++
-                  sparkJars ++
-                  Array(appResourcePath)
+                  sparkJars
                 val resolvedSparkProperties = new mutable.HashMap[String, String]
                 resolvedSparkProperties ++= sparkProperties
                 resolvedSparkProperties("spark.jars") = resolvedJars.mkString(",")

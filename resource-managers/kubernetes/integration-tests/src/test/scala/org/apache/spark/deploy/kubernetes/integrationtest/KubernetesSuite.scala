@@ -19,27 +19,23 @@ package org.apache.spark.deploy.kubernetes.integrationtest
 import java.io.File
 import java.nio.file.Paths
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 import com.google.common.collect.ImmutableList
-import com.google.common.util.concurrent.SettableFuture
-import io.fabric8.kubernetes.api.model.Pod
-import io.fabric8.kubernetes.client.{Config, KubernetesClient, KubernetesClientException, Watcher}
-import io.fabric8.kubernetes.client.Watcher.Action
+import io.fabric8.kubernetes.client.{Config, KubernetesClient}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
 import scala.collection.JavaConverters._
 
-import org.apache.spark.{SparkConf, SparkException, SparkFunSuite}
+import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.SparkSubmit
+import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.Client
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 import org.apache.spark.deploy.kubernetes.integrationtest.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.restapis.SparkRestApiV1
 import org.apache.spark.deploy.kubernetes.integrationtest.sslutil.SSLUtils
 import org.apache.spark.status.api.v1.{ApplicationStatus, StageStatus}
-import org.apache.spark.util.Utils
 
 private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
@@ -53,14 +49,29 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .listFiles()(0)
       .getAbsolutePath
 
-  private val EXAMPLES_JAR_FILE_NAME = Paths.get("target", "docker", "driver", "examples", "jars")
-    .toFile
-    .listFiles()
-    .toList
-    .map(_.getName)
-    .find(_.startsWith("spark-examples"))
-    .getOrElse(throw new IllegalStateException("Expected to find spark-examples jar; was the" +
-        " pre-integration-test phase run?"))
+  private val CONTAINER_MOUNTED_EXAMPLES_JAR_FILE_NAME =
+      Paths.get("target", "docker", "driver", "examples", "jars")
+        .toFile
+        .listFiles()
+        .toList
+        .map(_.getName)
+        .find(_.startsWith("spark-kubernetes-integration-tests-spark-jobs_"))
+        .getOrElse(throw new IllegalStateException("Expected to find integration test spark job" +
+          " jar; was the pre-integration-test phase run?"))
+  private val CONTAINER_MOUNTED_HELPER_JAR_FILE_NAME =
+    Paths.get("target", "docker", "driver", "examples", "jars")
+      .toFile
+      .listFiles()
+      .toList
+      .map(_.getName)
+      .find(_.startsWith("spark-kubernetes-integration-tests-spark-jobs-helpers_"))
+      .getOrElse(throw new IllegalStateException("Expected to find the integration test spark job" +
+        " helper jar; was the pre-integration-test phase run?"))
+
+  private val CONTAINER_MOUNTED_EXAMPLES_JAR_PATH = "container:///opt/spark/examples/jars/" +
+      CONTAINER_MOUNTED_EXAMPLES_JAR_FILE_NAME
+  private val CONTAINER_MOUNTED_HELPER_JAR_PATH = "/opt/spark/examples/jars/" +
+      CONTAINER_MOUNTED_HELPER_JAR_FILE_NAME
 
   private val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   private val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
@@ -114,6 +125,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         .withGracePeriod(60)
         .delete
     })
+    System.setProperty("spark.jars", "")
+    System.setProperty(KUBERNETES_DRIVER_UPLOAD_JARS.key, "")
   }
 
   override def afterAll(): Unit = {
@@ -219,54 +232,17 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--class", "org.apache.spark.examples.SparkPi",
+      "--class", MAIN_CLASS,
+      "--jars", CONTAINER_MOUNTED_HELPER_JAR_PATH,
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
       "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
       "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
-      s"container:///opt/spark/examples/jars/$EXAMPLES_JAR_FILE_NAME")
-    val allContainersSucceeded = SettableFuture.create[Boolean]
-    val watcher = new Watcher[Pod] {
-      override def eventReceived(action: Action, pod: Pod): Unit = {
-        if (action == Action.ERROR) {
-          allContainersSucceeded.setException(
-              new SparkException("The execution of the driver pod failed."))
-        } else if (action == Action.MODIFIED &&
-            pod.getStatus.getContainerStatuses.asScala.nonEmpty &&
-            pod.getStatus
-              .getContainerStatuses
-              .asScala
-              .forall(_.getState.getTerminated != null)) {
-          allContainersSucceeded.set(
-            pod.getStatus
-              .getContainerStatuses
-              .asScala
-              .forall(_.getState.getTerminated.getExitCode == 0)
-          )
-        }
-      }
-
-      override def onClose(e: KubernetesClientException): Unit = {
-        logError("Integration test pod watch closed", e)
-      }
-    }
-    Utils.tryWithResource(
-      minikubeKubernetesClient
-        .pods
-        .withLabel("spark-app-name", "spark-pi")
-        .watch(watcher)) { _ =>
-      SparkSubmit.main(args)
-      assert(allContainersSucceeded.get(2, TimeUnit.MINUTES),
-          "Some containers exited with a non-zero status.")
-    }
-    val driverPod = minikubeKubernetesClient.pods
-      .withLabel("spark-app-name", "spark-pi")
-      .list
-      .getItems
-      .get(0)
-    val jobLog = minikubeKubernetesClient.pods.withName(driverPod.getMetadata.getName).getLog
-    assert(jobLog.contains("Pi is roughly"), "Pi was not computed by the job...")
+      CONTAINER_MOUNTED_EXAMPLES_JAR_PATH)
+    SparkSubmit.main(args)
+    val sparkMetricsService = getSparkMetricsService("spark-pi")
+    expectationsForStaticAllocation(sparkMetricsService)
   }
 
   test("Run with custom labels") {
