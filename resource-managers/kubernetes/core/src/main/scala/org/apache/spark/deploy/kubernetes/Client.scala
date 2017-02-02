@@ -207,6 +207,8 @@ private[spark] class Client(
             logInfo(s"Waiting for application $kubernetesAppId to finish...")
             driverPodCompletedLatch.await()
             logInfo(s"Application $kubernetesAppId finished.")
+          } else {
+            logInfo(s"Application $kubernetesAppId launched.")
           }
         }
       } finally {
