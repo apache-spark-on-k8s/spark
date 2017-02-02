@@ -32,7 +32,7 @@ package object config {
           | --kubernetes-namespace command line argument.
         """.stripMargin)
       .stringConf
-      .createWithDefault("default")
+      .createOptional
 
   private[spark] val DRIVER_DOCKER_IMAGE =
     ConfigBuilder("spark.kubernetes.driver.docker.image")

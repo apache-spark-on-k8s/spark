@@ -26,7 +26,7 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, _}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
@@ -37,7 +37,7 @@ import scala.concurrent.duration.DurationInt
 import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
+import org.apache.spark.deploy.rest._
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ThreadUtils, Utils}
@@ -48,9 +48,6 @@ private[spark] class Client(
     mainAppResource: String,
     appArgs: Array[String]) extends Logging {
   import Client._
-
-  private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
-  private val master = resolveK8sMaster(sparkConf.get("spark.master"))
 
   private val launchTime = System.currentTimeMillis
   private val appName = sparkConf.getOption("spark.app.name")
@@ -83,21 +80,33 @@ private[spark] class Client(
   def run(): Unit = {
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
     val parsedCustomLabels = parseCustomLabels(customLabels)
-    var k8ConfBuilder = new ConfigBuilder()
+    var k8ConfBuilder = new K8SConfigBuilder()
       .withApiVersion("v1")
-      .withMasterUrl(master)
-      .withNamespace(namespace)
-    sparkConf.get(KUBERNETES_CA_CERT_FILE).foreach {
-      f => k8ConfBuilder = k8ConfBuilder.withCaCertFile(f)
+
+    resolveK8sMaster(sparkConf.get("spark.master")).foreach { m =>
+      k8ConfBuilder = k8ConfBuilder.withMasterUrl(m)
     }
-    sparkConf.get(KUBERNETES_CLIENT_KEY_FILE).foreach {
-      f => k8ConfBuilder = k8ConfBuilder.withClientKeyFile(f)
+
+    sparkConf.get(KUBERNETES_NAMESPACE).foreach { ns =>
+      k8ConfBuilder = k8ConfBuilder.withNamespace(ns)
     }
-    sparkConf.get(KUBERNETES_CLIENT_CERT_FILE).foreach {
-      f => k8ConfBuilder = k8ConfBuilder.withClientCertFile(f)
+
+    sparkConf.get(KUBERNETES_CA_CERT_FILE).foreach { f =>
+      k8ConfBuilder = k8ConfBuilder.withCaCertFile(f)
+    }
+    sparkConf.get(KUBERNETES_CLIENT_KEY_FILE).foreach { f =>
+      k8ConfBuilder = k8ConfBuilder.withClientKeyFile(f)
+    }
+    sparkConf.get(KUBERNETES_CLIENT_CERT_FILE).foreach { f =>
+      k8ConfBuilder = k8ConfBuilder.withClientCertFile(f)
     }
 
     val k8ClientConfig = k8ConfBuilder.build
+
+    // save into SparkConf so the submitter's default settings are sent to the driver
+    sparkConf.setIfMissing("spark.master", k8ConfBuilder.getMasterUrl())
+    sparkConf.setIfMissing(KUBERNETES_NAMESPACE, k8ConfBuilder.getNamespace())
+
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig)) { kubernetesClient =>
       val submitServerSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
@@ -117,18 +126,10 @@ private[spark] class Client(
           ++ parsedCustomLabels).asJava
         val containerPorts = buildContainerPorts()
         val submitCompletedFuture = SettableFuture.create[Boolean]
-        val submitPending = new AtomicBoolean(false)
-        val podWatcher = new DriverPodWatcher(
-          submitCompletedFuture,
-          submitPending,
-          kubernetesClient,
-          driverSubmitSslOptions,
-          Array(submitServerSecret) ++ sslSecrets,
-          driverKubernetesSelectors)
-        Utils.tryWithResource(kubernetesClient
-            .pods()
-            .withLabels(driverKubernetesSelectors)
-            .watch(podWatcher)) { _ =>
+
+        val secretDirectory = s"$DRIVER_CONTAINER_SECRETS_BASE_DIR/$kubernetesAppId"
+
+        def createDriverPod(unused: Watch): Unit = {
           kubernetesClient.pods().createNew()
             .withNewMetadata()
               .withName(kubernetesAppId)
@@ -651,19 +652,27 @@ private[spark] object Client extends Logging {
       appArgs = appArgs).run()
   }
 
-  def resolveK8sMaster(rawMasterString: String): String = {
-    if (!rawMasterString.startsWith("k8s://")) {
-      throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")
-    }
-    val masterWithoutK8sPrefix = rawMasterString.replaceFirst("k8s://", "")
-    if (masterWithoutK8sPrefix.startsWith("http://")
-        || masterWithoutK8sPrefix.startsWith("https://")) {
-      masterWithoutK8sPrefix
-    } else {
-      val resolvedURL = s"https://$masterWithoutK8sPrefix"
-      logDebug(s"No scheme specified for kubernetes master URL, so defaulting to https. Resolved" +
-        s" URL is $resolvedURL")
-      resolvedURL
+  /**
+   * @return a String URL if specified by the master URL, or None if the client default is
+   *         specified using k8s
+   * @throws IllegalArgumentException for master strings not k8s or starting with k8s://
+   */
+  def resolveK8sMaster(rawMasterString: String): Option[String] = {
+    rawMasterString match {
+      case "k8s" =>
+        logDebug("No kubernetes master URL specified, so falling back to client defaults...")
+        None
+      case master if master.startsWith("k8s://") => master.replaceFirst("k8s://", "") match {
+        case url if url.startsWith("http://") => Some(url)
+        case url if url.startsWith("https://") => Some(url)
+        case hostPort =>
+          val resolvedURL = s"https://$hostPort"
+          logDebug("No scheme specified for kubernetes master URL, so defaulting to https. " +
+            s"Resolved URL is $resolvedURL")
+          Some(resolvedURL)
+      }
+      case _ => throw new IllegalArgumentException("Master URL should be k8s or start with " +
+        "k8s:// in Kubernetes mode.")
     }
   }
 }
