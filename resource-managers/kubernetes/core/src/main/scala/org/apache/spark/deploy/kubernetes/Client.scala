@@ -31,8 +31,6 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.DurationInt
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.config._
@@ -40,7 +38,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
-import org.apache.spark.util.{ThreadUtils, Utils}
+import org.apache.spark.util.Utils
 
 private[spark] class Client(
     sparkConf: SparkConf,
@@ -73,10 +71,6 @@ private[spark] class Client(
 
   private val serviceAccount = sparkConf.get(KUBERNETES_SERVICE_ACCOUNT_NAME)
   private val customLabels = sparkConf.get(KUBERNETES_DRIVER_LABELS)
-
-  private implicit val retryableExecutionContext = ExecutionContext
-    .fromExecutorService(
-      ThreadUtils.newDaemonSingleThreadExecutor("kubernetes-client-retryable-futures"))
 
   def run(): Unit = {
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
