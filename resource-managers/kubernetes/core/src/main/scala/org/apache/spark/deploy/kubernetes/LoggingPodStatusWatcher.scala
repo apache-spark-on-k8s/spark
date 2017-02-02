@@ -69,7 +69,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
 
   override def onClose(e: KubernetesClientException): Unit = {
     scheduler.shutdown()
-    logInfo(s"Application $appId ended with final phase $phase")
+    logInfo(s"Stopped watching application $appId with last-observed phase $phase")
   }
 
   private def logShortStatus() = {
