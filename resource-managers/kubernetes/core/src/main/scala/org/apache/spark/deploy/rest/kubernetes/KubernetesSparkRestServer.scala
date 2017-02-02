@@ -184,7 +184,7 @@ private[spark] class KubernetesSparkRestServer(
                   .map(_.split(","))
                   .getOrElse(Array.empty[String])
                 val resolvedFiles = originalFiles ++ writtenFiles
-                resolvedSparkProperties("spark.files") = resolvedFiles.mkString
+                resolvedSparkProperties("spark.files") = resolvedFiles.mkString(",")
 
                 val command = new ArrayBuffer[String]
                 command += javaExecutable

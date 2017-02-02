@@ -106,7 +106,11 @@ package object config {
       .doc("""
           | Comma-separated list of files to send to the driver and
           | all executors when submitting the application in cluster
-          | mode.
+          | mode. The files are added in a flat hierarchy to the
+          | current working directory of the driver, having the same
+          | names as the names of the original files. Note that two
+          | files with the same name cannot be added, even if they
+          | were in different source directories on the client disk.
         """.stripMargin)
       .stringConf
       .createOptional

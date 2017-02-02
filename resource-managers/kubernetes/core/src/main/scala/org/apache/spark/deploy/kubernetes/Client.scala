@@ -63,7 +63,7 @@ private[spark] class Client(
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
   private val uploadedJars = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_JARS).filter(_.nonEmpty)
   private val uploadedFiles = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_FILES).filter(_.nonEmpty)
-  validateNoDuplicateUploadFileNames()
+  uploadedFiles.foreach(validateNoDuplicateUploadFileNames)
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
@@ -527,22 +527,22 @@ private[spark] class Client(
 
   // Because uploaded files should be added to the working directory of the driver, they
   // need to not have duplicate file names. They are added to the working directory so the
-  // user can reliably locate them in their application.
-  private def validateNoDuplicateUploadFileNames(): Unit = {
-    uploadedFiles.foreach { unsplitPaths =>
-      val splitPaths = unsplitPaths.split(",")
-      val allPathsByFileName = splitPaths.groupBy(new File(_).getName)
-      val pathsWithDuplicateNames = allPathsByFileName.filter(_._2.length > 1)
-      if (pathsWithDuplicateNames.nonEmpty) {
-        val pathsWithDuplicateNamesSorted = pathsWithDuplicateNames
-          .values
-          .flatten
-          .toList
-          .sortBy(new File(_).getName)
-        throw new SparkException("Cannot upload files with duplicate names via" +
-          s" ${KUBERNETES_DRIVER_UPLOAD_FILES.key}. The following paths have a duplicated" +
-          s" file name: ${pathsWithDuplicateNamesSorted.mkString(",")}")
-      }
+  // user can reliably locate them in their application. This is similar in principle to how
+  // YARN handles its `spark.files` setting.
+  private def validateNoDuplicateUploadFileNames(uploadedFilesCommaSeparated: String): Unit = {
+    val pathsWithDuplicateNames = uploadedFilesCommaSeparated
+      .split(",")
+      .groupBy(new File(_).getName)
+      .filter(_._2.length > 1)
+    if (pathsWithDuplicateNames.nonEmpty) {
+      val pathsWithDuplicateNamesSorted = pathsWithDuplicateNames
+        .values
+        .flatten
+        .toList
+        .sortBy(new File(_).getName)
+      throw new SparkException("Cannot upload files with duplicate names via" +
+        s" ${KUBERNETES_DRIVER_UPLOAD_FILES.key}. The following paths have a duplicated" +
+        s" file name: ${pathsWithDuplicateNamesSorted.mkString(",")}")
     }
   }
 

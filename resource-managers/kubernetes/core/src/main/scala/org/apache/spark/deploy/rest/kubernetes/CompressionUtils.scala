@@ -26,7 +26,6 @@ import org.apache.commons.compress.utils.CharsetNames
 import org.apache.commons.io.IOUtils
 import scala.collection.mutable
 
-import org.apache.spark.SparkException
 import org.apache.spark.deploy.rest.TarGzippedData
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ByteBufferOutputStream, Utils}
@@ -47,8 +46,7 @@ private[spark] object CompressionUtils extends Logging {
    * @param paths A list of file paths to be archived
    * @return An in-memory representation of the compressed data.
    */
-  def createTarGzip(paths: Iterable[String]):
-      TarGzippedData = {
+  def createTarGzip(paths: Iterable[String]): TarGzippedData = {
     val compressedBytesStream = Utils.tryWithResource(new ByteBufferOutputStream()) { raw =>
       Utils.tryWithResource(new GZIPOutputStream(raw)) { gzipping =>
         Utils.tryWithResource(new TarArchiveOutputStream(
