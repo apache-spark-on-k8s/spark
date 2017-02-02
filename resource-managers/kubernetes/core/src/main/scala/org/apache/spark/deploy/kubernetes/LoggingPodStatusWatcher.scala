@@ -32,7 +32,8 @@ import org.apache.spark.internal.Logging
  *
  * @param podCompletedFuture a CountDownLatch that is set to true when the watched pod finishes
  * @param appId
- * @param interval ms between each state request
+ * @param interval ms between each state request.  If set to 0 or a negative number, the periodic
+ *                 logging will be disabled.
  */
 private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownLatch,
                                                   appId: String,
@@ -44,7 +45,9 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   private val logRunnable: Runnable = new Runnable {
     override def run() = logShortStatus()
   }
-  scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
+  if (interval > 0) {
+    scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
+  }
 
   private var pod: Option[Pod] = Option.empty
   private var prevPhase: String = null
