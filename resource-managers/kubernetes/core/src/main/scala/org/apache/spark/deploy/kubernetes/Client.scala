@@ -188,6 +188,7 @@ private[spark] class Client(
             try {
               submitCompletedFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
               submitSucceeded = true
+              logInfo(s"Finished launching local resources to application $kubernetesAppId")
             } catch {
               case e: TimeoutException =>
                 val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
@@ -404,6 +405,8 @@ private[spark] class Client(
                   Future {
                     sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
                     val submitRequest = buildSubmissionRequest()
+                    logInfo(s"Submitting local resources to driver pod for application " +
+                      s"$kubernetesAppId ...")
                     driverSubmitter.submitApplication(submitRequest)
                   }
                 }
