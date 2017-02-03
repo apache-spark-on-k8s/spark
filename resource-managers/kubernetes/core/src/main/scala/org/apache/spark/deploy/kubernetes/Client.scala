@@ -125,8 +125,9 @@ private[spark] class Client(
         val driverPodCompletedLatch = new CountDownLatch(1)
         // only enable interval logging if in waitForAppCompletion mode
         val loggingInterval = if (waitForAppCompletion) sparkConf.get(REPORT_INTERVAL) else 0
-        val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedLatch, kubernetesAppId,
-                                                       loggingInterval)
+        val loggingWatch = new LoggingPodStatusWatcher(kubernetesAppId,
+                                                       loggingInterval,
+                                                       driverPodCompletedLatch.countDown)
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
