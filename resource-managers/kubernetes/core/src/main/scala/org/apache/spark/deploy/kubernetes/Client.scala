@@ -124,24 +124,12 @@ private[spark] class Client(
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withLabels(driverKubernetesSelectors)
-<<<<<<< HEAD
-            .watch(podWatcher)) { _ =>
+            .watch(loggingWatch)) { _ =>
           val probePingHttpGet = new HTTPGetActionBuilder()
             .withScheme(if (driverSubmitSslOptions.enabled) "HTTPS" else "HTTP")
             .withPath("/v1/submissions/ping")
             .withNewPort(SUBMISSION_SERVER_PORT_NAME)
             .build()
-          kubernetesClient.pods().createNew()
-            .withNewMetadata()
-              .withName(kubernetesAppId)
-||||||| merged common ancestors
-            .watch(podWatcher)) { _ =>
-          kubernetesClient.pods().createNew()
-            .withNewMetadata()
-              .withName(kubernetesAppId)
-=======
-            .watch(loggingWatch)) { _ =>
-
           // launch driver pod with inner watch to upload jars when it's ready
           val submitCompletedFuture = SettableFuture.create[Boolean]
           val submitPending = new AtomicBoolean(false)
@@ -154,7 +142,6 @@ private[spark] class Client(
             driverKubernetesSelectors)
           Utils.tryWithResource(kubernetesClient
               .pods()
->>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
               .withLabels(driverKubernetesSelectors)
               .watch(podWatcher)) { _ =>
             kubernetesClient.pods().createNew()
@@ -166,74 +153,6 @@ private[spark] class Client(
                 .withRestartPolicy("OnFailure")
                 .addNewVolume()
                   .withName(SUBMISSION_APP_SECRET_VOLUME_NAME)
-<<<<<<< HEAD
-                  .withMountPath(secretDirectory)
-                  .withReadOnly(true)
-                  .endVolumeMount()
-                .addToVolumeMounts(sslVolumeMounts: _*)
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SECRET_LOCATION)
-                  .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
-                  .endEnv()
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SERVER_PORT)
-                  .withValue(SUBMISSION_SERVER_PORT.toString)
-                  .endEnv()
-                .addToEnv(sslEnvs: _*)
-                .withPorts(containerPorts.asJava)
-                .withNewReadinessProbe().withHttpGet(probePingHttpGet).endReadinessProbe()
-                .withNewLivenessProbe()
-                  .withHttpGet(probePingHttpGet)
-                  .withInitialDelaySeconds(DRIVER_INITIAL_LIVELINESS_CHECK_DELAY_SECONDS)
-                  .endLivenessProbe()
-                .endContainer()
-              .endSpec()
-            .done()
-          var submitSucceeded = false
-          try {
-            submitCompletedFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-            submitSucceeded = true
-          } catch {
-            case e: TimeoutException =>
-              val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
-              logError(finalErrorMessage, e)
-              throw new SparkException(finalErrorMessage, e)
-          } finally {
-            if (!submitSucceeded) {
-              Utils.tryLogNonFatalError {
-                kubernetesClient.pods.withName(kubernetesAppId).delete()
-||||||| merged common ancestors
-                  .withMountPath(secretDirectory)
-                  .withReadOnly(true)
-                  .endVolumeMount()
-                .addToVolumeMounts(sslVolumeMounts: _*)
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SECRET_LOCATION)
-                  .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
-                  .endEnv()
-                .addNewEnv()
-                  .withName(ENV_SUBMISSION_SERVER_PORT)
-                  .withValue(SUBMISSION_SERVER_PORT.toString)
-                  .endEnv()
-                .addToEnv(sslEnvs: _*)
-                .withPorts(containerPorts.asJava)
-                .endContainer()
-              .endSpec()
-            .done()
-          var submitSucceeded = false
-          try {
-            submitCompletedFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-            submitSucceeded = true
-          } catch {
-            case e: TimeoutException =>
-              val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
-              logError(finalErrorMessage, e)
-              throw new SparkException(finalErrorMessage, e)
-          } finally {
-            if (!submitSucceeded) {
-              Utils.tryLogNonFatalError {
-                kubernetesClient.pods.withName(kubernetesAppId).delete()
-=======
                   .withNewSecret()
                     .withSecretName(submitServerSecret.getMetadata.getName)
                     .endSecret()
@@ -260,6 +179,11 @@ private[spark] class Client(
                     .endEnv()
                   .addToEnv(sslEnvs: _*)
                   .withPorts(containerPorts.asJava)
+                  .withNewReadinessProbe().withHttpGet(probePingHttpGet).endReadinessProbe()
+                  .withNewLivenessProbe()
+                    .withHttpGet(probePingHttpGet)
+                    .withInitialDelaySeconds(DRIVER_INITIAL_LIVELINESS_CHECK_DELAY_SECONDS)
+                    .endLivenessProbe()
                   .endContainer()
                 .endSpec()
               .done()
@@ -473,7 +397,8 @@ private[spark] class Client(
                   val driverSubmitter = buildDriverSubmissionClient(kubernetesClient, service,
                     driverSubmitSslOptions)
                   driverSubmitter.ping()
-<<<<<<< HEAD
+                  logInfo(s"Submitting local resources to driver pod for application " +
+                    s"$kubernetesAppId ...")
                   val submitRequest = buildSubmissionRequest()
                   driverSubmitter.submitApplication(submitRequest)
                   // After submitting, adjust the service to only expose the Spark UI
@@ -494,97 +419,6 @@ private[spark] class Client(
                       kubernetesClient.services().delete(service)
                     })
                     throw e
-||||||| merged common ancestors
-                }
-                ping onFailure {
-                  case t: Throwable =>
-                    logError("Ping failed to the driver server", t)
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val submitComplete = ping.flatMap { _ =>
-                  Future {
-                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
-                    val submitRequest = buildSubmissionRequest()
-                    driverSubmitter.submitApplication(submitRequest)
-                  }
-                }
-                submitComplete onFailure {
-                  case t: Throwable =>
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val adjustServicePort = submitComplete.flatMap { _ =>
-                  Future {
-                    // After submitting, adjust the service to only expose the Spark UI
-                    val uiServicePort = new ServicePortBuilder()
-                      .withName(UI_PORT_NAME)
-                      .withPort(uiPort)
-                      .withNewTargetPort(uiPort)
-                      .build()
-                    kubernetesClient.services().withName(kubernetesAppId).edit()
-                      .editSpec()
-                        .withType("ClusterIP")
-                        .withPorts(uiServicePort)
-                        .endSpec()
-                      .done
-                  }
-                }
-                adjustServicePort onSuccess {
-                  case _ =>
-                    submitCompletedFuture.set(true)
-                }
-                adjustServicePort onFailure {
-                  case throwable: Throwable =>
-                    submitCompletedFuture.setException(throwable)
-                    kubernetesClient.services().delete(service)
-=======
-                }
-                ping onFailure {
-                  case t: Throwable =>
-                    logError("Ping failed to the driver server", t)
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val submitComplete = ping.flatMap { _ =>
-                  Future {
-                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
-                    val submitRequest = buildSubmissionRequest()
-                    logInfo(s"Submitting local resources to driver pod for application " +
-                      s"$kubernetesAppId ...")
-                    driverSubmitter.submitApplication(submitRequest)
-                  }
-                }
-                submitComplete onFailure {
-                  case t: Throwable =>
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val adjustServicePort = submitComplete.flatMap { _ =>
-                  Future {
-                    // After submitting, adjust the service to only expose the Spark UI
-                    val uiServicePort = new ServicePortBuilder()
-                      .withName(UI_PORT_NAME)
-                      .withPort(uiPort)
-                      .withNewTargetPort(uiPort)
-                      .build()
-                    kubernetesClient.services().withName(kubernetesAppId).edit()
-                      .editSpec()
-                        .withType("ClusterIP")
-                        .withPorts(uiServicePort)
-                        .endSpec()
-                      .done
-                  }
-                }
-                adjustServicePort onSuccess {
-                  case _ =>
-                    submitCompletedFuture.set(true)
-                }
-                adjustServicePort onFailure {
-                  case throwable: Throwable =>
-                    submitCompletedFuture.setException(throwable)
-                    kubernetesClient.services().delete(service)
->>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
                 }
               } catch {
                 case e: Throwable =>
