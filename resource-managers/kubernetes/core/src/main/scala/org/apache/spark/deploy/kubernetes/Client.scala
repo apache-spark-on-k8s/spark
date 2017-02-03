@@ -202,7 +202,6 @@ private[spark] class Client(
                 Utils.tryLogNonFatalError {
                   kubernetesClient.pods.withName(kubernetesAppId).delete()
                 }
->>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
               }
             }
           }
