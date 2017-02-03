@@ -368,15 +368,7 @@ private[spark] class Client(
                     DEFAULT_BLOCKMANAGER_PORT.toString)
                   val driverSubmitter = buildDriverSubmissionClient(kubernetesClient, service,
                     driverSubmitSslOptions)
-<<<<<<< HEAD
-||||||| merged common ancestors
-                val ping = Retry.retry(5, 5.seconds) {
-=======
-                val ping = Retry.retry(5, 5.seconds,
-                    Some("Failed to contact the driver server")) {
->>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
                   driverSubmitter.ping()
-<<<<<<< HEAD
                   val submitRequest = buildSubmissionRequest()
                   driverSubmitter.submitApplication(submitRequest)
                   // After submitting, adjust the service to only expose the Spark UI
@@ -397,94 +389,6 @@ private[spark] class Client(
                       kubernetesClient.services().delete(service)
                     })
                     throw e
-||||||| merged common ancestors
-                }
-                ping onFailure {
-                  case t: Throwable =>
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val submitComplete = ping.flatMap { _ =>
-                  Future {
-                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
-                    val submitRequest = buildSubmissionRequest()
-                    driverSubmitter.submitApplication(submitRequest)
-                  }
-                }
-                submitComplete onFailure {
-                  case t: Throwable =>
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val adjustServicePort = submitComplete.flatMap { _ =>
-                  Future {
-                    // After submitting, adjust the service to only expose the Spark UI
-                    val uiServicePort = new ServicePortBuilder()
-                      .withName(UI_PORT_NAME)
-                      .withPort(uiPort)
-                      .withNewTargetPort(uiPort)
-                      .build()
-                    kubernetesClient.services().withName(kubernetesAppId).edit()
-                      .editSpec()
-                        .withType("ClusterIP")
-                        .withPorts(uiServicePort)
-                        .endSpec()
-                      .done
-                  }
-                }
-                adjustServicePort onSuccess {
-                  case _ =>
-                    submitCompletedFuture.set(true)
-                }
-                adjustServicePort onFailure {
-                  case throwable: Throwable =>
-                    submitCompletedFuture.setException(throwable)
-                    kubernetesClient.services().delete(service)
-=======
-                }
-                ping onFailure {
-                  case t: Throwable =>
-                    logError("Ping failed to the driver server", t)
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val submitComplete = ping.flatMap { _ =>
-                  Future {
-                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
-                    val submitRequest = buildSubmissionRequest()
-                    driverSubmitter.submitApplication(submitRequest)
-                  }
-                }
-                submitComplete onFailure {
-                  case t: Throwable =>
-                    submitCompletedFuture.setException(t)
-                    kubernetesClient.services().delete(service)
-                }
-                val adjustServicePort = submitComplete.flatMap { _ =>
-                  Future {
-                    // After submitting, adjust the service to only expose the Spark UI
-                    val uiServicePort = new ServicePortBuilder()
-                      .withName(UI_PORT_NAME)
-                      .withPort(uiPort)
-                      .withNewTargetPort(uiPort)
-                      .build()
-                    kubernetesClient.services().withName(kubernetesAppId).edit()
-                      .editSpec()
-                        .withType("ClusterIP")
-                        .withPorts(uiServicePort)
-                        .endSpec()
-                      .done
-                  }
-                }
-                adjustServicePort onSuccess {
-                  case _ =>
-                    submitCompletedFuture.set(true)
-                }
-                adjustServicePort onFailure {
-                  case throwable: Throwable =>
-                    submitCompletedFuture.setException(throwable)
-                    kubernetesClient.services().delete(service)
->>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
                 }
               } catch {
                 case e: Throwable =>
