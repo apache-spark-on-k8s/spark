@@ -35,9 +35,9 @@ import org.apache.spark.internal.Logging
  * @param interval ms between each state request.  If set to 0 or a negative number, the periodic
  *                 logging will be disabled.
  */
-private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownLatch,
-                                                  appId: String,
-                                                  interval: Long)
+private[kubernetes] class LoggingPodStatusWatcher(appId: String,
+                                                  interval: Long,
+                                                  completionFunc: => Unit)
     extends Watcher[Pod] with Logging {
 
   // start timer for periodic logging
@@ -63,7 +63,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
     prevPhase = phase
 
     if (phase == "Succeeded" || phase == "Failed") {
-      podCompletedFuture.countDown()
+      completionFunc
     }
   }
 
