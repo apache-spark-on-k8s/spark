@@ -59,7 +59,9 @@ private[spark] class Client(
   private val sslSecretsDirectory = s"$DRIVER_CONTAINER_SECRETS_BASE_DIR/$kubernetesAppId-ssl"
   private val sslSecretsName = s"$SUBMISSION_SSL_SECRETS_PREFIX-$kubernetesAppId"
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
-  private val uploadedJars = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_JARS)
+  private val uploadedJars = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_JARS).filter(_.nonEmpty)
+  private val uploadedFiles = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_FILES).filter(_.nonEmpty)
+  uploadedFiles.foreach(validateNoDuplicateUploadFileNames)
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
@@ -366,7 +368,15 @@ private[spark] class Client(
                     DEFAULT_BLOCKMANAGER_PORT.toString)
                   val driverSubmitter = buildDriverSubmissionClient(kubernetesClient, service,
                     driverSubmitSslOptions)
+<<<<<<< HEAD
+||||||| merged common ancestors
+                val ping = Retry.retry(5, 5.seconds) {
+=======
+                val ping = Retry.retry(5, 5.seconds,
+                    Some("Failed to contact the driver server")) {
+>>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
                   driverSubmitter.ping()
+<<<<<<< HEAD
                   val submitRequest = buildSubmissionRequest()
                   driverSubmitter.submitApplication(submitRequest)
                   // After submitting, adjust the service to only expose the Spark UI
@@ -387,6 +397,94 @@ private[spark] class Client(
                       kubernetesClient.services().delete(service)
                     })
                     throw e
+||||||| merged common ancestors
+                }
+                ping onFailure {
+                  case t: Throwable =>
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val submitComplete = ping.flatMap { _ =>
+                  Future {
+                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
+                    val submitRequest = buildSubmissionRequest()
+                    driverSubmitter.submitApplication(submitRequest)
+                  }
+                }
+                submitComplete onFailure {
+                  case t: Throwable =>
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val adjustServicePort = submitComplete.flatMap { _ =>
+                  Future {
+                    // After submitting, adjust the service to only expose the Spark UI
+                    val uiServicePort = new ServicePortBuilder()
+                      .withName(UI_PORT_NAME)
+                      .withPort(uiPort)
+                      .withNewTargetPort(uiPort)
+                      .build()
+                    kubernetesClient.services().withName(kubernetesAppId).edit()
+                      .editSpec()
+                        .withType("ClusterIP")
+                        .withPorts(uiServicePort)
+                        .endSpec()
+                      .done
+                  }
+                }
+                adjustServicePort onSuccess {
+                  case _ =>
+                    submitCompletedFuture.set(true)
+                }
+                adjustServicePort onFailure {
+                  case throwable: Throwable =>
+                    submitCompletedFuture.setException(throwable)
+                    kubernetesClient.services().delete(service)
+=======
+                }
+                ping onFailure {
+                  case t: Throwable =>
+                    logError("Ping failed to the driver server", t)
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val submitComplete = ping.flatMap { _ =>
+                  Future {
+                    sparkConf.set("spark.driver.host", pod.getStatus.getPodIP)
+                    val submitRequest = buildSubmissionRequest()
+                    driverSubmitter.submitApplication(submitRequest)
+                  }
+                }
+                submitComplete onFailure {
+                  case t: Throwable =>
+                    submitCompletedFuture.setException(t)
+                    kubernetesClient.services().delete(service)
+                }
+                val adjustServicePort = submitComplete.flatMap { _ =>
+                  Future {
+                    // After submitting, adjust the service to only expose the Spark UI
+                    val uiServicePort = new ServicePortBuilder()
+                      .withName(UI_PORT_NAME)
+                      .withPort(uiPort)
+                      .withNewTargetPort(uiPort)
+                      .build()
+                    kubernetesClient.services().withName(kubernetesAppId).edit()
+                      .editSpec()
+                        .withType("ClusterIP")
+                        .withPorts(uiServicePort)
+                        .endSpec()
+                      .done
+                  }
+                }
+                adjustServicePort onSuccess {
+                  case _ =>
+                    submitCompletedFuture.set(true)
+                }
+                adjustServicePort onFailure {
+                  case throwable: Throwable =>
+                    submitCompletedFuture.setException(throwable)
+                    kubernetesClient.services().delete(service)
+>>>>>>> apache-spark-on-k8s/k8s-support-alternate-incremental
                 }
               } catch {
                 case e: Throwable =>
@@ -490,18 +588,40 @@ private[spark] class Client(
       case "container" => ContainerAppResource(appResourceUri.getPath)
       case other => RemoteAppResource(other)
     }
-
-    val uploadJarsBase64Contents = compressJars(uploadedJars)
+    val uploadJarsBase64Contents = compressFiles(uploadedJars)
+    val uploadFilesBase64Contents = compressFiles(uploadedFiles)
     KubernetesCreateSubmissionRequest(
       appResource = resolvedAppResource,
       mainClass = mainClass,
       appArgs = appArgs,
       secret = secretBase64String,
       sparkProperties = sparkConf.getAll.toMap,
-      uploadedJarsBase64Contents = uploadJarsBase64Contents)
+      uploadedJarsBase64Contents = uploadJarsBase64Contents,
+      uploadedFilesBase64Contents = uploadFilesBase64Contents)
   }
 
-  private def compressJars(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
+  // Because uploaded files should be added to the working directory of the driver, they
+  // need to not have duplicate file names. They are added to the working directory so the
+  // user can reliably locate them in their application. This is similar in principle to how
+  // YARN handles its `spark.files` setting.
+  private def validateNoDuplicateUploadFileNames(uploadedFilesCommaSeparated: String): Unit = {
+    val pathsWithDuplicateNames = uploadedFilesCommaSeparated
+      .split(",")
+      .groupBy(new File(_).getName)
+      .filter(_._2.length > 1)
+    if (pathsWithDuplicateNames.nonEmpty) {
+      val pathsWithDuplicateNamesSorted = pathsWithDuplicateNames
+        .values
+        .flatten
+        .toList
+        .sortBy(new File(_).getName)
+      throw new SparkException("Cannot upload files with duplicate names via" +
+        s" ${KUBERNETES_DRIVER_UPLOAD_FILES.key}. The following paths have a duplicated" +
+        s" file name: ${pathsWithDuplicateNamesSorted.mkString(",")}")
+    }
+  }
+
+  private def compressFiles(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
     maybeFilePaths
       .map(_.split(","))
       .map(CompressionUtils.createTarGzip(_))
@@ -511,17 +631,6 @@ private[spark] class Client(
       kubernetesClient: KubernetesClient,
       service: Service,
       driverSubmitSslOptions: SSLOptions): KubernetesSparkRestApi = {
-    val servicePort = service
-      .getSpec
-      .getPorts
-      .asScala
-      .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
-      .head
-      .getNodePort
-    // NodePort is exposed on every node, so just pick one of them.
-    // TODO be resilient to node failures and try all of them
-    val node = kubernetesClient.nodes.list.getItems.asScala.head
-    val nodeAddress = node.getStatus.getAddresses.asScala.head.getAddress
     val urlScheme = if (driverSubmitSslOptions.enabled) {
       "https"
     } else {
@@ -530,15 +639,24 @@ private[spark] class Client(
         " to secure this step.")
       "http"
     }
+    val servicePort = service.getSpec.getPorts.asScala
+      .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
+      .head.getNodePort
+    val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
+      .filterNot(node => node.getSpec.getUnschedulable != null &&
+        node.getSpec.getUnschedulable)
+      .flatMap(_.getStatus.getAddresses.asScala.map(address => {
+        s"$urlScheme://${address.getAddress}:$servicePort"
+      })).toArray
+    require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {
         buildSslConnectionConfiguration(driverSubmitSslOptions)
       } else {
         (null, SSLContext.getDefault)
       }
-    val url = s"$urlScheme://$nodeAddress:$servicePort"
     HttpClientUtil.createClient[KubernetesSparkRestApi](
-      url,
+      uris = nodeUrls,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager)
   }
