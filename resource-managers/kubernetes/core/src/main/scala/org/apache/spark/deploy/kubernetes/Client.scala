@@ -20,6 +20,7 @@ import java.io.{File, FileInputStream}
 import java.security.{KeyStore, SecureRandom}
 import java.util.concurrent.{CountDownLatch, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.net.URI
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
 import com.google.common.base.Charsets
@@ -33,6 +34,9 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs._
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.config._
@@ -64,6 +68,7 @@ private[spark] class Client(
   private val uploadedJars = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_JARS).filter(_.nonEmpty)
   private val uploadedFiles = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_FILES).filter(_.nonEmpty)
   uploadedFiles.foreach(validateNoDuplicateUploadFileNames)
+  checkForUserJarsFilesExistence
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
@@ -85,7 +90,6 @@ private[spark] class Client(
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
-
     val parsedCustomLabels = parseCustomLabels(customLabels)
     var k8ConfBuilder = new K8SConfigBuilder()
       .withApiVersion("v1")
@@ -660,6 +664,33 @@ private[spark] class Client(
         }
       }).toMap
     }).getOrElse(Map.empty[String, String])
+  }
+
+  private def checkForUserJarsFilesExistence: Unit = {
+    val conf = new Configuration
+
+    def existsOrAbort(uri: URI): Unit = {
+      val path = new Path(uri)
+      if (!path.getFileSystem(conf).isFile(path)) {
+        throw new SparkException(s"""file "${uri}" does not exist!""")
+      }
+    }
+
+    def checkExistence(maybePaths: Option[String]): Unit = {
+      maybePaths match {
+        case None =>
+        case Some(paths) => paths.split(",").foreach { path =>
+          val uri = Utils.resolveURI(path)
+          uri.getScheme match {
+            case "file" | null => existsOrAbort(uri)
+            case _ =>
+          }
+        }
+      }
+    }
+    checkExistence(uploadedFiles)
+    checkExistence(uploadedJars)
+    checkExistence(Some(mainAppResource))
   }
 }
 
