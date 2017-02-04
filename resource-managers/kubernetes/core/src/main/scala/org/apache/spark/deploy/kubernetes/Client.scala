@@ -455,6 +455,8 @@ private[spark] class Client(
       extends Watcher[Endpoints] {
     override def eventReceived(action: Action, endpoints: Endpoints): Unit = {
       if ((action == Action.ADDED) || (action == Action.MODIFIED)
+          && endpoints.getSubsets.asScala.nonEmpty
+          && endpoints.getSubsets.asScala.exists(_.getAddresses.asScala.nonEmpty)
           && !resolvedDriverEndpoints.isDone) {
         resolvedDriverEndpoints.set(endpoints)
       }
@@ -584,7 +586,6 @@ private[spark] class Client(
       (Array[EnvVar](), Array[Volume](), Array[VolumeMount](), Array[Secret]())
     }
   }
-
 
   private def buildSubmitFailedErrorMessage(
       kubernetesClient: KubernetesClient,
