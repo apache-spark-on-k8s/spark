@@ -278,7 +278,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     assert(jobLog.contains("Pi is roughly"), "Pi was not computed by the job...")
   }
 
-  test("Run with custom labels") {
+  test("Run with custom labels and custom ports") {
     val args = Array(
       "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
       "--deploy-mode", "cluster",
@@ -295,17 +295,17 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
       "--conf", "spark.kubernetes.driver.labels=label1=label1value,label2=label2value",
+      "--conf", "spark.kubernetes.driver.additionalPorts=9090,9091",
       "--conf", "spark.kubernetes.submit.waitAppCompletion=false",
       EXAMPLES_JAR)
     SparkSubmit.main(args)
-    val driverPodLabels = minikubeKubernetesClient
+    val driverPod = minikubeKubernetesClient
       .pods
       .withLabel("spark-app-name", "spark-pi")
       .list()
       .getItems
       .get(0)
-      .getMetadata
-      .getLabels
+    val driverPodLabels = driverPod.getMetadata.getLabels
     // We can't match all of the selectors directly since one of the selectors is based on the
     // launch time.
     assert(driverPodLabels.size == 5, "Unexpected number of pod labels.")
@@ -315,6 +315,10 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       " spark-app-id label (should be prefixed with the app name).")
     assert(driverPodLabels.get("label1") == "label1value", "Unexpected value for label1")
     assert(driverPodLabels.get("label2") == "label2value", "Unexpected value for label2")
+
+    val driverPorts = driverPod.getSpec.getContainers.get(0).getPorts.asScala
+    assert(driverPorts.exists(_.getContainerPort == 9090))
+    assert(driverPorts.exists(_.getContainerPort == 9091))
   }
 
   test("Enable SSL on the driver submit server") {

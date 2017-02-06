@@ -250,6 +250,14 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.driver.additionalPorts</code></td>
+  <td>(none)</td>
+  <td>
+    Custom ports that will be opened on the driver pod. This should be a comma-separated list of port numbers. Note that
+    Spark also adds its own ports to the driver pod.
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.driverSubmitTimeout</code></td>
   <td>60s</td>
   <td>

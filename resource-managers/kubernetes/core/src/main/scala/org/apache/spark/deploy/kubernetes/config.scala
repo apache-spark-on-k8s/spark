@@ -142,6 +142,16 @@ package object config {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_DRIVER_POD_PORTS =
+    ConfigBuilder("spark.kubernetes.driver.additionalPorts")
+      .doc("""
+             | Custom ports that will be opened on the driver pod.
+             | This should be a comma-separated list of port numbers.
+             | Note that Spark also adds its own ports to the driver pod.
+           """.stripMargin)
+      .stringConf
+      .createOptional
+
   private[spark] val KUBERNETES_DRIVER_SUBMIT_TIMEOUT =
     ConfigBuilder("spark.kubernetes.driverSubmitTimeout")
       .doc("""
