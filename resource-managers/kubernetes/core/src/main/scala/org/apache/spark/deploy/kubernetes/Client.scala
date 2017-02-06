@@ -129,9 +129,26 @@ private[spark] class Client(
               sslVolumeMounts,
               sslEnvs,
               isKeyStoreLocalFile)
+            val ownerReferenceConfiguredDriverService = try {
+              configureOwnerReferences(
+                kubernetesClient,
+                submitServerSecret,
+                sslSecrets,
+                driverPod,
+                driverService)
+            } catch {
+              case e: Throwable =>
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.services().delete(driverService)
+                }
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.pods().delete(driverPod)
+                }
+                throw new SparkException("Failed to set owner references to the driver pod.", e)
+            }
             try {
               submitApplicationToDriverServer(kubernetesClient, driverSubmitSslOptions,
-                driverService)
+                ownerReferenceConfiguredDriverService)
               // wait if configured to do so
               if (waitForAppCompletion) {
                 logInfo(s"Waiting for application $kubernetesAppId to finish...")
@@ -143,12 +160,12 @@ private[spark] class Client(
             } catch {
               case e: Throwable =>
                 Utils.tryLogNonFatalError {
-                  kubernetesClient.pods().delete(driverPod)
+                  kubernetesClient.services().delete(ownerReferenceConfiguredDriverService)
                 }
                 Utils.tryLogNonFatalError {
-                  kubernetesClient.services().delete(driverService)
+                  kubernetesClient.pods().delete(driverPod)
                 }
-                throw e
+                throw new SparkException("Failed to submit the application to the driver pod.", e)
             }
           }
         } finally {
@@ -158,7 +175,6 @@ private[spark] class Client(
             sslSecrets.foreach { secret =>
               kubernetesClient.secrets().withName(secret.getMetadata.getName).delete()
             }
-            kubernetesClient.secrets().delete(sslSecrets: _*)
           }
         }
       } finally {
@@ -221,10 +237,15 @@ private[spark] class Client(
     val endpointsReadyFuture = SettableFuture.create[Endpoints]
     val endpointsReadyWatcher = new DriverEndpointsReadyWatcher(endpointsReadyFuture)
     val serviceReadyFuture = SettableFuture.create[Service]
+    val driverKubernetesSelectors = (Map(
+      SPARK_DRIVER_LABEL -> kubernetesAppId,
+      SPARK_APP_ID_LABEL -> kubernetesAppId,
+      SPARK_APP_NAME_LABEL -> appName)
+      ++ parsedCustomLabels).asJava
     val serviceReadyWatcher = new DriverServiceReadyWatcher(serviceReadyFuture)
     val podReadyFuture = SettableFuture.create[Pod]
     val podWatcher = new DriverPodReadyWatcher(podReadyFuture)
-    val (readyPod, readyService) = Utils.tryWithResource(kubernetesClient
+    Utils.tryWithResource(kubernetesClient
         .pods()
         .withName(kubernetesAppId)
         .watch(podWatcher)) { _ =>
@@ -236,11 +257,6 @@ private[spark] class Client(
             .endpoints()
             .withName(kubernetesAppId)
             .watch(endpointsReadyWatcher)) { _ =>
-          val driverKubernetesSelectors = (Map(
-            SPARK_DRIVER_LABEL -> kubernetesAppId,
-            SPARK_APP_ID_LABEL -> kubernetesAppId,
-            SPARK_APP_NAME_LABEL -> appName)
-            ++ parsedCustomLabels).asJava
           val driverService = createDriverService(
             kubernetesClient,
             driverKubernetesSelectors,
@@ -259,11 +275,12 @@ private[spark] class Client(
               Utils.tryLogNonFatalError {
                 kubernetesClient.services().delete(driverService)
               }
-              throw e
+              throw new SparkException("Failed to create the driver pod.", e)
           }
           try {
             waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
               serviceReadyFuture, podReadyFuture)
+            (driverPod, driverService)
           } catch {
             case e: Throwable =>
               Utils.tryLogNonFatalError {
@@ -275,46 +292,47 @@ private[spark] class Client(
               throw new SparkException("Timed out while waiting for a Kubernetes component to be" +
                 " ready.", e)
           }
-          (driverPod, driverService)
         }
       }
     }
-    val resolvedDriverService = try {
-      val driverPodOwnerRef = new OwnerReferenceBuilder()
-        .withName(readyPod.getMetadata.getName)
-        .withUid(readyPod.getMetadata.getUid)
-        .withApiVersion(readyPod.getApiVersion)
-        .withKind(readyPod.getKind)
-        .withController(true)
-        .build()
-      sslSecrets.foreach(secret => {
-        kubernetesClient.secrets().withName(secret.getMetadata.getName).edit()
-          .editMetadata()
-            .addToOwnerReferences(driverPodOwnerRef)
-            .endMetadata()
-          .done()
-      })
-      kubernetesClient.secrets().withName(submitServerSecret.getMetadata.getName).edit()
+  }
+
+  /**
+   * Sets the owner reference for all the kubernetes components to link to the driver pod.
+   *
+   * @return The driver service after it has been adjusted to reflect the new owner
+   * reference.
+   */
+  private def configureOwnerReferences(
+      kubernetesClient: KubernetesClient,
+      submitServerSecret: Secret,
+      sslSecrets: Array[Secret],
+      driverPod: Pod,
+      driverService: Service): Service = {
+    val driverPodOwnerRef = new OwnerReferenceBuilder()
+      .withName(driverPod.getMetadata.getName)
+      .withUid(driverPod.getMetadata.getUid)
+      .withApiVersion(driverPod.getApiVersion)
+      .withKind(driverPod.getKind)
+      .withController(true)
+      .build()
+    sslSecrets.foreach(secret => {
+      kubernetesClient.secrets().withName(secret.getMetadata.getName).edit()
         .editMetadata()
-          .addToOwnerReferences(driverPodOwnerRef)
-          .endMetadata()
+        .addToOwnerReferences(driverPodOwnerRef)
+        .endMetadata()
         .done()
-      kubernetesClient.services().withName(readyService.getMetadata.getName).edit()
-        .editMetadata()
-          .addToOwnerReferences(driverPodOwnerRef)
-          .endMetadata()
-        .done()
-    } catch {
-      case e: Throwable =>
-        Utils.tryLogNonFatalError {
-          kubernetesClient.services().delete(readyService)
-        }
-        Utils.tryLogNonFatalError {
-          kubernetesClient.pods().delete(readyPod)
-        }
-        throw e
-    }
-    (readyPod, resolvedDriverService)
+    })
+    kubernetesClient.secrets().withName(submitServerSecret.getMetadata.getName).edit()
+      .editMetadata()
+      .addToOwnerReferences(driverPodOwnerRef)
+      .endMetadata()
+      .done()
+    kubernetesClient.services().withName(driverService.getMetadata.getName).edit()
+      .editMetadata()
+      .addToOwnerReferences(driverPodOwnerRef)
+      .endMetadata()
+      .done()
   }
 
   private def waitForReadyKubernetesComponents(
