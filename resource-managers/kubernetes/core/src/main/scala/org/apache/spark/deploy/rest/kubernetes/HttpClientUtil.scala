@@ -33,6 +33,7 @@ private[spark] object HttpClientUtil {
 
   def createClient[T: ClassTag](
       uris: Array[String],
+      maxRetriesPerServer: Int = 1,
       sslSocketFactory: SSLSocketFactory = SSLContext.getDefault.getSocketFactory,
       trustContext: X509TrustManager = null,
       readTimeoutMillis: Int = 20000,

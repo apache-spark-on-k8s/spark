@@ -122,11 +122,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     })
   }
 
+  /**
   override def afterAll(): Unit = {
     if (!System.getProperty("spark.docker.test.persistMinikube", "false").toBoolean) {
       Minikube.deleteMinikube()
     }
-  }
+  }*/
 
   private def getSparkMetricsService(sparkBaseAppName: String): SparkRestApiV1 = {
     val serviceName = minikubeKubernetesClient.services()

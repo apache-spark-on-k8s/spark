@@ -438,13 +438,7 @@ private[spark] class Client(
             .endEnv()
           .addToEnv(sslEnvs: _*)
           .withPorts(containerPorts.asJava)
-          .withNewReadinessProbe()
-            .withHttpGet(probePingHttpGet)
-            .endReadinessProbe()
-          .withNewLivenessProbe()
-            .withHttpGet(probePingHttpGet)
-            .withInitialDelaySeconds(DRIVER_INITIAL_LIVELINESS_CHECK_DELAY_SECONDS)
-            .endLivenessProbe()
+          .withNewReadinessProbe().withHttpGet(probePingHttpGet).endReadinessProbe()
           .endContainer()
         .endSpec()
       .done()
@@ -758,6 +752,7 @@ private[spark] class Client(
       }
     HttpClientUtil.createClient[KubernetesSparkRestApi](
       uris = nodeUrls,
+      maxRetriesPerServer = 10,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager)
   }
