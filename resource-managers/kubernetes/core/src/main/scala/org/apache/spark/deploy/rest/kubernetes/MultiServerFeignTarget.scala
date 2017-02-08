@@ -38,8 +38,6 @@ private[kubernetes] class MultiServerFeignTarget[T : ClassTag](
     implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
   }
 
-  override def url(): String = threadLocalShuffledServers.get.head
-
   /**
    * Cloning the target is done on every request, for use on the current
    * thread - thus it's important that clone returns a "fresh" target.
