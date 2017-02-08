@@ -138,12 +138,7 @@ private[spark] class Client(
                 driverService)
             } catch {
               case e: Throwable =>
-                Utils.tryLogNonFatalError {
-                  kubernetesClient.services().delete(driverService)
-                }
-                Utils.tryLogNonFatalError {
-                  kubernetesClient.pods().delete(driverPod)
-                }
+                cleanupPodAndService(kubernetesClient, driverPod, driverService)
                 throw new SparkException("Failed to set owner references to the driver pod.", e)
             }
             try {
@@ -159,12 +154,8 @@ private[spark] class Client(
               }
             } catch {
               case e: Throwable =>
-                Utils.tryLogNonFatalError {
-                  kubernetesClient.services().delete(ownerReferenceConfiguredDriverService)
-                }
-                Utils.tryLogNonFatalError {
-                  kubernetesClient.pods().delete(driverPod)
-                }
+                cleanupPodAndService(kubernetesClient, driverPod,
+                  ownerReferenceConfiguredDriverService)
                 throw new SparkException("Failed to submit the application to the driver pod.", e)
             }
           }
@@ -182,6 +173,18 @@ private[spark] class Client(
           kubernetesClient.secrets().withName(submitServerSecret.getMetadata.getName).delete()
         }
       }
+    }
+  }
+
+  private def cleanupPodAndService(
+      kubernetesClient: KubernetesClient,
+      driverPod: Pod,
+      driverService: Service): Unit = {
+    Utils.tryLogNonFatalError {
+      kubernetesClient.services().delete(driverService)
+    }
+    Utils.tryLogNonFatalError {
+      kubernetesClient.pods().delete(driverPod)
     }
   }
 
