@@ -67,5 +67,4 @@ package object constants {
   // Miscellaneous
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_SUBMIT_SSL_NAMESPACE = "kubernetes.submit"
-  private[spark] val DRIVER_INITIAL_LIVELINESS_CHECK_DELAY_SECONDS = 10
 }

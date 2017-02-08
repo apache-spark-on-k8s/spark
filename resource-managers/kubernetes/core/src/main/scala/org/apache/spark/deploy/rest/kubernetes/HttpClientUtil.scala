@@ -46,12 +46,12 @@ private[spark] object HttpClientUtil {
       .registerModule(new DefaultScalaModule)
       .setDateFormat(JacksonMessageWriter.makeISODateFormat)
     objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-    val target = new MultiServerFeignTarget[T](uris)
+    val target = new MultiServerFeignTarget[T](uris, maxRetriesPerServer)
     val baseHttpClient = new feign.okhttp.OkHttpClient(httpClientBuilder.build())
     val resetTargetHttpClient = new Client {
       override def execute(request: Request, options: Options): Response = {
         val response = baseHttpClient.execute(request, options)
-        if (response.status() >= 200 && response.status() < 300) {
+        if (response.status() / 100 == 2) {
           target.reset()
         }
         response
