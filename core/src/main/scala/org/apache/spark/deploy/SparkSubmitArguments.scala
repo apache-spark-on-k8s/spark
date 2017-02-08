@@ -71,6 +71,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var principal: String = null
   var keytab: String = null
 
+  // Kubernetes only
+  var kubernetesNamespace: String = null
+  var kubernetesUploadJars: String = null
+  var kubernetesUploadFiles: String = null
+
   // Standalone cluster mode only
   var supervise: Boolean = false
   var driverCores: String = null
@@ -186,6 +191,15 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       .getOrElse(sparkProperties.get("spark.executor.instances").orNull)
     keytab = Option(keytab).orElse(sparkProperties.get("spark.yarn.keytab")).orNull
     principal = Option(principal).orElse(sparkProperties.get("spark.yarn.principal")).orNull
+    kubernetesNamespace = Option(kubernetesNamespace)
+      .orElse(sparkProperties.get("spark.kubernetes.namespace"))
+      .orNull
+    kubernetesUploadJars = Option(kubernetesUploadJars)
+      .orElse(sparkProperties.get("spark.kubernetes.driver.uploads.jars"))
+      .orNull
+    kubernetesUploadFiles = Option(kubernetesUploadFiles)
+      .orElse(sparkProperties.get("spark.kubernetes.driver.uploads.files"))
+      .orNull
 
     // Try to set main class from JAR if no --class argument is given
     if (mainClass == null && !isPython && !isR && primaryResource != null) {
@@ -425,6 +439,15 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
 
       case KEYTAB =>
         keytab = value
+
+      case KUBERNETES_NAMESPACE =>
+        kubernetesNamespace = value
+
+      case KUBERNETES_UPLOAD_JARS =>
+        kubernetesUploadJars = value
+
+      case KUBERNETES_UPLOAD_FILES =>
+        kubernetesUploadFiles = value
 
       case HELP =>
         printUsageAndExit(0)
