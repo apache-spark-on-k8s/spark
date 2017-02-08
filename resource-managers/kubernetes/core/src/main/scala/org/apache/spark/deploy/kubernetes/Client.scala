@@ -745,7 +745,7 @@ private[spark] class Client(
         node.getSpec.getUnschedulable)
       .flatMap(_.getStatus.getAddresses.asScala.map(address => {
         s"$urlScheme://${address.getAddress}:$servicePort"
-      })).toArray
+      })).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {
@@ -757,7 +757,8 @@ private[spark] class Client(
       uris = nodeUrls,
       maxRetriesPerServer = 10,
       sslSocketFactory = sslContext.getSocketFactory,
-      trustContext = trustManager)
+      trustContext = trustManager,
+      connectTimeoutMillis = 5000)
   }
 
   private def buildSslConnectionConfiguration(driverSubmitSslOptions: SSLOptions) = {
