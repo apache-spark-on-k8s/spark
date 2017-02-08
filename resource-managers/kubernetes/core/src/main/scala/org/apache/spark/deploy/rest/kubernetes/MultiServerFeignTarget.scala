@@ -25,7 +25,7 @@ import org.apache.spark.internal.Logging
 private[kubernetes] class MultiServerFeignTarget[T : ClassTag](
     private val servers: Seq[String],
     private val maxRetriesPerServer: Int = 1,
-    private val delayBetweenRetriesMillis = 1000) extends Target[T] with Retryer with Logging {
+    private val delayBetweenRetriesMillis: Int = 1000) extends Target[T] with Retryer with Logging {
   require(servers.nonEmpty, "Must provide at least one server URI.")
 
   private val threadLocalShuffledServers = new ThreadLocal[Seq[String]] {
