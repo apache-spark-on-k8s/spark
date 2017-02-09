@@ -755,7 +755,7 @@ private[spark] class Client(
       }
     HttpClientUtil.createClient[KubernetesSparkRestApi](
       uris = nodeUrls,
-      maxRetriesPerServer = 10,
+      maxRetriesPerServer = 3,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager,
       connectTimeoutMillis = 5000)
