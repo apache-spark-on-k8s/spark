@@ -64,7 +64,10 @@ private[spark] object Minikube extends Logging {
 
   def getMinikubeStatus: MinikubeStatus.Value = synchronized {
     assert(MINIKUBE_EXECUTABLE_DEST.exists(), EXPECTED_DOWNLOADED_MINIKUBE_MESSAGE)
-    val statusString = executeMinikube("status").head.replaceFirst("minikubeVM: ", "")
+    val statusString = executeMinikube("status")
+      .filter(_.contains("minikubeVM: "))
+      .head
+      .replaceFirst("minikubeVM: ", "")
     MinikubeStatus.unapply(statusString)
         .getOrElse(throw new IllegalStateException(s"Unknown status $statusString"))
   }
