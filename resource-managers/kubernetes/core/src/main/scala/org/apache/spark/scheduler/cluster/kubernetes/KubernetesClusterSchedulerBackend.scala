@@ -155,13 +155,12 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   private def allocateNewExecutorPod(): (String, Pod) = {
-    val executorKubernetesId = UUID.randomUUID().toString.replaceAll("-", "")
     val executorId = EXECUTOR_ID_COUNTER.incrementAndGet().toString
     val name = s"${applicationId()}-exec-$executorId"
 
     // hostname must be no longer than 63 characters, so take the last 63 characters of the pod
     // name as the hostname.  This preserves uniqueness since the end of name contains
-    // executorKubernetesId and applicationId
+    // executorId and applicationId
     val hostname = name.substring(Math.max(0, name.length - 63))
 
     val selectors = Map(SPARK_EXECUTOR_ID_LABEL -> executorId,
@@ -196,7 +195,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .build()
       })
     try {
-      (executorKubernetesId, kubernetesClient.pods().createNew()
+      (executorId, kubernetesClient.pods().createNew()
         .withNewMetadata()
           .withName(name)
           .withLabels(selectors)
