@@ -169,8 +169,7 @@ For example, if our local proxy were listening on port 8001, we would have our s
       examples/jars/spark_examples_2.11-2.2.0.jar
 
 This mechanism can also be useful when we have authentication schemes that the client library does not support
-completely. The default authentication schemes, using X509 Client Certs and oauth tokens (gce), are currently
-supported.
+completely.
 
 
 ### Spark Properties
