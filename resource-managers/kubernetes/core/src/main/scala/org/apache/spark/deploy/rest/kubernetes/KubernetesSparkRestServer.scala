@@ -158,17 +158,21 @@ private[spark] class KubernetesSparkRestServer(
                 handleError("Unauthorized to submit application.")
               } else {
                 val tempDir = Utils.createTempDir()
-                val appResourcePath = resolvedAppResource(appResource, tempDir)
+                val appResourcePath = resolveAppResourceToLocalPath(appResource, tempDir)
                 val writtenJars = writeUploadedJars(uploadedJars, tempDir)
                 val writtenFiles = writeUploadedFiles(uploadedFiles)
                 val resolvedSparkProperties = new mutable.HashMap[String, String]
                 resolvedSparkProperties ++= sparkProperties
 
                 // Resolve driver classpath and jars
-                val originalJars = sparkProperties.get("spark.jars")
+                val nonUploadedJars = sparkProperties.get("spark.jars")
                   .map(_.split(","))
+                  .map(_.filter(Utils.resolveURI(_).getScheme match {
+                    case "file" | null => false
+                    case _ => true
+                  }))
                   .getOrElse(Array.empty[String])
-                val resolvedJars = writtenJars ++ originalJars ++ Array(appResourcePath)
+                val resolvedJars = writtenJars ++ nonUploadedJars ++ Array(appResourcePath)
                 val sparkJars = new File(sparkHome, "jars").listFiles().map(_.getAbsolutePath)
                 val driverExtraClasspath = sparkProperties
                   .get("spark.driver.extraClassPath")
@@ -180,10 +184,14 @@ private[spark] class KubernetesSparkRestServer(
                 resolvedSparkProperties("spark.jars") = resolvedJars.mkString(",")
 
                 // Resolve spark.files
-                val originalFiles = sparkProperties.get("spark.files")
+                val nonUploadedFiles = sparkProperties.get("spark.files")
                   .map(_.split(","))
+                  .map(_.filter(Utils.resolveURI(_).getScheme match {
+                    case "file" | null => false
+                    case _ => true
+                  }))
                   .getOrElse(Array.empty[String])
-                val resolvedFiles = originalFiles ++ writtenFiles
+                val resolvedFiles = nonUploadedFiles ++ writtenFiles
                 resolvedSparkProperties("spark.files") = resolvedFiles.mkString(",")
 
                 val command = new ArrayBuffer[String]
@@ -250,7 +258,7 @@ private[spark] class KubernetesSparkRestServer(
       writeBase64ContentsToFiles(files, workingDir)
     }
 
-    def resolvedAppResource(appResource: AppResource, tempDir: File): String = {
+    def resolveAppResourceToLocalPath(appResource: AppResource, tempDir: File): String = {
       val appResourcePath = appResource match {
         case UploadedAppResource(resourceContentsBase64, resourceName) =>
           val resourceFile = new File(tempDir, resourceName)
