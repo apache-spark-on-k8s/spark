@@ -153,9 +153,14 @@ the driver container as a [secret volume](https://kubernetes.io/docs/user-guide/
 ### Kubernetes Clusters and the authenticated proxy endpoint
 
 Spark-submit also supports submission through the
-local kubectl proxy](https://kubernetes.io/docs/user-guide/connecting-to-applications-proxy/). One can use the
+[local kubectl proxy](https://kubernetes.io/docs/user-guide/connecting-to-applications-proxy/). One can use the
 authenticating proxy to communicate with the api server directly without passing credentials to spark-submit.
-For example, if our local proxy were listening on port 8001, we would have our submission looking like the following:
+
+The local proxy can be started by running:
+
+    kubectl proxy
+
+If our local proxy were listening on port 8001, we would have our submission looking like the following:
 
     bin/spark-submit \
       --deploy-mode cluster \
@@ -168,9 +173,10 @@ For example, if our local proxy were listening on port 8001, we would have our s
       --conf spark.kubernetes.executor.docker.image=registry-host:5000/spark-executor:latest \
       examples/jars/spark_examples_2.11-2.2.0.jar
 
-This mechanism can also be useful when we have authentication schemes that the client library does not support
-completely.
-
+Communication between Spark and Kubernetes clusters is performed using the fabric8 kubernetes-client library.
+The above mechanism using `kubectl proxy` can be used when we have authentication providers that the fabric8
+kubernetes-client library does not support. Authentication using X509 Client Certs and oauth tokens
+is currently supported.
 
 ### Spark Properties
 
