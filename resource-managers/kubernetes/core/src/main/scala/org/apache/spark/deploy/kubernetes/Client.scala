@@ -745,9 +745,11 @@ private[spark] class Client(
     val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
       .filterNot(node => node.getSpec.getUnschedulable != null &&
         node.getSpec.getUnschedulable)
-      .flatMap(_.getStatus.getAddresses.asScala.map(address => {
+      .flatMap(_.getStatus.getAddresses.asScala)
+      .filter(_.getType == "ExternalIP")
+      .map(address => {
         s"$urlScheme://${address.getAddress}:$servicePort"
-      })).toSet
+      }).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {
