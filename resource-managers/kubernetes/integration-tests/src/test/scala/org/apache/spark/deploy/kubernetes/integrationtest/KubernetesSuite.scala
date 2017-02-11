@@ -174,7 +174,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .set("spark.kubernetes.namespace", NAMESPACE)
       .set("spark.kubernetes.driver.docker.image", "spark-driver:latest")
       .set("spark.kubernetes.executor.docker.image", "spark-executor:latest")
-      .set("spark.kubernetes.driver.uploads.jars", HELPER_JAR)
+      .set("spark.jars", HELPER_JAR)
       .set("spark.executor.memory", "500m")
       .set("spark.executor.cores", "1")
       .set("spark.executors.instances", "1")
@@ -202,7 +202,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
+      "--jars", HELPER_JAR,
       "--class", SPARK_PI_MAIN_CLASS,
       "--conf", "spark.ui.enabled=true",
       "--conf", "spark.testing=false",
@@ -234,7 +234,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
       "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
       "--conf", "spark.kubernetes.submit.waitAppCompletion=false",
-      s"container:///opt/spark/examples/jars/$EXAMPLES_JAR_FILE_NAME")
+      s"local:///opt/spark/examples/jars/$EXAMPLES_JAR_FILE_NAME")
     val allContainersSucceeded = SettableFuture.create[Boolean]
     val watcher = new Watcher[Pod] {
       override def eventReceived(action: Action, pod: Pod): Unit = {
@@ -287,7 +287,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
+      "--jars", HELPER_JAR,
       "--class", SPARK_PI_MAIN_CLASS,
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
@@ -326,7 +326,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
+      "--jars", HELPER_JAR,
       "--class", SPARK_PI_MAIN_CLASS,
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
@@ -355,8 +355,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--upload-jars", HELPER_JAR,
-      "--upload-files", TEST_EXISTENCE_FILE.getAbsolutePath,
+      "--jars", HELPER_JAR,
+      "--files", TEST_EXISTENCE_FILE.getAbsolutePath,
       "--class", FILE_EXISTENCE_MAIN_CLASS,
       "--conf", "spark.ui.enabled=false",
       "--conf", "spark.testing=true",
