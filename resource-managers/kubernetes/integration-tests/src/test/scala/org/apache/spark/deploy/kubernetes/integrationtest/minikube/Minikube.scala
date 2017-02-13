@@ -19,6 +19,7 @@ package org.apache.spark.deploy.kubernetes.integrationtest.minikube
 import java.io.{BufferedReader, InputStreamReader}
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
 import javax.net.ssl.X509TrustManager
 
 import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient}
@@ -58,6 +59,7 @@ private[spark] object Minikube extends Logging {
   def getMinikubeIp: String = synchronized {
     assert(MINIKUBE_EXECUTABLE_DEST.exists(), EXPECTED_DOWNLOADED_MINIKUBE_MESSAGE)
     val outputs = executeMinikube("ip")
+      .filter(_.matches("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"))
     assert(outputs.size == 1, "Unexpected amount of output from minikube ip")
     outputs.head
   }
