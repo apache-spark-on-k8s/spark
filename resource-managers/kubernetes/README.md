@@ -17,13 +17,13 @@ important matters to keep in mind when developing this feature.
 To build Spark with Kubernetes support, use the `kubernetes` profile when invoking Maven. For example, to simply compile
 the Kubernetes core implementation module along with its dependencies:
 
-    build/mvn compile -Pkubernetes -pl resource-managers/kubernetes/core -am
+    build/mvn compile -Pkubernetes -pl resource-managers/kubernetes/core -am -DskipTests
 
 To build a distribution of Spark with Kubernetes support, use the `dev/make-distribution.sh` script, and add the
 `kubernetes` profile as part of the build arguments. Any other build arguments can be specified as one would expect when
 building Spark normally. For example, to build Spark against Hadoop 2.7 and Kubernetes:
 
-    dev/make-distribution.sh --tgz -Phadoop-2.7 -Pkubernetes
+    dev/make-distribution.sh --tgz -Phadoop-2.7 -Pkubernetes -DskipTests
 
 # Kubernetes Code Modules
 
@@ -47,7 +47,7 @@ Running any of the integration tests requires including `kubernetes-integration-
 order to prepare the environment for running the integration tests, the `pre-integration-test` step must be run in Maven
 on the `resource-managers/kubernetes/integration-tests` module:
 
-    build/mvn pre-integration-test -Pkubernetes -Pkubernetes-integration-tests -pl resource-managers/kubernetes/integration-tests -am
+    build/mvn pre-integration-test -Pkubernetes -Pkubernetes-integration-tests -pl resource-managers/kubernetes/integration-tests -am -DskipTests
  
 Afterwards, the integration tests can be executed with Maven or your IDE. Note that when running tests from an IDE, the
 `pre-integration-test` phase must be run every time the Spark main code changes. When running tests from the
