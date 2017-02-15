@@ -22,6 +22,8 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 import io.fabric8.kubernetes.client.{Config, ConfigBuilder, DefaultKubernetesClient}
 
+import org.apache.spark.deploy.kubernetes.constants._
+
 private[spark] object KubernetesClientBuilder {
   private val API_SERVER_TOKEN = new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH)
   private val CA_CERT_FILE = new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH)
@@ -32,12 +34,13 @@ private[spark] object KubernetesClientBuilder {
    * are picked up from canonical locations, as they are injected
    * into the pod's disk space.
    */
-  def buildFromWithinPod(
-      kubernetesMaster: String,
-      kubernetesNamespace: String): DefaultKubernetesClient = {
+  def buildFromWithinPod(kubernetesNamespace: String, useSsl: Boolean): DefaultKubernetesClient = {
+    val kubernetesHost = System.getenv(ENV_KUBERNETES_SERVICE_HOST)
+    val kubernetesPort = System.getenv(ENV_KUBERNETES_SERVICE_PORT)
+    val urlScheme = if (useSsl) "https" else "http"
     var clientConfigBuilder = new ConfigBuilder()
       .withApiVersion("v1")
-      .withMasterUrl(kubernetesMaster)
+      .withMasterUrl(s"$urlScheme://$kubernetesHost:$kubernetesPort")
       .withNamespace(kubernetesNamespace)
 
     if (CA_CERT_FILE.isFile) {
