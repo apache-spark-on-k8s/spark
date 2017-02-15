@@ -227,7 +227,7 @@ private[spark] class Client(
 
   private def launchDriverKubernetesComponents(
       kubernetesClient: KubernetesClient,
-      kubernetesComponentsCleaner: KubernetesComponentCleaner,
+      kubernetesComponentCleaner: KubernetesComponentCleaner,
       parsedCustomLabels: Map[String, String],
       submitServerSecret: Secret,
       driverSubmitSslOptions: SSLOptions,
@@ -263,7 +263,7 @@ private[spark] class Client(
             kubernetesClient,
             driverKubernetesSelectors,
             submitServerSecret)
-          kubernetesComponentsCleaner.registerOrUpdateService(driverService)
+          kubernetesComponentCleaner.registerOrUpdateService(driverService)
           val driverPod = createDriverPod(
             kubernetesClient,
             driverKubernetesSelectors,
@@ -272,7 +272,7 @@ private[spark] class Client(
             sslVolumes,
             sslVolumeMounts,
             sslEnvs)
-          kubernetesComponentsCleaner.registerOrUpdatePod(driverPod)
+          kubernetesComponentCleaner.registerOrUpdatePod(driverPod)
           waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
             serviceReadyFuture, podReadyFuture)
           (driverPod, driverService)
