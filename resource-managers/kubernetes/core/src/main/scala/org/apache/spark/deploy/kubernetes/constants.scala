@@ -63,6 +63,8 @@ package object constants {
   private[spark] val ENV_EXECUTOR_MEMORY = "SPARK_EXECUTOR_MEMORY"
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"
   private[spark] val ENV_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
+  private[spark] val ENV_KUBERNETES_SERVICE_HOST = "KUBERNETES_SERVICE_HOST"
+  private[spark] val ENV_KUBERNETES_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
 
   // Miscellaneous
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
