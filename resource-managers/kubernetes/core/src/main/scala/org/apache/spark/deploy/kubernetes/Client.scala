@@ -173,7 +173,7 @@ private[spark] class Client(
           }
         }
       } finally {
-        kubernetesComponentCleaner.purgeAllRegisteredComponentsFromKubernetes()
+        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes()
       }
     }
   }

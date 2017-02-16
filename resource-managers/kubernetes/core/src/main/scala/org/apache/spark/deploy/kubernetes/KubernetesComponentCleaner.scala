@@ -21,73 +21,88 @@ import io.fabric8.kubernetes.api.model.extensions.Ingress
 import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.mutable
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
-private[spark] class KubernetesComponentCleaner(kubernetesClient: KubernetesClient) {
-  private val LOCK = new Object
+private[spark] class KubernetesComponentCleaner(kubernetesClient: KubernetesClient)
+    extends Logging {
   private val registeredPods = mutable.HashMap.empty[String, Pod]
   private val registeredServices = mutable.HashMap.empty[String, Service]
   private val registeredSecrets = mutable.HashMap.empty[String, Secret]
   private val registeredIngresses = mutable.HashMap.empty[String, Ingress]
 
-  ShutdownHookManager.addShutdownHook(() => purgeAllRegisteredComponentsFromKubernetes())
+  ShutdownHookManager.addShutdownHook(() => deleteAllRegisteredComponentsFromKubernetes())
 
-  def registerOrUpdatePod(pod: Pod): Unit = LOCK.synchronized {
+  def registerOrUpdatePod(pod: Pod): Unit = registeredPods.synchronized {
     registeredPods.put(pod.getMetadata.getName, pod)
   }
 
-  def unregisterPod(pod: Pod): Unit = LOCK.synchronized {
+  def unregisterPod(pod: Pod): Unit = registeredPods.synchronized {
     registeredPods.remove(pod.getMetadata.getName)
   }
 
-  def registerOrUpdateService(service: Service): Unit = LOCK.synchronized {
+  def registerOrUpdateService(service: Service): Unit = registeredServices.synchronized {
     registeredServices.put(service.getMetadata.getName, service)
   }
 
-  def unregisterService(service: Service): Unit = LOCK.synchronized {
+  def unregisterService(service: Service): Unit = registeredServices.synchronized {
     registeredServices.remove(service.getMetadata.getName)
   }
 
-  def registerOrUpdateSecret(secret: Secret): Unit = LOCK.synchronized {
+  def registerOrUpdateSecret(secret: Secret): Unit = registeredSecrets.synchronized {
     registeredSecrets.put(secret.getMetadata.getName, secret)
   }
 
-  def unregisterSecret(secret: Secret): Unit = LOCK.synchronized {
+  def unregisterSecret(secret: Secret): Unit = registeredSecrets.synchronized {
     registeredSecrets.remove(secret.getMetadata.getName)
   }
 
-  def registerOrUpdateIngress(ingress: Ingress): Unit = LOCK.synchronized {
+  def registerOrUpdateIngress(ingress: Ingress): Unit = registeredIngresses.synchronized {
     registeredIngresses.put(ingress.getMetadata.getName, ingress)
   }
 
-  def unregisterIngress(ingress: Ingress): Unit = LOCK.synchronized {
+  def unregisterIngress(ingress: Ingress): Unit = registeredIngresses.synchronized {
     registeredIngresses.remove(ingress.getMetadata.getName)
   }
 
-  def purgeAllRegisteredComponentsFromKubernetes(): Unit = LOCK.synchronized {
-    registeredPods.values.foreach { pod =>
-      Utils.tryLogNonFatalError {
-        kubernetesClient.pods().delete(pod)
+  def deleteAllRegisteredComponentsFromKubernetes(): Unit = {
+    logInfo(s"Deleting registered Kubernetes components:" +
+      s" ${registeredPods.size} pod(s), ${registeredServices.size} service(s)," +
+      s" ${registeredSecrets.size} secret(s), and ${registeredIngresses} ingress(es).")
+    registeredPods.synchronized {
+      registeredPods.values.foreach { pod =>
+        Utils.tryLogNonFatalError {
+          kubernetesClient.pods().delete(pod)
+        }
       }
+      registeredPods.clear()
     }
-    registeredPods.clear()
-    registeredServices.values.foreach { service =>
-      Utils.tryLogNonFatalError {
-        kubernetesClient.services().delete(service)
+
+    registeredServices.synchronized {
+      registeredServices.values.foreach { service =>
+        Utils.tryLogNonFatalError {
+          kubernetesClient.services().delete(service)
+        }
       }
+      registeredServices.clear()
     }
-    registeredServices.clear()
-    registeredSecrets.values.foreach { secret =>
-      Utils.tryLogNonFatalError {
-        kubernetesClient.secrets().delete(secret)
+
+    registeredSecrets.synchronized {
+      registeredSecrets.values.foreach { secret =>
+        Utils.tryLogNonFatalError {
+          kubernetesClient.secrets().delete(secret)
+        }
       }
+      registeredSecrets.clear()
     }
-    registeredSecrets.clear()
-    registeredIngresses.values.foreach { ingress =>
-      Utils.tryLogNonFatalError {
-        kubernetesClient.extensions().ingresses().delete(ingress)
+
+    registeredIngresses.synchronized {
+      registeredIngresses.values.foreach { ingress =>
+        Utils.tryLogNonFatalError {
+          kubernetesClient.extensions().ingresses().delete(ingress)
+        }
       }
+      registeredIngresses.clear()
     }
-    registeredIngresses.clear()
   }
 }
