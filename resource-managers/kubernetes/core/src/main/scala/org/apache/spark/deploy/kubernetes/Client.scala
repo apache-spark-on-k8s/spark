@@ -514,7 +514,7 @@ private[spark] class Client(
     val (isLocalKeyStore, resolvedKeyStore) = maybeKeyStore.map(keyStore => {
       (KubernetesFileUtils.isUriLocalFile(keyStore),
         Option.apply(Utils.resolveURI(keyStore).getPath))
-    }).getOrElse((true, Option.empty[String]))
+    }).getOrElse((false, Option.empty[String]))
     resolvedKeyStore.foreach {
       resolvedSparkConf.set(KUBERNETES_DRIVER_SUBMIT_KEYSTORE, _)
     }

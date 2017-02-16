@@ -19,7 +19,6 @@ package org.apache.spark.deploy.kubernetes.integrationtest
 import java.io.File
 import java.nio.file.Paths
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 import com.google.common.base.Charsets
 import com.google.common.collect.ImmutableList
@@ -216,8 +215,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "--executor-memory", "512m",
       "--executor-cores", "1",
       "--num-executors", "1",
-      "--jars", s"local:///opt/spark/eamples/integration-tests-jars/${HELPER_JAR_FILE.getName}",
-      "--class", "org.apache.spark.examples.SparkPi",
+      "--jars", s"local:///opt/spark/examples/integration-tests-jars/${HELPER_JAR_FILE.getName}",
+      "--class", SPARK_PI_MAIN_CLASS,
       "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
       "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
       "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
