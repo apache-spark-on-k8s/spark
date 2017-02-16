@@ -722,9 +722,16 @@ private[spark] class Client(
     val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
       .filterNot(node => node.getSpec.getUnschedulable != null &&
         node.getSpec.getUnschedulable)
-      .flatMap(_.getStatus.getAddresses.asScala.map(address => {
+      .flatMap(_.getStatus.getAddresses.asScala)
+      // The list contains hostnames, internal and external IP addresses.
+      // (https://kubernetes.io/docs/admin/node/#addresses)
+      // we want only external IP addresses and legacyHostIP addresses in our list
+      // legacyHostIPs are deprecated and will be removed in the future.
+      // (https://github.com/kubernetes/kubernetes/issues/9267)
+      .filter(address => address.getType == "ExternalIP" || address.getType == "LegacyHostIP")
+      .map(address => {
         s"$urlScheme://${address.getAddress}:$servicePort"
-      })).toSet
+      }).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {

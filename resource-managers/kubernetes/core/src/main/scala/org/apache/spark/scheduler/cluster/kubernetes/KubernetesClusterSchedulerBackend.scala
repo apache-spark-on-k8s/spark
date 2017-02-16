@@ -44,7 +44,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val EXECUTOR_MODIFICATION_LOCK = new Object
   private val runningExecutorPods = new scala.collection.mutable.HashMap[String, Pod]
 
-  private val kubernetesMaster = "https://kubernetes"
   private val executorDockerImage = conf.get(EXECUTOR_DOCKER_IMAGE)
   private val kubernetesNamespace = conf.get(KUBERNETES_NAMESPACE)
   private val executorPort = conf.getInt("spark.executor.port", DEFAULT_STATIC_PORT)
@@ -77,7 +76,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
   private val kubernetesClient = KubernetesClientBuilder
-    .buildFromWithinPod(kubernetesMaster, kubernetesNamespace)
+    .buildFromWithinPod(kubernetesNamespace)
 
   private val driverPod = try {
     kubernetesClient.pods().inNamespace(kubernetesNamespace).
@@ -155,9 +154,14 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   private def allocateNewExecutorPod(): (String, Pod) = {
-    val executorKubernetesId = UUID.randomUUID().toString.replaceAll("-", "")
     val executorId = EXECUTOR_ID_COUNTER.incrementAndGet().toString
-    val name = s"${applicationId()}-exec-$executorKubernetesId"
+    val name = s"${applicationId()}-exec-$executorId"
+
+    // hostname must be no longer than 63 characters, so take the last 63 characters of the pod
+    // name as the hostname.  This preserves uniqueness since the end of name contains
+    // executorId and applicationId
+    val hostname = name.substring(Math.max(0, name.length - 63))
+
     val selectors = Map(SPARK_EXECUTOR_ID_LABEL -> executorId,
       SPARK_APP_ID_LABEL -> applicationId()).asJava
     val executorMemoryQuantity = new QuantityBuilder(false)
@@ -190,7 +194,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .build()
       })
     try {
-      (executorKubernetesId, kubernetesClient.pods().createNew()
+      (executorId, kubernetesClient.pods().createNew()
         .withNewMetadata()
           .withName(name)
           .withLabels(selectors)
@@ -204,6 +208,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .endOwnerReference()
         .endMetadata()
         .withNewSpec()
+          .withHostname(hostname)
           .addNewContainer()
             .withName(s"executor")
             .withImage(executorDockerImage)
