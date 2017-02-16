@@ -74,9 +74,9 @@ pod in starting the application, set `spark.ssl.kubernetes.submit.trustStore`.
 
 One note about the keyStore is that it can be specified as either a file on the client machine or a file in the
 container image's disk. Thus `spark.ssl.kubernetes.submit.keyStore` can be a URI with a scheme of either `file:`
-or `container:`. A scheme of `file:` corresponds to the keyStore being located on the client machine; it is mounted onto
+or `local:`. A scheme of `file:` corresponds to the keyStore being located on the client machine; it is mounted onto
 the driver container as a [secret volume](https://kubernetes.io/docs/user-guide/secrets/). When the URI has the scheme
-`container:`, the file is assumed to already be on the container's disk at the appropriate path.
+`local:`, the file is assumed to already be on the container's disk at the appropriate path.
 
 ### Kubernetes Clusters and the authenticated proxy endpoint
 

@@ -25,7 +25,7 @@ private[spark] object KubernetesFileUtils {
     uris.filter(uri => schemeFilter(Option(Utils.resolveURI(uri).getScheme).getOrElse("file")))
   }
 
-  def getOnlyContainerLocalOrRemoteFiles(uris: Iterable[String]): Iterable[String] = {
+  def getNonSubmitterLocalFiles(uris: Iterable[String]): Iterable[String] = {
     filterUriStringsByScheme(uris, _ != "file")
   }
 

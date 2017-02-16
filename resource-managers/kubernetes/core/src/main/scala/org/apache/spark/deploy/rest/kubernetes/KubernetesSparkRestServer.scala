@@ -16,14 +16,14 @@
  */
 package org.apache.spark.deploy.rest.kubernetes
 
-import java.io.File
+import java.io.{File, FileOutputStream, StringReader}
 import java.net.URI
 import java.nio.file.Paths
 import java.util.concurrent.CountDownLatch
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 import com.google.common.base.Charsets
-import com.google.common.io.Files
+import com.google.common.io.{BaseEncoding, ByteStreams, Files}
 import org.apache.commons.codec.binary.Base64
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -158,8 +158,7 @@ private[spark] class KubernetesSparkRestServer(
                 handleError("Unauthorized to submit application.")
               } else {
                 val tempDir = Utils.createTempDir()
-                val (appResourceLocalPath, appResourceAddedSparkJar) =
-                  resolvedAppResource(appResource, tempDir)
+                val resolvedAppResource = resolveAppResource(appResource, tempDir)
                 val writtenJars = writeUploadedJars(uploadedJars, tempDir)
                 val writtenFiles = writeUploadedFiles(uploadedFiles)
                 val resolvedSparkProperties = new mutable.HashMap[String, String]
@@ -173,10 +172,10 @@ private[spark] class KubernetesSparkRestServer(
                 // to the submitting user's disk, and replace them with the paths that were
                 // written to disk above.
                 val onlyContainerLocalOrRemoteJars = KubernetesFileUtils
-                  .getOnlyContainerLocalOrRemoteFiles(originalJars)
+                  .getNonSubmitterLocalFiles(originalJars)
                 val resolvedJars = (writtenJars ++
                   onlyContainerLocalOrRemoteJars ++
-                  Array(appResourceAddedSparkJar)).toSet
+                  Array(resolvedAppResource.sparkJarPath)).toSet
                 if (resolvedJars.nonEmpty) {
                   resolvedSparkProperties("spark.jars") = resolvedJars.mkString(",")
                 } else {
@@ -196,7 +195,7 @@ private[spark] class KubernetesSparkRestServer(
                 val onlyContainerLocalJars = KubernetesFileUtils
                   .getOnlyContainerLocalFiles(originalJars)
                 val driverClasspath = driverExtraClasspath ++
-                  Seq(appResourceLocalPath) ++
+                  Seq(resolvedAppResource.localPath) ++
                   writtenJars ++
                   onlyContainerLocalJars ++
                   sparkCoreJars
@@ -206,7 +205,7 @@ private[spark] class KubernetesSparkRestServer(
                   .map(_.split(","))
                   .getOrElse(Array.empty[String])
                 val onlyContainerLocalOrRemoteFiles = KubernetesFileUtils
-                  .getOnlyContainerLocalOrRemoteFiles(originalFiles)
+                  .getNonSubmitterLocalFiles(originalFiles)
                 val resolvedFiles = writtenFiles ++ onlyContainerLocalOrRemoteFiles
                 if (resolvedFiles.nonEmpty) {
                   resolvedSparkProperties("spark.files") = resolvedFiles.mkString(",")
@@ -278,24 +277,35 @@ private[spark] class KubernetesSparkRestServer(
       CompressionUtils.unpackAndWriteCompressedFiles(files, workingDir)
     }
 
-    // Retrieve the path on the driver container where the main app resource is, and what value it
-    // ought to have in the spark.jars property. The two may be different because for non-local
-    // dependencies, we have to fetch the resource (if it is not "local") but still want to use
-    // the full URI in spark.jars.
-    private def resolvedAppResource(appResource: AppResource, tempDir: File): (String, String) = {
+
+    /**
+     * Retrieve the path on the driver container where the main app resource is, and what value it
+     * ought to have in the spark.jars property. The two may be different because for non-local
+     * dependencies, we have to fetch the resource (if it is not "local") but still want to use
+     * the full URI in spark.jars.
+     */
+    private def resolveAppResource(appResource: AppResource, tempDir: File):
+        ResolvedAppResource = {
       appResource match {
         case UploadedAppResource(resourceContentsBase64, resourceName) =>
           val resourceFile = new File(tempDir, resourceName)
           val resourceFilePath = resourceFile.getAbsolutePath
           if (resourceFile.createNewFile()) {
-            val resourceContentsBytes = Base64.decodeBase64(resourceContentsBase64)
-            Files.write(resourceContentsBytes, resourceFile)
-            (resourceFile.getAbsolutePath, resourceFile.getAbsolutePath)
+            Utils.tryWithResource(new StringReader(resourceContentsBase64)) { reader =>
+              Utils.tryWithResource(new FileOutputStream(resourceFile)) { os =>
+                Utils.tryWithResource(BaseEncoding.base64().decodingStream(reader)) {
+                    decodingStream =>
+                  ByteStreams.copy(decodingStream, os)
+                }
+              }
+            }
+            ResolvedAppResource(resourceFile.getAbsolutePath, resourceFile.getAbsolutePath)
           } else {
             throw new IllegalStateException(s"Failed to write main app resource file" +
               s" to $resourceFilePath")
           }
-        case ContainerAppResource(resource) => (Utils.resolveURI(resource).getPath, resource)
+        case ContainerAppResource(resource) =>
+          ResolvedAppResource(Utils.resolveURI(resource).getPath, resource)
         case RemoteAppResource(resource) =>
           Utils.fetchFile(resource, tempDir, conf,
             securityManager, SparkHadoopUtil.get.newConfiguration(conf),
@@ -307,10 +317,12 @@ private[spark] class KubernetesSparkRestServer(
             throw new IllegalStateException(s"Main app resource is not a file or" +
               s" does not exist at $downloadedFilePath")
           }
-          (downloadedFilePath, resource)
+          ResolvedAppResource(downloadedFilePath, resource)
       }
     }
   }
+
+  private case class ResolvedAppResource(localPath: String, sparkJarPath: String)
 }
 
 private[spark] object KubernetesSparkRestServer {

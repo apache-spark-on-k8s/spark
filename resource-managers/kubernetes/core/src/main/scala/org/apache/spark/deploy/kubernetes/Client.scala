@@ -81,7 +81,7 @@ private[spark] class Client(
     val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars)
     (submitterLocalFiles ++ submitterLocalJars).foreach { file =>
       if (!new File(Utils.resolveURI(file).getPath).isFile) {
-        throw new SparkException(s"File $file is not a file or is a directory.")
+        throw new SparkException(s"File $file does not exist or is a directory.")
       }
     }
     if (KubernetesFileUtils.isUriLocalFile(mainAppResource) &&
@@ -684,10 +684,6 @@ private[spark] class Client(
         .getOrElse("file") match {
       case "file" =>
         val appFile = new File(mainResourceUri.getPath)
-        if (!appFile.isFile) {
-          throw new IllegalStateException("Provided local file path does not exist" +
-            s" or is not a file: ${appFile.getAbsolutePath}")
-        }
         val fileBytes = Files.toByteArray(appFile)
         val fileBase64 = Base64.encodeBase64String(fileBytes)
         UploadedAppResource(resourceBase64Contents = fileBase64, name = appFile.getName)
