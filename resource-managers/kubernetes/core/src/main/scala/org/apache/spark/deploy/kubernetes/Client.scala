@@ -22,6 +22,9 @@ import java.util
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+
 import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
@@ -29,13 +32,11 @@ import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, TarGzippedData, UploadedAppResource}
+import org.apache.spark.deploy.rest.{AppResource, KubernetesCreateSubmissionRequest, TarGzippedData}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
@@ -59,9 +60,9 @@ private[spark] class Client(
   private val sslSecretsDirectory = s"$DRIVER_CONTAINER_SECRETS_BASE_DIR/$kubernetesAppId-ssl"
   private val sslSecretsName = s"$SUBMISSION_SSL_SECRETS_PREFIX-$kubernetesAppId"
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
-  private val uploadedJars = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_JARS).filter(_.nonEmpty)
-  private val uploadedFiles = sparkConf.get(KUBERNETES_DRIVER_UPLOAD_FILES).filter(_.nonEmpty)
-  uploadedFiles.foreach(validateNoDuplicateUploadFileNames)
+  private val sparkJars = sparkConf.getOption("spark.jars")
+  private val sparkFiles = sparkConf.getOption("spark.files")
+  sparkFiles.foreach(validateNoDuplicateFileNames)
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
 
@@ -79,7 +80,7 @@ private[spark] class Client(
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
 
-    Seq(uploadedFiles, uploadedJars, Some(mainAppResource)).foreach(checkForFilesExistence)
+    Seq(sparkJars, sparkFiles, Some(mainAppResource)).foreach(checkForFilesExistence)
 
     val (driverSubmitSslOptions, isKeyStoreLocalFile) = parseDriverSubmitSslOptions()
     val parsedCustomLabels = parseCustomLabels(customLabels)
@@ -674,22 +675,9 @@ private[spark] class Client(
   }
 
   private def buildSubmissionRequest(): KubernetesCreateSubmissionRequest = {
-    val appResourceUri = Utils.resolveURI(mainAppResource)
-    val resolvedAppResource: AppResource = appResourceUri.getScheme match {
-      case "file" | null =>
-        val appFile = new File(appResourceUri.getPath)
-        if (!appFile.isFile) {
-          throw new IllegalStateException("Provided local file path does not exist" +
-            s" or is not a file: ${appFile.getAbsolutePath}")
-        }
-        val fileBytes = Files.toByteArray(appFile)
-        val fileBase64 = Base64.encodeBase64String(fileBytes)
-        UploadedAppResource(resourceBase64Contents = fileBase64, name = appFile.getName)
-      case "container" => ContainerAppResource(appResourceUri.getPath)
-      case other => RemoteAppResource(other)
-    }
-    val uploadJarsBase64Contents = compressFiles(uploadedJars)
-    val uploadFilesBase64Contents = compressFiles(uploadedFiles)
+    val resolvedAppResource: AppResource = AppResource.assemble(mainAppResource)
+    val uploadJarsBase64Contents = compressUploadableFiles(sparkJars)
+    val uploadFilesBase64Contents = compressUploadableFiles(sparkFiles)
     KubernetesCreateSubmissionRequest(
       appResource = resolvedAppResource,
       mainClass = mainClass,
@@ -700,11 +688,10 @@ private[spark] class Client(
       uploadedFilesBase64Contents = uploadFilesBase64Contents)
   }
 
-  // Because uploaded files should be added to the working directory of the driver, they
-  // need to not have duplicate file names. They are added to the working directory so the
-  // user can reliably locate them in their application. This is similar in principle to how
-  // YARN handles its `spark.files` setting.
-  private def validateNoDuplicateUploadFileNames(uploadedFilesCommaSeparated: String): Unit = {
+  // Because files should be added to the working directory of the driver, they need to not have
+  // duplicate file names. They are added to the working directory so the user can reliably
+  // locate them in their application. This is similar to how YARN handles `spark.files` too.
+  private def validateNoDuplicateFileNames(uploadedFilesCommaSeparated: String): Unit = {
     val pathsWithDuplicateNames = uploadedFilesCommaSeparated
       .split(",")
       .groupBy(new File(_).getName)
@@ -715,15 +702,21 @@ private[spark] class Client(
         .flatten
         .toList
         .sortBy(new File(_).getName)
-      throw new SparkException("Cannot upload files with duplicate names via" +
-        s" ${KUBERNETES_DRIVER_UPLOAD_FILES.key}. The following paths have a duplicated" +
-        s" file name: ${pathsWithDuplicateNamesSorted.mkString(",")}")
+      throw new SparkException("Cannot support files with duplicate names in spark.files because " +
+        "the files are placed into the working directory of the driver and executors.  The " +
+        "following paths have a duplicated file name:" +
+        pathsWithDuplicateNamesSorted.mkString(","))
     }
   }
 
-  private def compressFiles(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
+  private def compressUploadableFiles(maybeFilePaths: Option[String]): Option[TarGzippedData] = {
     maybeFilePaths
       .map(_.split(","))
+      .map(_.filter(Utils.resolveURI(_).getScheme match {
+        // only local files that need to be uploaded
+        case "file" | null => true
+        case _ => false
+      }))
       .map(CompressionUtils.createTarGzip(_))
   }
 

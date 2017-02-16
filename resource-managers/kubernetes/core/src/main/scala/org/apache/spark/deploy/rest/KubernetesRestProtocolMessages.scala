@@ -16,9 +16,14 @@
  */
 package org.apache.spark.deploy.rest
 
+import java.io.File
+
 import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo}
+import com.google.common.io.Files
+import org.apache.commons.codec.binary.Base64
 
 import org.apache.spark.SPARK_VERSION
+import org.apache.spark.util.Utils
 
 case class KubernetesCreateSubmissionRequest(
   appResource: AppResource,
@@ -63,3 +68,21 @@ class PingResponse extends SubmitRestProtocolResponse {
   serverSparkVersion = SPARK_VERSION
 }
 
+object AppResource {
+  def assemble(appResource: String): AppResource = {
+    val appResourceUri = Utils.resolveURI(appResource)
+    appResourceUri.getScheme match {
+      case "file" | null =>
+        val appFile = new File(appResourceUri.getPath)
+        if (!appFile.isFile) {
+          throw new IllegalStateException("Provided local file path does not exist" +
+            s" or is not a file: ${appFile.getAbsolutePath}")
+        }
+        val fileBytes = Files.toByteArray(appFile)
+        val fileBase64 = Base64.encodeBase64String(fileBytes)
+        UploadedAppResource(resourceBase64Contents = fileBase64, name = appFile.getName)
+      case "container" | "local" => ContainerAppResource(appResourceUri.getPath)
+      case other => RemoteAppResource(other)
+    }
+  }
+}
