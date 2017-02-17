@@ -22,11 +22,9 @@ import java.util
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.google.common.io.Files
-import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.api.model.extensions.Ingress
-import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
-import io.fabric8.kubernetes.client.Watcher.Action
+import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient}
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
 
@@ -236,54 +234,25 @@ private[spark] class Client(
       SPARK_APP_NAME_LABEL -> appName)
       ++ parsedCustomLabels).asJava
 
-    val podReadyFuture = SettableFuture.create[Pod]
-    val endpointsReadyFuture = SettableFuture.create[Endpoints]
-    val serviceReadyFuture = SettableFuture.create[Service]
-    val ingressReadyFuture = ingressBasePath.map(_ => SettableFuture.create[Ingress])
-
-    val podWatcher = new DriverPodReadyWatcher(podReadyFuture)
-    val endpointsReadyWatcher = new DriverEndpointsReadyWatcher(endpointsReadyFuture)
-    val serviceReadyWatcher = new DriverServiceReadyWatcher(serviceReadyFuture)
-    val ingressWatcher = new DriverIngressReadyWatcher(ingressReadyFuture)
-    Utils.tryWithResource(kubernetesClient
-        .pods()
-        .withName(kubernetesAppId)
-        .watch(podWatcher)) { _ =>
-      Utils.tryWithResource(kubernetesClient
-          .services()
-          .withName(kubernetesAppId)
-          .watch(serviceReadyWatcher)) { _ =>
-        Utils.tryWithResource(kubernetesClient
-            .endpoints()
-            .withName(kubernetesAppId)
-            .watch(endpointsReadyWatcher)) { _ =>
-          Utils.tryWithResource(kubernetesClient
-              .extensions()
-              .ingresses()
-              .watch(ingressWatcher)) { _ =>
-            val driverService = createDriverService(
-              kubernetesClient,
-              driverKubernetesSelectors,
-              submitServerSecret)
-            kubernetesComponentCleaner.registerOrUpdateService(driverService)
-            val driverPod = createDriverPod(
-              kubernetesClient,
-              driverKubernetesSelectors,
-              submitServerSecret,
-              kubernetesSslConfiguration)
-            kubernetesComponentCleaner.registerOrUpdatePod(driverPod)
-            val driverIngress = createDriverIngress(
-                kubernetesClient,
-                driverKubernetesSelectors,
-                driverService)
-            driverIngress.foreach(kubernetesComponentCleaner.registerOrUpdateIngress)
-            waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
-              serviceReadyFuture, podReadyFuture, ingressReadyFuture)
-            (driverPod, driverService, driverIngress)
-          }
-        }
-      }
-    }
+    KubernetesComponentReadiness.launchComponentsThenWaitForReadiness(
+      kubernetesClient,
+      kubernetesAppId,
+      driverSubmitTimeoutSecs,
+      () => createDriverPod(
+            kubernetesClient,
+            kubernetesComponentCleaner,
+            driverKubernetesSelectors,
+            submitServerSecret,
+            kubernetesSslConfiguration),
+      () => createDriverService(
+            kubernetesClient,
+            kubernetesComponentCleaner,
+            driverKubernetesSelectors,
+            submitServerSecret),
+      ingressBasePath.map(_ => () => createDriverIngress(
+        kubernetesClient,
+        kubernetesComponentCleaner,
+        driverKubernetesSelectors)))
   }
 
   /**
@@ -344,52 +313,9 @@ private[spark] class Client(
     (updatedService, updatedIngress)
   }
 
-  private def waitForReadyKubernetesComponents(
-      kubernetesClient: KubernetesClient,
-      endpointsReadyFuture: SettableFuture[Endpoints],
-      serviceReadyFuture: SettableFuture[Service],
-      podReadyFuture: SettableFuture[Pod],
-      ingressReadyFuture: Option[SettableFuture[Ingress]]) = {
-    try {
-      podReadyFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-      logInfo("Driver pod successfully created in Kubernetes cluster.")
-    } catch {
-      case e: Throwable =>
-        val finalErrorMessage: String = buildSubmitFailedErrorMessage(kubernetesClient, e)
-        logError(finalErrorMessage, e)
-        throw new SparkException(finalErrorMessage, e)
-    }
-    try {
-      serviceReadyFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-      logInfo("Driver service created successfully in Kubernetes.")
-    } catch {
-      case e: Throwable =>
-        throw new SparkException(s"The driver service was not ready" +
-          s" in $driverSubmitTimeoutSecs seconds.", e)
-    }
-    try {
-      endpointsReadyFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-      logInfo("Driver endpoints ready to receive application submission")
-    } catch {
-      case e: Throwable =>
-        throw new SparkException(s"The driver service endpoint was not ready" +
-          s" in $driverSubmitTimeoutSecs seconds.", e)
-    }
-    ingressReadyFuture.foreach { future =>
-      try {
-        future.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
-        logInfo("Driver ingress ready to proxy application submission request" +
-          " to driver service")
-      } catch {
-        case e: Throwable =>
-          throw new SparkException(s"The driver ingress was not ready" +
-            s" in $driverSubmitTimeoutSecs seconds.", e)
-      }
-    }
-  }
-
   private def createDriverService(
       kubernetesClient: KubernetesClient,
+      kubernetesComponentCleaner: KubernetesComponentCleaner,
       driverKubernetesSelectors: java.util.Map[String, String],
       submitServerSecret: Secret): Service = {
     val driverSubmissionServicePort = new ServicePortBuilder()
@@ -397,7 +323,7 @@ private[spark] class Client(
       .withPort(SUBMISSION_SERVER_PORT)
       .withNewTargetPort(SUBMISSION_SERVER_PORT)
       .build()
-    kubernetesClient.services().createNew()
+    val driverService = kubernetesClient.services().createNew()
       .withNewMetadata()
         .withName(kubernetesAppId)
         .withLabels(driverKubernetesSelectors)
@@ -408,11 +334,14 @@ private[spark] class Client(
         .withPorts(driverSubmissionServicePort)
         .endSpec()
       .done()
+    kubernetesComponentCleaner.registerOrUpdateService(driverService)
+    driverService
   }
 
   private def createDriverPod(
       kubernetesClient: KubernetesClient,
-      driverKubernetesSelectors: util.Map[String, String],
+      kubernetesComponentCleaner: KubernetesComponentCleaner,
+      driverKubernetesSelectors: java.util.Map[String, String],
       submitServerSecret: Secret,
       kubernetesSslConfiguration: KubernetesSslConfiguration): Pod = {
     val containerPorts = buildContainerPorts()
@@ -421,7 +350,7 @@ private[spark] class Client(
       .withPath(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT/v1/submissions/ping")
       .withNewPort(SUBMISSION_SERVER_PORT_NAME)
       .build()
-    kubernetesClient.pods().createNew()
+    val driverPod = kubernetesClient.pods().createNew()
       .withNewMetadata()
         .withName(kubernetesAppId)
         .withLabels(driverKubernetesSelectors)
@@ -464,163 +393,42 @@ private[spark] class Client(
           .endContainer()
         .endSpec()
       .done()
+    kubernetesComponentCleaner.registerOrUpdatePod(driverPod)
+    driverPod
   }
 
   private def createDriverIngress(
       kubernetesClient: KubernetesClient,
-      driverKubernetesSelectors: util.Map[String, String],
-      driverService: Service): Option[Ingress] = {
-    ingressBasePath.map(_ => {
-      kubernetesClient.extensions().ingresses().createNew()
-        .withNewMetadata()
-          .withName(kubernetesAppId)
-          .withLabels(driverKubernetesSelectors)
-          .endMetadata()
-        .withNewSpec()
-          .addNewRule()
-            .withNewHttp()
-              .addNewPath()
-                .withPath(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT")
-                .withNewBackend()
-                  .withServiceName(driverService.getMetadata.getName)
-                  .withNewServicePort(SUBMISSION_SERVER_PORT_NAME)
-                  .endBackend()
-                .endPath()
-              .addNewPath()
-                .withPath(s"/$kubernetesAppId/$UI_PATH_COMPONENT")
-                .withNewBackend()
-                  .withServiceName(driverService.getMetadata.getName)
-                  .withNewServicePort(UI_PORT_NAME)
-                  .endBackend()
-                .endPath()
-              .endHttp()
-            .endRule()
-          .endSpec()
-        .done()
-    })
-  }
-
-  private class DriverPodReadyWatcher(resolvedDriverPod: SettableFuture[Pod]) extends Watcher[Pod] {
-    override def eventReceived(action: Action, pod: Pod): Unit = {
-      if ((action == Action.ADDED || action == Action.MODIFIED)
-          && pod.getStatus.getPhase == "Running"
-          && !resolvedDriverPod.isDone) {
-        pod.getStatus
-          .getContainerStatuses
-          .asScala
-          .find(status =>
-            status.getName == DRIVER_CONTAINER_NAME && status.getReady)
-          .foreach { _ => resolvedDriverPod.set(pod) }
-      }
-    }
-
-    override def onClose(cause: KubernetesClientException): Unit = {
-      logDebug("Driver pod readiness watch closed.", cause)
-    }
-  }
-
-  private class DriverEndpointsReadyWatcher(resolvedDriverEndpoints: SettableFuture[Endpoints])
-      extends Watcher[Endpoints] {
-    override def eventReceived(action: Action, endpoints: Endpoints): Unit = {
-      if ((action == Action.ADDED) || (action == Action.MODIFIED)
-          && endpoints.getSubsets.asScala.nonEmpty
-          && endpoints.getSubsets.asScala.exists(_.getAddresses.asScala.nonEmpty)
-          && !resolvedDriverEndpoints.isDone) {
-        resolvedDriverEndpoints.set(endpoints)
-      }
-    }
-
-    override def onClose(cause: KubernetesClientException): Unit = {
-      logDebug("Driver endpoints readiness watch closed.", cause)
-    }
-  }
-
-  private class DriverServiceReadyWatcher(resolvedDriverService: SettableFuture[Service])
-      extends Watcher[Service] {
-    override def eventReceived(action: Action, service: Service): Unit = {
-      if ((action == Action.ADDED) || (action == Action.MODIFIED)
-          && !resolvedDriverService.isDone) {
-        resolvedDriverService.set(service)
-      }
-    }
-
-    override def onClose(cause: KubernetesClientException): Unit = {
-      logDebug("Driver service readiness watch closed.", cause)
-    }
-  }
-
-  private class DriverIngressReadyWatcher(resolvedDriverIngress: Option[SettableFuture[Ingress]])
-      extends Watcher[Ingress] {
-
-    override def eventReceived(action: Action, ingress: Ingress): Unit = {
-      if ((action == Action.ADDED || action == Action.MODIFIED)
-          && ingress.getStatus.getLoadBalancer.getIngress.asScala.nonEmpty) {
-        resolvedDriverIngress.foreach(_.set(ingress))
-      }
-    }
-
-    override def onClose(cause: KubernetesClientException): Unit = {
-      logDebug("Ingress readiness watch closed.", cause)
-    }
-
-  }
-
-  private def buildSubmitFailedErrorMessage(
-      kubernetesClient: KubernetesClient,
-      e: Throwable): String = {
-    val driverPod = try {
-      kubernetesClient.pods().withName(kubernetesAppId).get()
-    } catch {
-      case throwable: Throwable =>
-        logError(s"Timed out while waiting $driverSubmitTimeoutSecs seconds for the" +
-          " driver pod to start, but an error occurred while fetching the driver" +
-          " pod's details.", throwable)
-        throw new SparkException(s"Timed out while waiting $driverSubmitTimeoutSecs" +
-          " seconds for the driver pod to start. Unfortunately, in attempting to fetch" +
-          " the latest state of the pod, another error was thrown. Check the logs for" +
-          " the error that was thrown in looking up the driver pod.", e)
-    }
-    val topLevelMessage = s"The driver pod with name ${driverPod.getMetadata.getName}" +
-      s" in namespace ${driverPod.getMetadata.getNamespace} was not ready in" +
-      s" $driverSubmitTimeoutSecs seconds."
-    val podStatusPhase = if (driverPod.getStatus.getPhase != null) {
-      s"Latest phase from the pod is: ${driverPod.getStatus.getPhase}"
-    } else {
-      "The pod had no final phase."
-    }
-    val podStatusMessage = if (driverPod.getStatus.getMessage != null) {
-      s"Latest message from the pod is: ${driverPod.getStatus.getMessage}"
-    } else {
-      "The pod had no final message."
-    }
-    val failedDriverContainerStatusString = driverPod.getStatus
-      .getContainerStatuses
-      .asScala
-      .find(_.getName == DRIVER_CONTAINER_NAME)
-      .map(status => {
-        val lastState = status.getState
-        if (lastState.getRunning != null) {
-          "Driver container last state: Running\n" +
-            s"Driver container started at: ${lastState.getRunning.getStartedAt}"
-        } else if (lastState.getWaiting != null) {
-          "Driver container last state: Waiting\n" +
-            s"Driver container wait reason: ${lastState.getWaiting.getReason}\n" +
-            s"Driver container message: ${lastState.getWaiting.getMessage}\n"
-        } else if (lastState.getTerminated != null) {
-          "Driver container last state: Terminated\n" +
-            s"Driver container started at: ${lastState.getTerminated.getStartedAt}\n" +
-            s"Driver container finished at: ${lastState.getTerminated.getFinishedAt}\n" +
-            s"Driver container exit reason: ${lastState.getTerminated.getReason}\n" +
-            s"Driver container exit code: ${lastState.getTerminated.getExitCode}\n" +
-            s"Driver container message: ${lastState.getTerminated.getMessage}"
-        } else {
-          "Driver container last state: Unknown"
-        }
-      }).getOrElse("The driver container wasn't found in the pod; expected to find" +
-      s" container with name $DRIVER_CONTAINER_NAME")
-    s"$topLevelMessage\n" +
-      s"$podStatusPhase\n" +
-      s"$podStatusMessage\n\n$failedDriverContainerStatusString"
+      kubernetesComponentCleaner: KubernetesComponentCleaner,
+      driverKubernetesSelectors: util.Map[String, String]): Ingress = {
+    val ingress = kubernetesClient.extensions().ingresses().createNew()
+      .withNewMetadata()
+        .withName(kubernetesAppId)
+        .withLabels(driverKubernetesSelectors)
+        .endMetadata()
+      .withNewSpec()
+        .addNewRule()
+          .withNewHttp()
+            .addNewPath()
+              .withPath(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT")
+              .withNewBackend()
+                .withServiceName(kubernetesAppId)
+                .withNewServicePort(SUBMISSION_SERVER_PORT_NAME)
+                .endBackend()
+              .endPath()
+            .addNewPath()
+              .withPath(s"/$kubernetesAppId/$UI_PATH_COMPONENT")
+              .withNewBackend()
+                .withServiceName(kubernetesAppId)
+                .withNewServicePort(UI_PORT_NAME)
+                .endBackend()
+              .endPath()
+            .endHttp()
+          .endRule()
+        .endSpec()
+      .done()
+    kubernetesComponentCleaner.registerOrUpdateIngress(ingress)
+    ingress
   }
 
   private def buildContainerPorts(): Seq[ContainerPort] = {
