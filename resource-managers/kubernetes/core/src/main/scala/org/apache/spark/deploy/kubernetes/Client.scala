@@ -226,13 +226,15 @@ private[spark] class Client(
     logInfo("Successfully submitted local resources and driver configuration to" +
       " driver pod.")
     // After submitting, adjust the service to only expose the Spark UI
+    val serviceType = if (sparkConf.get(EXPOSE_KUBERNETES_DRIVER_SERVICE_UI_PORT)) "NodePort"
+      else "ClusterIP"
     val uiServicePort = new ServicePortBuilder()
       .withName(UI_PORT_NAME)
       .withPort(uiPort)
       .withNewTargetPort(uiPort)
       .build()
     kubernetesClient.services().withName(kubernetesAppId).edit().editSpec()
-      .withType("ClusterIP")
+      .withType(serviceType)
       .withPorts(uiServicePort)
       .endSpec()
       .done()
