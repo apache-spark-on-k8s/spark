@@ -122,7 +122,6 @@ private[spark] class Client(
       try {
         val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(
           kubernetesClient,
-          kubernetesComponentCleaner,
           driverSubmitSslOptions,
           isKeyStoreLocalFile)
         sslSecrets.foreach(kubernetesComponentCleaner.registerOrUpdateSecret)
@@ -509,7 +508,6 @@ private[spark] class Client(
 
   private def configureSsl(
       kubernetesClient: KubernetesClient,
-      kubernetesComponentCleaner: KubernetesComponentCleaner,
       driverSubmitSslOptions: SSLOptions,
       isKeyStoreLocalFile: Boolean):
       (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
