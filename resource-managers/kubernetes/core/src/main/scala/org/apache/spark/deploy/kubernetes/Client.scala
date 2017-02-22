@@ -38,7 +38,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, RemoteAppResource, UploadedAppResource}
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ShutdownHookManager, Utils}
 
 private[spark] class Client(
     sparkConf: SparkConf,
@@ -75,6 +75,8 @@ private[spark] class Client(
   private val serviceAccount = sparkConf.get(KUBERNETES_SERVICE_ACCOUNT_NAME)
   private val customLabels = sparkConf.get(KUBERNETES_DRIVER_LABELS)
 
+  private val kubernetesComponentCleaner = new KubernetesComponentCleaner
+
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
     val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
@@ -107,7 +109,8 @@ private[spark] class Client(
 
     val k8ClientConfig = k8ConfBuilder.build
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig)) { kubernetesClient =>
-      val kubernetesComponentCleaner = new KubernetesComponentCleaner(kubernetesClient)
+      ShutdownHookManager.addShutdownHook(() =>
+        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes(kubernetesClient))
       val submitServerSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
           .withName(secretName)
@@ -135,7 +138,6 @@ private[spark] class Client(
             .watch(loggingWatch)) { _ =>
           val (driverPod, driverService) = launchDriverKubernetesComponents(
             kubernetesClient,
-            kubernetesComponentCleaner,
             parsedCustomLabels,
             submitServerSecret,
             driverSubmitSslOptions,
@@ -146,14 +148,12 @@ private[spark] class Client(
             isKeyStoreLocalFile)
           configureOwnerReferences(
             kubernetesClient,
-            kubernetesComponentCleaner,
             submitServerSecret,
             sslSecrets,
             driverPod,
             driverService)
           submitApplicationToDriverServer(
             kubernetesClient,
-            kubernetesComponentCleaner,
             driverSubmitSslOptions,
             driverService,
             submitterLocalFiles,
@@ -173,14 +173,13 @@ private[spark] class Client(
           }
         }
       } finally {
-        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes()
+        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes(kubernetesClient)
       }
     }
   }
 
   private def submitApplicationToDriverServer(
       kubernetesClient: KubernetesClient,
-      kubernetesComponentCleaner: KubernetesComponentCleaner,
       driverSubmitSslOptions: SSLOptions,
       driverService: Service,
       submitterLocalFiles: Iterable[String],
@@ -226,7 +225,6 @@ private[spark] class Client(
 
   private def launchDriverKubernetesComponents(
       kubernetesClient: KubernetesClient,
-      kubernetesComponentCleaner: KubernetesComponentCleaner,
       parsedCustomLabels: Map[String, String],
       submitServerSecret: Secret,
       driverSubmitSslOptions: SSLOptions,
@@ -288,7 +286,6 @@ private[spark] class Client(
    */
   private def configureOwnerReferences(
       kubernetesClient: KubernetesClient,
-      kubernetesComponentCleaner: KubernetesComponentCleaner,
       submitServerSecret: Secret,
       sslSecrets: Array[Secret],
       driverPod: Pod,

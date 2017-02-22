@@ -24,14 +24,12 @@ import scala.collection.mutable
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
-private[spark] class KubernetesComponentCleaner(kubernetesClient: KubernetesClient)
+private[spark] class KubernetesComponentCleaner
     extends Logging {
   private val registeredPods = mutable.HashMap.empty[String, Pod]
   private val registeredServices = mutable.HashMap.empty[String, Service]
   private val registeredSecrets = mutable.HashMap.empty[String, Secret]
   private val registeredIngresses = mutable.HashMap.empty[String, Ingress]
-
-  ShutdownHookManager.addShutdownHook(() => deleteAllRegisteredComponentsFromKubernetes())
 
   def registerOrUpdatePod(pod: Pod): Unit = registeredPods.synchronized {
     registeredPods.put(pod.getMetadata.getName, pod)
@@ -57,15 +55,7 @@ private[spark] class KubernetesComponentCleaner(kubernetesClient: KubernetesClie
     registeredSecrets.remove(secret.getMetadata.getName)
   }
 
-  def registerOrUpdateIngress(ingress: Ingress): Unit = registeredIngresses.synchronized {
-    registeredIngresses.put(ingress.getMetadata.getName, ingress)
-  }
-
-  def unregisterIngress(ingress: Ingress): Unit = registeredIngresses.synchronized {
-    registeredIngresses.remove(ingress.getMetadata.getName)
-  }
-
-  def deleteAllRegisteredComponentsFromKubernetes(): Unit = {
+  def deleteAllRegisteredComponentsFromKubernetes(kubernetesClient: KubernetesClient): Unit = {
     logInfo(s"Deleting registered Kubernetes components:" +
       s" ${registeredPods.size} pod(s), ${registeredServices.size} service(s)," +
       s" ${registeredSecrets.size} secret(s), and ${registeredIngresses} ingress(es).")
