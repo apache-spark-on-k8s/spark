@@ -133,7 +133,7 @@ private[spark] class Client(
             .pods()
             .withName(kubernetesAppId)
             .watch(loggingWatch)) { _ =>
-          val (driverPod, driverService, driverIngress) = launchDriverKubernetesComponents(
+          val (driverPod, driverService) = launchDriverKubernetesComponents(
             kubernetesClient,
             kubernetesComponentCleaner,
             parsedCustomLabels,
