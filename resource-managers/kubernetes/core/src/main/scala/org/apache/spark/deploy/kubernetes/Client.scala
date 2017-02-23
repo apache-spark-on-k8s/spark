@@ -62,7 +62,11 @@ private[spark] class Client(
   private val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
   private val driverSubmitTimeoutSecs = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
   private val sparkFiles = sparkConf.getOption("spark.files")
+    .map(_.split(","))
+    .getOrElse(Array.empty)
   private val sparkJars = sparkConf.getOption("spark.jars")
+    .map(_.split(","))
+    .getOrElse(Array.empty)
 
   private val waitForAppCompletion: Boolean = sparkConf.get(WAIT_FOR_APP_COMPLETION)
 
@@ -77,12 +81,8 @@ private[spark] class Client(
 
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
-    val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles
-      .map(_.split(","))
-      .getOrElse(Array.empty[String]))
-    val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars
-      .map(_.split(","))
-      .getOrElse(Array.empty[String]))
+    val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
+    val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars)
     (submitterLocalFiles ++ submitterLocalJars).foreach { file =>
       if (!new File(Utils.resolveURI(file).getPath).isFile) {
         throw new SparkException(s"File $file does not exist or is a directory.")
