@@ -148,6 +148,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       assert(result.size == 1)
       result
     }
+    assert(minikubeKubernetesClient.secrets().list().getItems.asScala.nonEmpty)
   }
 
   test("Run a simple example") {

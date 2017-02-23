@@ -75,7 +75,7 @@ private[spark] class Client(
   private val serviceAccount = sparkConf.get(KUBERNETES_SERVICE_ACCOUNT_NAME)
   private val customLabels = sparkConf.get(KUBERNETES_DRIVER_LABELS)
 
-  private val kubernetesComponentCleaner = new KubernetesComponentCleaner
+  private val kubernetesComponentCleaner = new KubernetesResourceCleaner
 
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
@@ -110,7 +110,7 @@ private[spark] class Client(
     val k8ClientConfig = k8ConfBuilder.build
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig)) { kubernetesClient =>
       ShutdownHookManager.addShutdownHook(() =>
-        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes(kubernetesClient))
+        kubernetesComponentCleaner.deleteAllRegisteredResourcesFromKubernetes(kubernetesClient))
       val submitServerSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
           .withName(secretName)
@@ -118,7 +118,7 @@ private[spark] class Client(
         .withData(Map((SUBMISSION_APP_SECRET_NAME, secretBase64String)).asJava)
         .withType("Opaque")
         .done()
-      kubernetesComponentCleaner.registerOrUpdateSecret(submitServerSecret)
+      kubernetesComponentCleaner.registerOrUpdateResource(submitServerSecret)
       try {
         val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(
           kubernetesClient,
@@ -159,8 +159,8 @@ private[spark] class Client(
           // Now that the application has started, persist the components that were created beyond
           // the shutdown hook. We still want to purge the one-time secrets, so do not unregister
           // those.
-          kubernetesComponentCleaner.unregisterPod(driverPod)
-          kubernetesComponentCleaner.unregisterService(driverService)
+          kubernetesComponentCleaner.unregisterResource(driverPod)
+          kubernetesComponentCleaner.unregisterResource(driverService)
           // wait if configured to do so
           if (waitForAppCompletion) {
             logInfo(s"Waiting for application $kubernetesAppId to finish...")
@@ -171,7 +171,7 @@ private[spark] class Client(
           }
         }
       } finally {
-        kubernetesComponentCleaner.deleteAllRegisteredComponentsFromKubernetes(kubernetesClient)
+        kubernetesComponentCleaner.deleteAllRegisteredResourcesFromKubernetes(kubernetesClient)
       }
     }
   }
@@ -217,7 +217,7 @@ private[spark] class Client(
         .withPorts(uiServicePort)
         .endSpec()
       .done()
-    kubernetesComponentCleaner.registerOrUpdateService(resolvedService)
+    kubernetesComponentCleaner.registerOrUpdateResource(resolvedService)
     logInfo("Finished submitting application to Kubernetes.")
   }
 
@@ -258,7 +258,7 @@ private[spark] class Client(
             kubernetesClient,
             driverKubernetesSelectors,
             submitServerSecret)
-          kubernetesComponentCleaner.registerOrUpdateService(driverService)
+          kubernetesComponentCleaner.registerOrUpdateResource(driverService)
           val driverPod = createDriverPod(
             kubernetesClient,
             driverKubernetesSelectors,
@@ -267,7 +267,7 @@ private[spark] class Client(
             sslVolumes,
             sslVolumeMounts,
             sslEnvs)
-          kubernetesComponentCleaner.registerOrUpdatePod(driverPod)
+          kubernetesComponentCleaner.registerOrUpdateResource(driverPod)
           waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
             serviceReadyFuture, podReadyFuture)
           (driverPod, driverService)
@@ -301,7 +301,7 @@ private[spark] class Client(
         .addToOwnerReferences(driverPodOwnerRef)
         .endMetadata()
         .done()
-      kubernetesComponentCleaner.registerOrUpdateSecret(updatedSecret)
+      kubernetesComponentCleaner.registerOrUpdateResource(updatedSecret)
     })
     val updatedSubmitServerSecret = kubernetesClient
       .secrets()
@@ -311,7 +311,7 @@ private[spark] class Client(
           .addToOwnerReferences(driverPodOwnerRef)
           .endMetadata()
         .done()
-    kubernetesComponentCleaner.registerOrUpdateSecret(updatedSubmitServerSecret)
+    kubernetesComponentCleaner.registerOrUpdateResource(updatedSubmitServerSecret)
     val updatedService = kubernetesClient
       .services()
       .withName(driverService.getMetadata.getName)
@@ -320,7 +320,7 @@ private[spark] class Client(
           .addToOwnerReferences(driverPodOwnerRef)
           .endMetadata()
         .done()
-    kubernetesComponentCleaner.registerOrUpdateService(updatedService)
+    kubernetesComponentCleaner.registerOrUpdateResource(updatedService)
     updatedService
   }
 
@@ -576,7 +576,7 @@ private[spark] class Client(
         .withData(sslSecretsMap.asJava)
         .withType("Opaque")
         .done()
-      kubernetesComponentCleaner.registerOrUpdateSecret(sslSecrets)
+      kubernetesComponentCleaner.registerOrUpdateResource(sslSecrets)
       secrets += sslSecrets
       (sslEnvs.toArray, Array(sslVolume), Array(sslVolumeMount), secrets.toArray)
     } else {
