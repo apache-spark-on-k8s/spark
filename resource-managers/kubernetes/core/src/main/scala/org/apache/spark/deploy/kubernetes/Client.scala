@@ -124,7 +124,6 @@ private[spark] class Client(
           kubernetesClient,
           driverSubmitSslOptions,
           isKeyStoreLocalFile)
-        sslSecrets.foreach(kubernetesComponentCleaner.registerOrUpdateSecret)
         // start outer watch for status logging of driver pod
         val driverPodCompletedLatch = new CountDownLatch(1)
         // only enable interval logging if in waitForAppCompletion mode
