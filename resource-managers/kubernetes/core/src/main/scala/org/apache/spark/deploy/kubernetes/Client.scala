@@ -119,7 +119,8 @@ private[spark] class Client(
         .withType("Opaque")
         .done()
       try {
-        val (sslEnvs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(kubernetesClient,
+        val (sslArgs, sslVolumes, sslVolumeMounts, sslSecrets) = configureSsl(
+          kubernetesClient,
           driverSubmitSslOptions,
           isKeyStoreLocalFile)
         try {
@@ -141,7 +142,7 @@ private[spark] class Client(
               sslSecrets,
               sslVolumes,
               sslVolumeMounts,
-              sslEnvs,
+              sslArgs,
               isKeyStoreLocalFile)
             val ownerReferenceConfiguredDriverService = try {
               configureOwnerReferences(
@@ -253,7 +254,7 @@ private[spark] class Client(
       sslSecrets: Array[Secret],
       sslVolumes: Array[Volume],
       sslVolumeMounts: Array[VolumeMount],
-      sslEnvs: Array[EnvVar],
+      sslArgs: Array[String],
       isKeyStoreLocalFile: Boolean): (Pod, Service) = {
     val endpointsReadyFuture = SettableFuture.create[Endpoints]
     val endpointsReadyWatcher = new DriverEndpointsReadyWatcher(endpointsReadyFuture)
@@ -290,7 +291,7 @@ private[spark] class Client(
               driverSubmitSslOptions,
               sslVolumes,
               sslVolumeMounts,
-              sslEnvs)
+              sslArgs)
           } catch {
             case e: Throwable =>
               Utils.tryLogNonFatalError {
@@ -417,13 +418,21 @@ private[spark] class Client(
       driverSubmitSslOptions: SSLOptions,
       sslVolumes: Array[Volume],
       sslVolumeMounts: Array[VolumeMount],
-      sslEnvs: Array[EnvVar]) = {
+      sslArgs: Array[String]) = {
     val containerPorts = buildContainerPorts()
     val probePingHttpGet = new HTTPGetActionBuilder()
       .withScheme(if (driverSubmitSslOptions.enabled) "HTTPS" else "HTTP")
       .withPath("/v1/submissions/ping")
       .withNewPort(SUBMISSION_SERVER_PORT_NAME)
       .build()
+    val args = mutable.Buffer[String]()
+    args ++= Seq(
+      "bin/spark-class", "org.apache.spark.deploy.rest.kubernetes.KubernetesSparkRestServer",
+      "--hostname", "$HOSTNAME",
+      "--port", SUBMISSION_SERVER_PORT.toString,
+      "--secret-file", SUBMISSION_SERVER_PORT.toString
+    )
+
     kubernetesClient.pods().createNew()
       .withNewMetadata()
         .withName(kubernetesAppId)
@@ -443,6 +452,7 @@ private[spark] class Client(
           .withName(DRIVER_CONTAINER_NAME)
           .withImage(driverDockerImage)
           .withImagePullPolicy("IfNotPresent")
+          .withArgs(args.toArray ++ sslArgs: _*)
           .addNewVolumeMount()
             .withName(SUBMISSION_APP_SECRET_VOLUME_NAME)
             .withMountPath(secretDirectory)
@@ -457,7 +467,6 @@ private[spark] class Client(
             .withName(ENV_SUBMISSION_SERVER_PORT)
             .withValue(SUBMISSION_SERVER_PORT.toString)
             .endEnv()
-          .addToEnv(sslEnvs: _*)
           .withPorts(containerPorts.asJava)
           .withNewReadinessProbe().withHttpGet(probePingHttpGet).endReadinessProbe()
           .endContainer()
@@ -537,12 +546,14 @@ private[spark] class Client(
     (securityManager.getSSLOptions(KUBERNETES_SUBMIT_SSL_NAMESPACE), isLocalKeyStore)
   }
 
-  private def configureSsl(kubernetesClient: KubernetesClient, driverSubmitSslOptions: SSLOptions,
-        isKeyStoreLocalFile: Boolean):
-        (Array[EnvVar], Array[Volume], Array[VolumeMount], Array[Secret]) = {
+  private def configureSsl(
+      kubernetesClient: KubernetesClient,
+      driverSubmitSslOptions: SSLOptions,
+      isKeyStoreLocalFile: Boolean):
+    (Array[String], Array[Volume], Array[VolumeMount], Array[Secret]) = {
     if (driverSubmitSslOptions.enabled) {
       val sslSecretsMap = mutable.HashMap[String, String]()
-      val sslEnvs = mutable.Buffer[EnvVar]()
+      val sslArgs = mutable.Buffer[String]()
       val secrets = mutable.Buffer[Secret]()
       driverSubmitSslOptions.keyStore.foreach(store => {
         val resolvedKeyStoreFile = if (isKeyStoreLocalFile) {
@@ -557,37 +568,26 @@ private[spark] class Client(
         } else {
           store.getAbsolutePath
         }
-        sslEnvs += new EnvVarBuilder()
-          .withName(ENV_SUBMISSION_KEYSTORE_FILE)
-          .withValue(resolvedKeyStoreFile)
-          .build()
+        sslArgs ++= Seq("--keystore-file", resolvedKeyStoreFile)
       })
       driverSubmitSslOptions.keyStorePassword.foreach(password => {
         val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
         sslSecretsMap += (SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME -> passwordBase64)
-        sslEnvs += new EnvVarBuilder()
-          .withName(ENV_SUBMISSION_KEYSTORE_PASSWORD_FILE)
-          .withValue(s"$sslSecretsDirectory/$SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME")
-          .build()
+        sslArgs ++= Seq(
+          "--keystore-password-file",
+          s"$sslSecretsDirectory/$SUBMISSION_SSL_KEYSTORE_PASSWORD_SECRET_NAME")
       })
       driverSubmitSslOptions.keyPassword.foreach(password => {
         val passwordBase64 = Base64.encodeBase64String(password.getBytes(Charsets.UTF_8))
         sslSecretsMap += (SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME -> passwordBase64)
-        sslEnvs += new EnvVarBuilder()
-          .withName(ENV_SUBMISSION_KEYSTORE_KEY_PASSWORD_FILE)
-          .withValue(s"$sslSecretsDirectory/$SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME")
-          .build()
+        sslArgs ++= Seq(
+          "--keystore-key-password-file",
+          s"$sslSecretsDirectory/$SUBMISSION_SSL_KEY_PASSWORD_SECRET_NAME")
       })
       driverSubmitSslOptions.keyStoreType.foreach(storeType => {
-        sslEnvs += new EnvVarBuilder()
-          .withName(ENV_SUBMISSION_KEYSTORE_TYPE)
-          .withValue(storeType)
-          .build()
+        sslArgs ++= Seq("--keystore-type", storeType)
       })
-      sslEnvs += new EnvVarBuilder()
-        .withName(ENV_SUBMISSION_USE_SSL)
-        .withValue("true")
-        .build()
+      sslArgs ++= Seq("--use-ssl", "true")
       val sslVolume = new VolumeBuilder()
         .withName(SUBMISSION_SSL_SECRETS_VOLUME_NAME)
         .withNewSecret()
@@ -607,9 +607,9 @@ private[spark] class Client(
         .withType("Opaque")
         .done()
       secrets += sslSecrets
-      (sslEnvs.toArray, Array(sslVolume), Array(sslVolumeMount), secrets.toArray)
+      (sslArgs.toArray, Array(sslVolume), Array(sslVolumeMount), secrets.toArray)
     } else {
-      (Array[EnvVar](), Array[Volume](), Array[VolumeMount](), Array[Secret]())
+      (Array[String](), Array[Volume](), Array[VolumeMount](), Array[Secret]())
     }
   }
 

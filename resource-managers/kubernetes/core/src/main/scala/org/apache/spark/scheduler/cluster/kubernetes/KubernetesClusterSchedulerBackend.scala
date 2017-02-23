@@ -173,17 +173,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val executorCpuQuantity = new QuantityBuilder(false)
       .withAmount(executorCores)
       .build()
-    val requiredEnv = Seq(
-      (ENV_EXECUTOR_PORT, executorPort.toString),
-      (ENV_DRIVER_URL, driverUrl),
-      (ENV_EXECUTOR_CORES, executorCores),
-      (ENV_EXECUTOR_MEMORY, executorMemory),
-      (ENV_APPLICATION_ID, applicationId()),
-      (ENV_EXECUTOR_ID, executorId)
-    ).map(env => new EnvVarBuilder()
-      .withName(env._1)
-      .withValue(env._2)
-      .build())
     val requiredPorts = Seq(
       (EXECUTOR_PORT_NAME, executorPort),
       (BLOCK_MANAGER_PORT_NAME, blockmanagerPort))
@@ -193,6 +182,17 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .withContainerPort(port._2)
           .build()
       })
+    val args = scala.collection.mutable.Buffer[String]()
+    args ++= Seq(
+      "${JAVA_HOME}/bin/java", s"-Dspark.executor.port=${executorPort.toString}",
+      s"-Xms$executorMemory", s"-Xmx$executorMemory",
+      "-cp", "${SPARK_HOME}/jars/\\*", "org.apache.spark.executor.CoarseGrainedExecutorBackend",
+      "--driver-url", driverUrl,
+      "--executor-id", executorId,
+      "--cores", executorCores,
+      "--app-id", applicationId(),
+      "--hostname", "$HOSTNAME"
+    )
     try {
       (executorId, kubernetesClient.pods().createNew()
         .withNewMetadata()
@@ -213,13 +213,13 @@ private[spark] class KubernetesClusterSchedulerBackend(
             .withName(s"executor")
             .withImage(executorDockerImage)
             .withImagePullPolicy("IfNotPresent")
+            .withArgs(args.toArray: _*)
             .withNewResources()
               .addToRequests("memory", executorMemoryQuantity)
               .addToLimits("memory", executorMemoryLimitQuantity)
               .addToRequests("cpu", executorCpuQuantity)
               .addToLimits("cpu", executorCpuQuantity)
               .endResources()
-            .withEnv(requiredEnv.asJava)
             .withPorts(requiredPorts.asJava)
             .endContainer()
           .endSpec()
