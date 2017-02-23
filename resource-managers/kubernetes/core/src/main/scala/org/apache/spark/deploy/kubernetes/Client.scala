@@ -77,8 +77,12 @@ private[spark] class Client(
 
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
-    val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
-    val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars)
+    val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles
+      .map(_.split(","))
+      .getOrElse(Array.empty[String]))
+    val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars
+      .map(_.split(","))
+      .getOrElse(Array.empty[String]))
     (submitterLocalFiles ++ submitterLocalJars).foreach { file =>
       if (!new File(Utils.resolveURI(file).getPath).isFile) {
         throw new SparkException(s"File $file does not exist or is a directory.")
