@@ -20,8 +20,9 @@ import javax.net.ssl.{SSLContext, SSLSocketFactory, X509TrustManager}
 
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import feign.{Client, Feign, Request, Response}
+import feign.{Client, Feign, Request, Response, RetryableException}
 import feign.Request.Options
+import feign.codec.ErrorDecoder
 import feign.jackson.{JacksonDecoder, JacksonEncoder}
 import feign.jaxrs.JAXRSContract
 import okhttp3.OkHttpClient
@@ -57,11 +58,23 @@ private[spark] object HttpClientUtil {
         response
       }
     }
+    val defaultErrorDecoder = new ErrorDecoder.Default
+    val alwaysRetryErrorDecoder = new ErrorDecoder {
+      override def decode(methodKey: String, response: Response): Exception = {
+        defaultErrorDecoder.decode(methodKey, response) match {
+          case retryable: RetryableException => retryable
+          case e: Exception =>
+            new RetryableException("An error that is normally not retryable has" +
+              " occurred, but the client may retry anyways...", e, null)
+        }
+      }
+    }
     Feign.builder()
       .client(resetTargetHttpClient)
       .contract(new JAXRSContract)
       .encoder(new JacksonEncoder(objectMapper))
       .decoder(new JacksonDecoder(objectMapper))
+      .errorDecoder(alwaysRetryErrorDecoder)
       .options(new Options(connectTimeoutMillis, readTimeoutMillis))
       .retryer(target)
       .target(target)

@@ -51,6 +51,7 @@ private[spark] object Minikube extends Logging {
     assert(MINIKUBE_EXECUTABLE_DEST.exists(), EXPECTED_DOWNLOADED_MINIKUBE_MESSAGE)
     if (getMinikubeStatus != MinikubeStatus.RUNNING) {
       executeMinikube("start", "--memory", "6000", "--cpus", "8")
+      executeMinikube("addons", "enable", "ingress")
     } else {
       logInfo("Minikube is already started.")
     }

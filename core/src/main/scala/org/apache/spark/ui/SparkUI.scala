@@ -50,6 +50,7 @@ private[spark] class SparkUI private (
     val operationGraphListener: RDDOperationGraphListener,
     var appName: String,
     val basePath: String,
+    val apiRootResourceBasePath: String,
     val startTime: Long)
   extends WebUI(securityManager, securityManager.getSSLOptions("ui"), SparkUI.getUIPort(conf),
     conf, basePath, "SparkUI")
@@ -73,7 +74,7 @@ private[spark] class SparkUI private (
     attachTab(new ExecutorsTab(this))
     attachHandler(createStaticHandler(SparkUI.STATIC_RESOURCE_DIR, "/static"))
     attachHandler(createRedirectHandler("/", "/jobs/", basePath = basePath))
-    attachHandler(ApiRootResource.getServletHandler(this))
+    attachHandler(ApiRootResource.getServletHandler(this, apiRootResourceBasePath))
     // These should be POST only, but, the YARN AM proxy won't proxy POSTs
     attachHandler(createRedirectHandler(
       "/jobs/job/kill", "/jobs/", jobsTab.handleKillRequest, httpMethods = Set("GET", "POST")))
@@ -160,8 +161,10 @@ private[spark] object SparkUI {
       securityManager: SecurityManager,
       appName: String,
       startTime: Long): SparkUI = {
+    val basePath = conf.get("spark.ui.basePath", "")
     create(Some(sc), conf, listenerBus, securityManager, appName,
-      jobProgressListener = Some(jobProgressListener), startTime = startTime)
+      jobProgressListener = Some(jobProgressListener), startTime = startTime,
+      basePath = basePath, apiRootResourceBasePath = basePath)
   }
 
   def createHistoryUI(
@@ -197,6 +200,7 @@ private[spark] object SparkUI {
       securityManager: SecurityManager,
       appName: String,
       basePath: String = "",
+      apiRootResourceBasePath: String = "",
       jobProgressListener: Option[JobProgressListener] = None,
       startTime: Long): SparkUI = {
 
@@ -220,6 +224,6 @@ private[spark] object SparkUI {
 
     new SparkUI(sc, conf, securityManager, environmentListener, storageStatusListener,
       executorsListener, _jobProgressListener, storageListener, operationGraphListener,
-      appName, basePath, startTime)
+      appName, basePath, apiRootResourceBasePath, startTime)
   }
 }

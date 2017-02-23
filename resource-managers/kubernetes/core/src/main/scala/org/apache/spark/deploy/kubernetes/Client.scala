@@ -26,6 +26,7 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.api.model.extensions.Ingress
 import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
@@ -68,6 +69,9 @@ private[spark] class Client(
     .map(_.split(","))
     .getOrElse(Array.empty[String])
 
+  private val useIngress = sparkConf.get(DRIVER_EXPOSE_INGRESS)
+  private val ingressBasePath = sparkConf.get(INGRESS_BASE_PATH)
+
   private val waitForAppCompletion: Boolean = sparkConf.get(WAIT_FOR_APP_COMPLETION)
 
   private val secretBase64String = {
@@ -81,6 +85,11 @@ private[spark] class Client(
 
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
+    if (useIngress) {
+      require(ingressBasePath.isDefined, "Ingress base path must be provided if" +
+        s" ${DRIVER_EXPOSE_INGRESS.key} is true")
+    }
+
     val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
     val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars)
     (submitterLocalFiles ++ submitterLocalJars).foreach { file =>
@@ -133,7 +142,7 @@ private[spark] class Client(
               .pods()
               .withName(kubernetesAppId)
               .watch(loggingWatch)) { _ =>
-            val (driverPod, driverService) = launchDriverKubernetesComponents(
+            val (driverPod, driverService, driverIngress) = launchDriverKubernetesComponents(
               kubernetesClient,
               parsedCustomLabels,
               submitServerSecret,
@@ -143,16 +152,19 @@ private[spark] class Client(
               sslVolumeMounts,
               sslEnvs,
               isKeyStoreLocalFile)
-            val ownerReferenceConfiguredDriverService = try {
+            val (ownerReferenceConfiguredDriverService,
+                ownerReferenceConfiguredDriverIngress) = try {
               configureOwnerReferences(
                 kubernetesClient,
                 submitServerSecret,
                 sslSecrets,
                 driverPod,
-                driverService)
+                driverService,
+                driverIngress)
             } catch {
               case e: Throwable =>
-                cleanupPodAndService(kubernetesClient, driverPod, driverService)
+                cleanupAllDriverComponents(kubernetesClient, driverPod, driverService,
+                  driverIngress)
                 throw new SparkException("Failed to set owner references to the driver pod.", e)
             }
             try {
@@ -168,8 +180,9 @@ private[spark] class Client(
               }
             } catch {
               case e: Throwable =>
-                cleanupPodAndService(kubernetesClient, driverPod,
-                  ownerReferenceConfiguredDriverService)
+                cleanupAllDriverComponents(kubernetesClient, driverPod,
+                  ownerReferenceConfiguredDriverService,
+                  ownerReferenceConfiguredDriverIngress)
                 throw new SparkException("Failed to submit the application to the driver pod.", e)
             }
           }
@@ -190,15 +203,19 @@ private[spark] class Client(
     }
   }
 
-  private def cleanupPodAndService(
+  private def cleanupAllDriverComponents(
       kubernetesClient: KubernetesClient,
       driverPod: Pod,
-      driverService: Service): Unit = {
+      driverService: Service,
+      driverIngress: Option[Ingress]): Unit = {
     Utils.tryLogNonFatalError {
       kubernetesClient.services().delete(driverService)
     }
     Utils.tryLogNonFatalError {
       kubernetesClient.pods().delete(driverPod)
+    }
+    Utils.tryLogNonFatalError {
+      driverIngress.foreach(kubernetesClient.extensions().ingresses().delete(_))
     }
   }
 
@@ -219,8 +236,10 @@ private[spark] class Client(
     sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
     sparkConf.setIfMissing("spark.blockmanager.port",
       DEFAULT_BLOCKMANAGER_PORT.toString)
+    sparkConf.set("spark.ui.basePath", s"/$kubernetesAppId/$UI_PATH_COMPONENT")
     val driverSubmitter = buildDriverSubmissionClient(kubernetesClient, driverService,
       driverSubmitSslOptions)
+
     // Sanity check to see if the driver submitter is even reachable.
     driverSubmitter.ping()
     logInfo(s"Submitting local resources to driver pod for application " +
@@ -254,18 +273,22 @@ private[spark] class Client(
       sslVolumes: Array[Volume],
       sslVolumeMounts: Array[VolumeMount],
       sslEnvs: Array[EnvVar],
-      isKeyStoreLocalFile: Boolean): (Pod, Service) = {
-    val endpointsReadyFuture = SettableFuture.create[Endpoints]
-    val endpointsReadyWatcher = new DriverEndpointsReadyWatcher(endpointsReadyFuture)
-    val serviceReadyFuture = SettableFuture.create[Service]
+      isKeyStoreLocalFile: Boolean): (Pod, Service, Option[Ingress]) = {
     val driverKubernetesSelectors = (Map(
       SPARK_DRIVER_LABEL -> kubernetesAppId,
       SPARK_APP_ID_LABEL -> kubernetesAppId,
       SPARK_APP_NAME_LABEL -> appName)
       ++ parsedCustomLabels).asJava
-    val serviceReadyWatcher = new DriverServiceReadyWatcher(serviceReadyFuture)
+
     val podReadyFuture = SettableFuture.create[Pod]
+    val endpointsReadyFuture = SettableFuture.create[Endpoints]
+    val serviceReadyFuture = SettableFuture.create[Service]
+    val ingressReadyFuture = ingressBasePath.map(_ => SettableFuture.create[Ingress])
+
     val podWatcher = new DriverPodReadyWatcher(podReadyFuture)
+    val endpointsReadyWatcher = new DriverEndpointsReadyWatcher(endpointsReadyFuture)
+    val serviceReadyWatcher = new DriverServiceReadyWatcher(serviceReadyFuture)
+    val ingressWatcher = new DriverIngressReadyWatcher(ingressReadyFuture)
     Utils.tryWithResource(kubernetesClient
         .pods()
         .withName(kubernetesAppId)
@@ -278,40 +301,53 @@ private[spark] class Client(
             .endpoints()
             .withName(kubernetesAppId)
             .watch(endpointsReadyWatcher)) { _ =>
-          val driverService = createDriverService(
-            kubernetesClient,
-            driverKubernetesSelectors,
-            submitServerSecret)
-          val driverPod = try {
-            createDriverPod(
+          Utils.tryWithResource(kubernetesClient
+              .extensions()
+              .ingresses()
+              .watch(ingressWatcher)) { _ =>
+            val driverService = createDriverService(
               kubernetesClient,
               driverKubernetesSelectors,
-              submitServerSecret,
-              driverSubmitSslOptions,
-              sslVolumes,
-              sslVolumeMounts,
-              sslEnvs)
-          } catch {
-            case e: Throwable =>
-              Utils.tryLogNonFatalError {
-                kubernetesClient.services().delete(driverService)
-              }
-              throw new SparkException("Failed to create the driver pod.", e)
-          }
-          try {
-            waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
-              serviceReadyFuture, podReadyFuture)
-            (driverPod, driverService)
-          } catch {
-            case e: Throwable =>
-              Utils.tryLogNonFatalError {
-                kubernetesClient.services().delete(driverService)
-              }
-              Utils.tryLogNonFatalError {
-                kubernetesClient.pods().delete(driverPod)
-              }
-              throw new SparkException("Timed out while waiting for a Kubernetes component to be" +
-                " ready.", e)
+              submitServerSecret)
+            val driverPod = try {
+              createDriverPod(
+                kubernetesClient,
+                driverKubernetesSelectors,
+                submitServerSecret,
+                driverSubmitSslOptions,
+                sslVolumes,
+                sslVolumeMounts,
+                sslEnvs)
+            } catch {
+              case e: Throwable =>
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.services().delete(driverService)
+                }
+                throw new SparkException("Failed to create the driver pod.", e)
+            }
+            val driverIngress = try {
+              createDriverIngress(kubernetesClient, driverKubernetesSelectors, driverService)
+            } catch {
+              case e: Throwable =>
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.services().delete(driverService)
+                }
+                Utils.tryLogNonFatalError {
+                  kubernetesClient.pods().delete(driverPod)
+                }
+                throw new SparkException("Failed to create the driver ingress.", e)
+            }
+            try {
+              waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
+                serviceReadyFuture, podReadyFuture, ingressReadyFuture)
+              (driverPod, driverService, driverIngress)
+            } catch {
+              case e: Throwable =>
+                cleanupAllDriverComponents(kubernetesClient, driverPod, driverService,
+                  driverIngress)
+                throw new SparkException("Timed out while waiting for a Kubernetes component to" +
+                  " be ready.", e)
+            }
           }
         }
       }
@@ -329,7 +365,8 @@ private[spark] class Client(
       submitServerSecret: Secret,
       sslSecrets: Array[Secret],
       driverPod: Pod,
-      driverService: Service): Service = {
+      driverService: Service,
+      driverIngress: Option[Ingress]): (Service, Option[Ingress]) = {
     val driverPodOwnerRef = new OwnerReferenceBuilder()
       .withName(driverPod.getMetadata.getName)
       .withUid(driverPod.getMetadata.getUid)
@@ -349,18 +386,30 @@ private[spark] class Client(
       .addToOwnerReferences(driverPodOwnerRef)
       .endMetadata()
       .done()
-    kubernetesClient.services().withName(driverService.getMetadata.getName).edit()
-      .editMetadata()
-      .addToOwnerReferences(driverPodOwnerRef)
-      .endMetadata()
-      .done()
+    val updatedService = kubernetesClient
+      .services()
+      .withName(driverService.getMetadata.getName)
+      .edit()
+        .editMetadata()
+          .addToOwnerReferences(driverPodOwnerRef)
+          .endMetadata()
+        .done()
+    val updatedIngress = driverIngress.map { ingress =>
+      kubernetesClient.extensions().ingresses().withName(ingress.getMetadata.getName).edit()
+        .editMetadata()
+          .addToOwnerReferences(driverPodOwnerRef)
+          .endMetadata()
+        .done()
+    }
+    (updatedService, updatedIngress)
   }
 
   private def waitForReadyKubernetesComponents(
       kubernetesClient: KubernetesClient,
       endpointsReadyFuture: SettableFuture[Endpoints],
       serviceReadyFuture: SettableFuture[Service],
-      podReadyFuture: SettableFuture[Pod]) = {
+      podReadyFuture: SettableFuture[Pod],
+      ingressReadyFuture: Option[SettableFuture[Ingress]]) = {
     try {
       podReadyFuture.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
       logInfo("Driver pod successfully created in Kubernetes cluster.")
@@ -386,6 +435,17 @@ private[spark] class Client(
         throw new SparkException(s"The driver service endpoint was not ready" +
           s" in $driverSubmitTimeoutSecs seconds.", e)
     }
+    ingressReadyFuture.foreach { future =>
+      try {
+        future.get(driverSubmitTimeoutSecs, TimeUnit.SECONDS)
+        logInfo("Driver ingress ready to proxy application submission request" +
+          " to driver service")
+      } catch {
+        case e: Throwable =>
+          throw new SparkException(s"The driver ingress was not ready" +
+            s" in $driverSubmitTimeoutSecs seconds.", e)
+      }
+    }
   }
 
   private def createDriverService(
@@ -403,7 +463,7 @@ private[spark] class Client(
         .withLabels(driverKubernetesSelectors)
         .endMetadata()
       .withNewSpec()
-        .withType("NodePort")
+        .withType(if (useIngress) "ClusterIP" else "NodePort")
         .withSelector(driverKubernetesSelectors)
         .withPorts(driverSubmissionServicePort)
         .endSpec()
@@ -421,7 +481,7 @@ private[spark] class Client(
     val containerPorts = buildContainerPorts()
     val probePingHttpGet = new HTTPGetActionBuilder()
       .withScheme(if (driverSubmitSslOptions.enabled) "HTTPS" else "HTTP")
-      .withPath("/v1/submissions/ping")
+      .withPath(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT/v1/submissions/ping")
       .withNewPort(SUBMISSION_SERVER_PORT_NAME)
       .build()
     kubernetesClient.pods().createNew()
@@ -457,12 +517,50 @@ private[spark] class Client(
             .withName(ENV_SUBMISSION_SERVER_PORT)
             .withValue(SUBMISSION_SERVER_PORT.toString)
             .endEnv()
+          .addNewEnv()
+            .withName(ENV_SUBMISSION_SERVER_BASE_PATH)
+            .withValue(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT")
+            .endEnv()
           .addToEnv(sslEnvs: _*)
           .withPorts(containerPorts.asJava)
           .withNewReadinessProbe().withHttpGet(probePingHttpGet).endReadinessProbe()
           .endContainer()
         .endSpec()
       .done()
+  }
+
+  private def createDriverIngress(
+      kubernetesClient: KubernetesClient,
+      driverKubernetesSelectors: util.Map[String, String],
+      driverService: Service): Option[Ingress] = {
+    ingressBasePath.map(_ => {
+      kubernetesClient.extensions().ingresses().createNew()
+        .withNewMetadata()
+          .withName(kubernetesAppId)
+          .withLabels(driverKubernetesSelectors)
+          .endMetadata()
+        .withNewSpec()
+          .addNewRule()
+            .withNewHttp()
+              .addNewPath()
+                .withPath(s"/$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT")
+                .withNewBackend()
+                  .withServiceName(driverService.getMetadata.getName)
+                  .withNewServicePort(SUBMISSION_SERVER_PORT_NAME)
+                  .endBackend()
+                .endPath()
+              .addNewPath()
+                .withPath(s"/$kubernetesAppId/$UI_PATH_COMPONENT")
+                .withNewBackend()
+                  .withServiceName(driverService.getMetadata.getName)
+                  .withNewServicePort(UI_PORT_NAME)
+                  .endBackend()
+                .endPath()
+              .endHttp()
+            .endRule()
+          .endSpec()
+        .done()
+    })
   }
 
   private class DriverPodReadyWatcher(resolvedDriverPod: SettableFuture[Pod]) extends Watcher[Pod] {
@@ -512,6 +610,22 @@ private[spark] class Client(
     override def onClose(cause: KubernetesClientException): Unit = {
       logDebug("Driver service readiness watch closed.", cause)
     }
+  }
+
+  private class DriverIngressReadyWatcher(resolvedDriverIngress: Option[SettableFuture[Ingress]])
+      extends Watcher[Ingress] {
+
+    override def eventReceived(action: Action, ingress: Ingress): Unit = {
+      if ((action == Action.ADDED || action == Action.MODIFIED)
+          && ingress.getStatus.getLoadBalancer.getIngress.asScala.nonEmpty) {
+        resolvedDriverIngress.foreach(_.set(ingress))
+      }
+    }
+
+    override def onClose(cause: KubernetesClientException): Unit = {
+      logDebug("Ingress readiness watch closed.", cause)
+    }
+
   }
 
   private def parseDriverSubmitSslOptions(): (SSLOptions, Boolean) = {
@@ -725,19 +839,24 @@ private[spark] class Client(
     val servicePort = service.getSpec.getPorts.asScala
       .filter(_.getName == SUBMISSION_SERVER_PORT_NAME)
       .head.getNodePort
-    val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
-      .filterNot(node => node.getSpec.getUnschedulable != null &&
-        node.getSpec.getUnschedulable)
-      .flatMap(_.getStatus.getAddresses.asScala)
-      // The list contains hostnames, internal and external IP addresses.
-      // (https://kubernetes.io/docs/admin/node/#addresses)
-      // we want only external IP addresses and legacyHostIP addresses in our list
-      // legacyHostIPs are deprecated and will be removed in the future.
-      // (https://github.com/kubernetes/kubernetes/issues/9267)
-      .filter(address => address.getType == "ExternalIP" || address.getType == "LegacyHostIP")
-      .map(address => {
-        s"$urlScheme://${address.getAddress}:$servicePort"
-      }).toSet
+    val serverBasePath = s"$kubernetesAppId/$SUBMISSION_SERVER_PATH_COMPONENT"
+    val nodeUrls = ingressBasePath.map(ingressBase => {
+      Set(s"$urlScheme://$ingressBase/$serverBasePath")
+    }).getOrElse {
+      kubernetesClient.nodes.list.getItems.asScala
+        .filterNot(node => node.getSpec.getUnschedulable != null &&
+          node.getSpec.getUnschedulable)
+        .flatMap(_.getStatus.getAddresses.asScala)
+        // The list contains hostnames, internal and external IP addresses.
+        // (https://kubernetes.io/docs/admin/node/#addresses)
+        // we want only external IP addresses and legacyHostIP addresses in our list
+        // legacyHostIPs are deprecated and will be removed in the future.
+        // (https://github.com/kubernetes/kubernetes/issues/9267)
+        .filter(address => address.getType == "ExternalIP" || address.getType == "LegacyHostIP")
+        .map(address => {
+          s"$urlScheme://${address.getAddress}:$servicePort/$serverBasePath"
+        }).toSet
+    }
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     val (trustManager, sslContext): (X509TrustManager, SSLContext) =
       if (driverSubmitSslOptions.enabled) {
@@ -745,9 +864,14 @@ private[spark] class Client(
       } else {
         (null, SSLContext.getDefault)
       }
+    val maxRetriesPerServer = if (useIngress) {
+      SUBMISSION_CLIENT_RETRIES_INGRESS
+    } else {
+      SUBMISSION_CLIENT_RETRIES_NODE_PORT
+    }
     HttpClientUtil.createClient[KubernetesSparkRestApi](
       uris = nodeUrls,
-      maxRetriesPerServer = 3,
+      maxRetriesPerServer = maxRetriesPerServer,
       sslSocketFactory = sslContext.getSocketFactory,
       trustContext = trustManager,
       connectTimeoutMillis = 5000)

@@ -50,7 +50,8 @@ class HistoryServer(
     conf: SparkConf,
     provider: ApplicationHistoryProvider,
     securityManager: SecurityManager,
-    port: Int)
+    port: Int,
+    basePath: String = "")
   extends WebUI(securityManager, securityManager.getSSLOptions("historyServer"), port, conf)
   with Logging with UIRoot with ApplicationCacheOperations {
 
@@ -279,6 +280,7 @@ object HistoryServer extends Logging {
       .asInstanceOf[ApplicationHistoryProvider]
 
     val port = conf.getInt("spark.history.ui.port", 18080)
+    val basePath = conf.get("spark.history.ui.basePath", "")
 
     val server = new HistoryServer(conf, provider, securityManager, port)
     server.bind()

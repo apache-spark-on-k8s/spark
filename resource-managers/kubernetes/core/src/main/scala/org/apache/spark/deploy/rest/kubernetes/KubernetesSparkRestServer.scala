@@ -37,6 +37,7 @@ import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
 private case class KubernetesSparkRestServerArguments(
     host: Option[String] = None,
     port: Option[Int] = None,
+    basePath: Option[String] = None,
     useSsl: Boolean = false,
     secretFile: Option[String] = None,
     keyStoreFile: Option[String] = None,
@@ -46,6 +47,7 @@ private case class KubernetesSparkRestServerArguments(
   def validate(): KubernetesSparkRestServerArguments = {
     require(host.isDefined, "Hostname not set via --hostname.")
     require(port.isDefined, "Port not set via --port")
+    require(basePath.isDefined, "Base path not defined via --base-path")
     require(secretFile.isDefined, "Secret file not set via --secret-file")
     this
   }
@@ -66,6 +68,9 @@ private object KubernetesSparkRestServerArguments {
         case "--secret-file" :: value :: tail =>
           args = tail
           resolvedArguments.copy(secretFile = Some(value))
+        case "--base-path" :: value :: tail =>
+          args = tail
+          resolvedArguments.copy(basePath = Some(value))
         case "--use-ssl" :: value :: tail =>
           args = tail
           resolvedArguments.copy(useSsl = value.toBoolean)
@@ -99,6 +104,7 @@ private object KubernetesSparkRestServerArguments {
 private[spark] class KubernetesSparkRestServer(
     host: String,
     port: Int,
+    basePath: String,
     conf: SparkConf,
     expectedApplicationSecret: Array[Byte],
     shutdownLock: CountDownLatch,
@@ -110,9 +116,12 @@ private[spark] class KubernetesSparkRestServer(
   private val javaExecutable = s"${System.getenv("JAVA_HOME")}/bin/java"
   private val sparkHome = System.getenv("SPARK_HOME")
   private val securityManager = new SecurityManager(conf)
+
+  // super.baseContext has a leading slash
+  private val completeBaseContext = basePath + baseContext
   override protected lazy val contextToServlet = Map[String, RestServlet](
-    s"$baseContext/create/*" -> submitRequestServlet,
-    s"$baseContext/ping/*" -> pingServlet)
+    s"$completeBaseContext/create/*" -> submitRequestServlet,
+    s"$completeBaseContext/ping/*" -> pingServlet)
 
   private val pingServlet = new PingServlet
   override protected val submitRequestServlet: SubmitRequestServlet
@@ -362,6 +371,7 @@ private[spark] object KubernetesSparkRestServer {
     val server = new KubernetesSparkRestServer(
       parsedArguments.host.get,
       parsedArguments.port.get,
+      parsedArguments.basePath.get,
       sparkConf,
       secretBytes,
       barrier,

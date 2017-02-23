@@ -35,10 +35,12 @@ import scala.collection.JavaConverters._
 import org.apache.spark.{SparkConf, SparkException, SparkFunSuite}
 import org.apache.spark.deploy.SparkSubmit
 import org.apache.spark.deploy.kubernetes.Client
+import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 import org.apache.spark.deploy.kubernetes.integrationtest.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.restapis.SparkRestApiV1
 import org.apache.spark.deploy.kubernetes.integrationtest.sslutil.SSLUtils
+import org.apache.spark.deploy.rest.kubernetes.HttpClientUtil
 import org.apache.spark.status.api.v1.{ApplicationStatus, StageStatus}
 import org.apache.spark.util.Utils
 
@@ -83,6 +85,22 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       "changeit")
     keyStoreFile = keyStore
     trustStoreFile = trustStore
+    minikubeKubernetesClient.services().inNamespace("kube-system").createOrReplaceWithNew()
+      .withNewMetadata()
+        .withName("spark-integration-test-ingress-service")
+        .addToLabels("spark-integration-test-ingress-service", System.currentTimeMillis().toString)
+        .endMetadata()
+      .withNewSpec()
+        .withType("NodePort")
+        .addToSelector("app", "nginx-ingress-lb")
+        .addNewPort()
+          .withName("nginx-port")
+          .withPort(80)
+          .withNewTargetPort(80)
+          .withNodePort(31000) // Since we control the environment and shouldn't hit port conflicts
+          .endPort()
+        .endSpec()
+      .done()
   }
 
   before {
@@ -108,6 +126,9 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         .withGracePeriod(60)
         .delete
     })
+    // spark-submit sets the system properties, so just reset all of them
+    val sparkConfFromSystemProperties = new SparkConf(true)
+    sparkConfFromSystemProperties.getAll.foreach(conf => System.clearProperty(conf._1))
   }
 
   override def afterAll(): Unit = {
@@ -124,7 +145,11 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .get(0)
       .getMetadata
       .getName
-    Minikube.getService[SparkRestApiV1](serviceName, NAMESPACE, "spark-ui-port")
+    Minikube.getService[SparkRestApiV1](
+        serviceName,
+        NAMESPACE,
+        "spark-ui-port",
+        s"/$serviceName/$UI_PATH_COMPONENT")
   }
 
   private def expectationsForStaticAllocation(sparkMetricsService: SparkRestApiV1): Unit = {
@@ -365,5 +390,42 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       assert(podLog.contains(s"File found at /opt/spark/${TEST_EXISTENCE_FILE.getName}" +
         s" with correct contents."), "Job did not find the file as expected.")
     }
+  }
+
+  test("Use ingress to submit the driver") {
+    val args = Array(
+      "--master", s"k8s://https://${Minikube.getMinikubeIp}:8443",
+      "--deploy-mode", "cluster",
+      "--kubernetes-namespace", NAMESPACE,
+      "--name", "spark-pi",
+      "--executor-memory", "512m",
+      "--executor-cores", "1",
+      "--num-executors", "1",
+      "--jars", HELPER_JAR_FILE.getAbsolutePath,
+      "--class", SPARK_PI_MAIN_CLASS,
+      "--conf", "spark.ui.enabled=true",
+      "--conf", "spark.testing=false",
+      "--conf", s"spark.kubernetes.submit.caCertFile=${clientConfig.getCaCertFile}",
+      "--conf", s"spark.kubernetes.submit.clientKeyFile=${clientConfig.getClientKeyFile}",
+      "--conf", s"spark.kubernetes.submit.clientCertFile=${clientConfig.getClientCertFile}",
+      "--conf", "spark.kubernetes.executor.docker.image=spark-executor:latest",
+      "--conf", "spark.kubernetes.driver.docker.image=spark-driver:latest",
+      "--conf", "spark.kubernetes.submit.waitAppCompletion=false",
+      "--conf", "spark.kubernetes.driver.exposeIngress=true",
+      "--conf", s"spark.kubernetes.driver.ingressBasePath=${Minikube.getMinikubeIp}:31000",
+      EXAMPLES_JAR_FILE.getAbsolutePath)
+    SparkSubmit.main(args)
+    val driverPod = minikubeKubernetesClient
+      .pods
+      .withLabel("spark-app-name", "spark-pi")
+      .list()
+      .getItems
+      .get(0)
+    // This time we build the metrics service using the nginx proxy
+    val metricsUrl = s"http://${Minikube.getMinikubeIp}:31000/" +
+      s"${driverPod.getMetadata.getName}/" +
+      s"$UI_PATH_COMPONENT"
+    val sparkMetricsService = HttpClientUtil.createClient[SparkRestApiV1](Set(metricsUrl))
+    expectationsForStaticAllocation(sparkMetricsService)
   }
 }

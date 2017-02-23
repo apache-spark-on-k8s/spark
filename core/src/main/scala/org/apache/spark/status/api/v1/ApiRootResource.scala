@@ -203,9 +203,9 @@ private[v1] class ApiRootResource extends UIRootFromServletContext {
 
 private[spark] object ApiRootResource {
 
-  def getServletHandler(uiRoot: UIRoot): ServletContextHandler = {
+  def getServletHandler(uiRoot: UIRoot, basePath: String = ""): ServletContextHandler = {
     val jerseyContext = new ServletContextHandler(ServletContextHandler.NO_SESSIONS)
-    jerseyContext.setContextPath("/api")
+    jerseyContext.setContextPath(s"${basePath.stripSuffix("/")}/api")
     val holder: ServletHolder = new ServletHolder(classOf[ServletContainer])
     holder.setInitParameter(ServerProperties.PROVIDER_PACKAGES, "org.apache.spark.status.api.v1")
     UIRootFromServletContext.setUiRoot(jerseyContext, uiRoot)

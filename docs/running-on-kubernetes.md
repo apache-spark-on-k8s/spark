@@ -188,6 +188,22 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.driver.exposeIngress</code></td>
+  <td>false</td>
+  <td>
+    When initially contacting the driver, use an Ingress when the submitting client passes application dependencies to
+    the driver pod. The Ingress also remains and exposes the Spark UI. This requires an Ingress controller to be
+    installed on the cluster.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.driver.ingressBasePath</code></td>
+  <td>(none)</td>
+  <td>
+    Base path for the ingress created for the driver. Must be provided if spark.kubernetes.driver.exposeIngress is true.
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.driverSubmitTimeout</code></td>
   <td>60s</td>
   <td>

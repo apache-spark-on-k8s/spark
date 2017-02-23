@@ -50,6 +50,7 @@ package object constants {
   // Environment Variables
   private[spark] val ENV_SUBMISSION_SECRET_LOCATION = "SPARK_SUBMISSION_SECRET_LOCATION"
   private[spark] val ENV_SUBMISSION_SERVER_PORT = "SPARK_SUBMISSION_SERVER_PORT"
+  private[spark] val ENV_SUBMISSION_SERVER_BASE_PATH = "SPARK_SUBMISSION_SERVER_BASE_PATH"
   private[spark] val ENV_SUBMISSION_KEYSTORE_FILE = "SPARK_SUBMISSION_KEYSTORE_FILE"
   private[spark] val ENV_SUBMISSION_KEYSTORE_PASSWORD_FILE =
       "SPARK_SUBMISSION_KEYSTORE_PASSWORD_FILE"
@@ -64,8 +65,14 @@ package object constants {
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"
   private[spark] val ENV_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
 
+  // Ingress paths
+  private[spark] val SUBMISSION_SERVER_PATH_COMPONENT = "submit-driver"
+  private[spark] val UI_PATH_COMPONENT = "spark-ui"
+
   // Miscellaneous
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_SUBMIT_SSL_NAMESPACE = "kubernetes.submit"
+  private[spark] val SUBMISSION_CLIENT_RETRIES_NODE_PORT = 3
+  private[spark] val SUBMISSION_CLIENT_RETRIES_INGRESS = 20
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
 }

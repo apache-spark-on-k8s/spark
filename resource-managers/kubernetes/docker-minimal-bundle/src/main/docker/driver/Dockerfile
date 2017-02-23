@@ -29,4 +29,5 @@ CMD SSL_ARGS="" && \
       --hostname $HOSTNAME \
       --port $SPARK_SUBMISSION_SERVER_PORT \
       --secret-file $SPARK_SUBMISSION_SECRET_LOCATION \
+      --base-path $SPARK_SUBMISSION_SERVER_BASE_PATH \
       ${SSL_ARGS}

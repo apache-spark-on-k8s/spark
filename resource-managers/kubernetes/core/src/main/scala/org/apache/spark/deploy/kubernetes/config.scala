@@ -192,4 +192,28 @@ package object config {
         """.stripMargin)
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("1s")
+
+  private[spark] val DRIVER_EXPOSE_INGRESS =
+    ConfigBuilder("spark.kubernetes.driver.exposeIngress")
+      .doc(
+        """
+          | When initially contacting the driver, use an Ingress when the submitting client
+          | passes application dependencies to the driver pod. The Ingress also remains and
+          | exposes the Spark UI. This requires an Ingress controller must be installed on
+          | the cluster.
+        """.stripMargin
+      )
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val INGRESS_BASE_PATH =
+    ConfigBuilder("spark.kubernetes.driver.ingressBasePath")
+      .doc(
+        s"""
+          | Base path for the ingress created for the driver. Must be provided if
+          | ${DRIVER_EXPOSE_INGRESS.key} is true.
+        """.stripMargin
+      )
+      .stringConf
+      .createOptional
 }
