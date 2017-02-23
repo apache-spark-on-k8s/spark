@@ -29,7 +29,6 @@ private[spark] class KubernetesComponentCleaner
   private val registeredPods = mutable.HashMap.empty[String, Pod]
   private val registeredServices = mutable.HashMap.empty[String, Service]
   private val registeredSecrets = mutable.HashMap.empty[String, Secret]
-  private val registeredIngresses = mutable.HashMap.empty[String, Ingress]
 
   def registerOrUpdatePod(pod: Pod): Unit = registeredPods.synchronized {
     registeredPods.put(pod.getMetadata.getName, pod)
@@ -57,8 +56,8 @@ private[spark] class KubernetesComponentCleaner
 
   def deleteAllRegisteredComponentsFromKubernetes(kubernetesClient: KubernetesClient): Unit = {
     logInfo(s"Deleting registered Kubernetes components:" +
-      s" ${registeredPods.size} pod(s), ${registeredServices.size} service(s)," +
-      s" ${registeredSecrets.size} secret(s), and ${registeredIngresses} ingress(es).")
+      s" ${registeredPods.size} pod(s), ${registeredServices.size} service(s), and" +
+      s" ${registeredSecrets.size} secret(s).")
     registeredPods.synchronized {
       registeredPods.values.foreach { pod =>
         Utils.tryLogNonFatalError {
@@ -84,15 +83,6 @@ private[spark] class KubernetesComponentCleaner
         }
       }
       registeredSecrets.clear()
-    }
-
-    registeredIngresses.synchronized {
-      registeredIngresses.values.foreach { ingress =>
-        Utils.tryLogNonFatalError {
-          kubernetesClient.extensions().ingresses().delete(ingress)
-        }
-      }
-      registeredIngresses.clear()
     }
   }
 }
