@@ -214,7 +214,7 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td><code>spark.kubernetes.report.interval</code></td>
   <td><code>1s</code></td>
   <td>
-    Interval between reports of the current app status in cluster mode.
+    Interval between reports of the current Spark job status in cluster mode.
   </td>
 </tr>
 </table>
