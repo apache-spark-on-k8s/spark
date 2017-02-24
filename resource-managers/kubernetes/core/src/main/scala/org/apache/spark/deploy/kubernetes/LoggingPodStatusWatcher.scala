@@ -85,10 +85,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   }
 
   private def hasCompleted(): Boolean = {
-    if (phase == "Succeeded" || phase == "Failed") {
-      return true
-    }
-    false
+    return (phase == "Succeeded" || phase == "Failed")
   }
 
   private def closeWatch(): Unit = {
