@@ -119,18 +119,19 @@ private[spark] class Client(
         .withType("Opaque")
         .done()
       kubernetesResourceCleaner.registerOrUpdateResource(submitServerSecret)
+      var loggingWatch = None: Option[LoggingPodStatusWatcher]
       try {
         val sslConfiguration = sslConfigurationProvider.getSslConfiguration()
         // start outer watch for status logging of driver pod
         val driverPodCompletedLatch = new CountDownLatch(1)
         // only enable interval logging if in waitForAppCompletion mode
         val loggingInterval = if (waitForAppCompletion) sparkConf.get(REPORT_INTERVAL) else 0
-        val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedLatch, kubernetesAppId,
-          loggingInterval)
+        loggingWatch = Option(new LoggingPodStatusWatcher(driverPodCompletedLatch, kubernetesAppId,
+          loggingInterval))
         Utils.tryWithResource(kubernetesClient
             .pods()
             .withName(kubernetesAppId)
-            .watch(loggingWatch)) { _ =>
+            .watch(loggingWatch.get)) { _ =>
           val (driverPod, driverService) = launchDriverKubernetesComponents(
             kubernetesClient,
             parsedCustomLabels,
@@ -164,6 +165,9 @@ private[spark] class Client(
         }
       } finally {
         kubernetesResourceCleaner.deleteAllRegisteredResourcesFromKubernetes(kubernetesClient)
+        if (loggingWatch.nonEmpty) {
+          loggingWatch.get.shutdown()
+        }
       }
     }
   }
