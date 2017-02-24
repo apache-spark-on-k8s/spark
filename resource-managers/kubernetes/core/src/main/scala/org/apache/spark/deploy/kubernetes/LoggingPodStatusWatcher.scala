@@ -72,7 +72,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   }
 
   override def onClose(e: KubernetesClientException): Unit = {
-    logDebug(s"Stopped watching application $appId with last-observed phase $phase")
+    logDebug(s"Stopping watching application $appId with last-observed phase $phase")
     closeWatch()
   }
 
@@ -85,7 +85,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   }
 
   private def hasCompleted(): Boolean = {
-    return (phase == "Succeeded" || phase == "Failed")
+    phase == "Succeeded" || phase == "Failed"
   }
 
   private def closeWatch(): Unit = {
