@@ -111,7 +111,8 @@ private[spark] class Client(
     val k8ClientConfig = k8ConfBuilder.build
     Utils.tryWithResource(new DefaultKubernetesClient(k8ClientConfig)) { kubernetesClient =>
       driverServiceManager.start(kubernetesClient, kubernetesAppId, sparkConf)
-      // Begin monitoring the state of the driver pod
+      // start outer watch for status logging of driver pod
+      // only enable interval logging if in waitForAppCompletion mode
       val loggingInterval = if (waitForAppCompletion) sparkConf.get(REPORT_INTERVAL) else 0
       val driverPodCompletedLatch = new CountDownLatch(1)
       val loggingWatch = new LoggingPodStatusWatcher(driverPodCompletedLatch, kubernetesAppId,
@@ -143,8 +144,6 @@ private[spark] class Client(
             .done()
           kubernetesResourceCleaner.registerOrUpdateResource(submitServerSecret)
           val sslConfiguration = sslConfigurationProvider.getSslConfiguration()
-          // start outer watch for status logging of driver pod
-          // only enable interval logging if in waitForAppCompletion mode
           val driverKubernetesSelectors = (Map(
             SPARK_DRIVER_LABEL -> kubernetesAppId,
             SPARK_APP_ID_LABEL -> kubernetesAppId,

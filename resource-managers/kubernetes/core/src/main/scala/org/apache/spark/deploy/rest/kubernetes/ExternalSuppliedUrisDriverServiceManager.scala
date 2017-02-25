@@ -30,6 +30,60 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
 
+/**
+ * Creates the service with an annotation that is expected to be detected by another process
+ * which the user provides and is not built in this project. When the external process detects
+ * the creation of the service with the appropriate annotation, it is expected to populate the
+ * value of a second annotation that is the URI of the driver submission server.
+ */
+private[spark] class ExternalSuppliedUrisDriverServiceManager
+  extends DriverServiceManager with Logging {
+
+  private val externalUriFuture = SettableFuture.create[String]
+  private var externalUriSetWatch: Option[Watch] = None
+
+  override def onStart(
+      kubernetesClient: KubernetesClient,
+      serviceName: String,
+      sparkConf: SparkConf): Unit = {
+    externalUriSetWatch = Some(kubernetesClient
+      .services()
+      .withName(serviceName)
+      .watch(new ExternalUriSetWatcher(externalUriFuture)))
+  }
+
+  override def getServiceManagerType: String = ExternalSuppliedUrisDriverServiceManager.TYPE
+
+  override def customizeDriverService(driverServiceTemplate: ServiceBuilder): ServiceBuilder = {
+    require(serviceName != null, "Service name was null; was start() called?")
+    driverServiceTemplate
+      .editMetadata()
+      .addToAnnotations(ANNOTATION_PROVIDE_EXTERNAL_URI, "true")
+      .endMetadata()
+      .editSpec()
+      .withType("ClusterIP")
+      .endSpec()
+  }
+
+  override def getDriverServiceSubmissionServerUris(driverService: Service): Set[String] = {
+    val timeoutSeconds = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
+    require(externalUriSetWatch.isDefined, "The watch that listens for the provision of" +
+      " the external URI was not started; was start() called?")
+    Set(externalUriFuture.get(timeoutSeconds, TimeUnit.SECONDS))
+  }
+
+  override def onStop(): Unit = {
+    Utils.tryLogNonFatalError {
+      externalUriSetWatch.foreach(_.close())
+      externalUriSetWatch = None
+    }
+  }
+}
+
+private[spark] object ExternalSuppliedUrisDriverServiceManager {
+  val TYPE = "ExternalAnnotation"
+}
+
 private[spark] class ExternalUriSetWatcher(externalUriFuture: SettableFuture[String])
   extends Watcher[Service] with Logging {
 
@@ -47,55 +101,5 @@ private[spark] class ExternalUriSetWatcher(externalUriFuture: SettableFuture[Str
   override def onClose(cause: KubernetesClientException): Unit = {
     logDebug("External URI set watcher closed.", cause)
   }
-}
-
-private[spark] class ExternalSuppliedUrisDriverServiceManager
-  extends DriverServiceManager with Logging {
-
-  private val externalUriFuture = SettableFuture.create[String]
-  private var externalUriSetWatch: Option[Watch] = None
-
-  override def start(
-      kubernetesClient: KubernetesClient,
-      serviceName: String,
-      sparkConf: SparkConf): Unit = {
-    super.start(kubernetesClient, serviceName, sparkConf)
-    externalUriSetWatch = Some(kubernetesClient
-      .services()
-      .withName(serviceName)
-      .watch(new ExternalUriSetWatcher(externalUriFuture)))
-  }
-
-  override def getServiceManagerType: String = ExternalSuppliedUrisDriverServiceManager.TYPE
-
-  override def getDriverServiceSubmissionServerUris(driverService: Service): Set[String] = {
-    val timeoutSeconds = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_TIMEOUT)
-    require(externalUriSetWatch.isDefined, "The watch that listens for the provision of" +
-      " the external URI was not started; was start() called?")
-    Set(externalUriFuture.get(timeoutSeconds, TimeUnit.SECONDS))
-  }
-
-  override def customizeDriverService(driverServiceTemplate: ServiceBuilder): ServiceBuilder = {
-    require(serviceName != null, "Service name was null; was start() called?")
-    driverServiceTemplate
-      .editMetadata()
-        .addToAnnotations(ANNOTATION_PROVIDE_EXTERNAL_URI, "true")
-        .endMetadata()
-      .editSpec()
-        .withType("ClusterIP")
-        .endSpec()
-  }
-
-  override def stop(): Unit = {
-    super.stop()
-    Utils.tryLogNonFatalError {
-      externalUriSetWatch.foreach(_.close())
-      externalUriSetWatch = None
-    }
-  }
-}
-
-private[spark] object ExternalSuppliedUrisDriverServiceManager {
-  val TYPE = "ExternalAnnotation"
 }
 

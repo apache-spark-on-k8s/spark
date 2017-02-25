@@ -23,7 +23,7 @@ import io.fabric8.kubernetes.client.KubernetesClient
 import org.apache.spark.SparkConf
 
 /**
- * Implementations of this interface as responsible for exposing the driver pod by:
+ * Implementations of this interface are responsible for exposing the driver pod by:
  * - Creating a Kubernetes Service that is backed by the driver pod, and
  * - Providing one or more URIs that the service can be reached at from the submission client.
  *
@@ -45,19 +45,24 @@ trait DriverServiceManager {
    */
   def getServiceManagerType: String
 
-  /**
-   * Guaranteed to be called before {@link createDriverService} or
-   * {@link getDriverServiceSubmissionServerUris} is called. If this is overridden,
-   * always make sure to invoke super().
-   */
-  def start(
+  final def start(
       kubernetesClient: KubernetesClient,
       serviceName: String,
       sparkConf: SparkConf): Unit = {
     this.kubernetesClient = kubernetesClient
     this.serviceName = serviceName
     this.sparkConf = sparkConf
+    onStart(kubernetesClient, serviceName, sparkConf)
   }
+
+  /**
+    * Guaranteed to be called before {@link createDriverService} or
+    * {@link getDriverServiceSubmissionServerUris} is called.
+    */
+  protected def onStart(
+      kubernetesClient: KubernetesClient,
+      serviceName: String,
+      sparkConf: SparkConf): Unit = {}
 
   /**
    * Customize the driver service that overlays on the driver pod.
@@ -78,16 +83,18 @@ trait DriverServiceManager {
   def getDriverServiceSubmissionServerUris(driverService: Service): Set[String]
 
   /**
-   * Called when the Spark application ended up failing to start. Allows the service
+   * Called when the Spark application failed to start. Allows the service
    * manager to clean up any state it may have created that should not be persisted
    * in the case of an unsuccessful launch. Note that stop() is still called
    * regardless if this method is called.
    */
   def handleSubmissionError(cause: Throwable): Unit = {}
 
+  final def stop(): Unit = onStop()
+
   /**
-   * Perform any cleanup of this service manager. If overridden, be sure to invoke
+   * Perform any cleanup of this service manager.
    * the super implementation.
    */
-  def stop() {}
+  protected def onStop(): Unit = {}
 }

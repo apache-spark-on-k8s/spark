@@ -23,7 +23,17 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
 
+/**
+ * Creates the service with an open NodePort. The URI to reach the submission server is thus
+ * at the address of any of the nodes through the service's node port.
+ */
 private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManager with Logging {
+
+  override def getServiceManagerType: String = NodePortUrisDriverServiceManager.TYPE
+
+  override def customizeDriverService(driverServiceTemplate: ServiceBuilder): ServiceBuilder = {
+    driverServiceTemplate.editSpec().withType("NodePort").endSpec()
+  }
 
   override def getDriverServiceSubmissionServerUris(driverService: Service): Set[String] = {
     val urlScheme = if (sparkConf.get(DRIVER_SUBMIT_SSL_ENABLED)) {
@@ -52,13 +62,6 @@ private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManag
       }).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     nodeUrls
-  }
-
-  override def getServiceManagerType: String = NodePortUrisDriverServiceManager.TYPE
-
-  override def customizeDriverService(driverServiceTemplate: ServiceBuilder)
-      : ServiceBuilder = {
-    driverServiceTemplate.editSpec().withType("NodePort").endSpec()
   }
 }
 
