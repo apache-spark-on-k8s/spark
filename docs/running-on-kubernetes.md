@@ -127,8 +127,10 @@ namespace (set by `spark.kubernetes.namespace`). The process should determine a 
 annotation `spark-job.alpha.apache.org/resolvedExternalUri`, which has its value as the external URI that your process
 has provided (e.g. `https://example.com:8080/my-job`).
 
-Note that if the URI provided by the annotation also provides a base path, the base path should be removed when the
-request is forwarded to the back end pod.
+Note that the URI provided in the annotation needs to route traffic to the appropriate destination on the pod, which has
+a empty path portion of the URI. This means the external URI provider will likely need to rewrite the path from the
+external URI to the destination on the pod, e.g. https://example.com:8080/spark-app-1/submit will need to route traffic
+to https://<pod_ip>:<service_port>/. Note that the paths of these two URLs are different.
 
 If the above is confusing, keep in mind that this functionality is only necessary if the submitter cannot reach any of
 the nodes at the driver's node port. It is recommended to use the default configuration with the node port service
