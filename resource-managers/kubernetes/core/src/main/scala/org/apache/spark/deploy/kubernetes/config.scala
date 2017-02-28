@@ -110,10 +110,10 @@ package object config {
     ConfigBuilder("spark.kubernetes.driver.memoryOverhead")
       .doc("""
           | The amount of off-heap memory (in megabytes) to be
-          | allocated for the driver. This is memory that accounts for
-          | things like VM overheads, interned strings, other native
-          | overheads, etc. This tends to grow with the driver's memory
-          | size (typically 6-10%).
+          | allocated for the driver and the driver submission server.
+          | This is memory that accounts for things like VM overheads,
+          | interned strings, other native overheads, etc. This tends
+          | to grow with the driver's memory size (typically 6-10%).
            """.stripMargin)
       .stringConf
       .createOptional
@@ -169,7 +169,7 @@ package object config {
         .createOptional
 
   private[spark] val KUBERNETES_DRIVER_SUBMIT_SERVER_MEMORY =
-    ConfigBuilder("spark.kubernetes.driver.submitServerMemory")
+    ConfigBuilder("spark.kubernetes.driver.submissionServerMemory")
       .doc("""
           | The amount of memory to allocate for the driver submission server.
         """.stripMargin)
