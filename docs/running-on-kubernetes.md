@@ -117,14 +117,15 @@ that is opened on every node. The submission client will then contact the driver
 addresses with the appropriate service port.
 
 There may be cases where the nodes cannot be reached by the submission client. For example, the cluster may
-only be reachable through an external load balancer. The user may provide their own external IP for Spark driver
-services. To use a your own external IP instead of a node's IP, first set
+only be reachable through an external load balancer. The user may provide their own external URI for Spark driver
+services. To use a your own external URI instead of a node's IP and node port, first set
 `spark.kubernetes.driver.serviceManagerType` to `ExternalAnnotation`. A service will be created with the annotation
 `spark-job.alpha.apache.org/provideExternalUri`, and this service routes to the driver pod. You will need to run a
-process that watches the API server for services that are created with this annotation in the application's namespace
-(set by `spark.kubernetes.namespace`). The process should determine a URI that routes to this service, and patch the
-service to include an annotation `spark-job.alpha.apache.org/resolvedExternalUri`, which has its value as the external
-URI that your process has provided (e.g. `https://example.com:8080/my-job`).
+separate process that watches the API server for services that are created with this annotation in the application's
+namespace (set by `spark.kubernetes.namespace`). The process should determine a URI that routes to this service
+(potentially configuring infrastructure to handle the URI behind the scenes), and patch the service to include an
+annotation `spark-job.alpha.apache.org/resolvedExternalUri`, which has its value as the external URI that your process
+has provided (e.g. `https://example.com:8080/my-job`).
 
 Note that if the URI provided by the annotation also provides a base path, the base path should be removed when the
 request is forwarded to the back end pod.
@@ -250,11 +251,11 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td>
     A tag indicating which class to use for creating the Kubernetes service and determining its URI for the submission
     client. Valid values are currently <code>NodePort</code> and <code>ExternalAnnotation</code>. By default, a service
-    is created with the NodePort type, and the driver will be contacted at one of the kubelet nodes at the port that the
-    Kubelets expose for the service. If the Kubelets cannot be contacted from the submitter's machine, consider setting
-    this to <code>ExternalAnnotation</code> as described in "Determining the Driver Base URI" above. One may also
-    include a custom implementation of <code>org.apache.spark.deploy.rest.kubernetes.DriverServiceManager</code> on the
-    submitter's classpath - spark-submit loads an instance of that class via Service Loading. To use the custom
+    is created with the <code>NodePort</code> type, and the driver will be contacted at one of the nodes at the port
+    that the nodes expose for the service. If the nodes cannot be contacted from the submitter's machine, consider
+    setting this to <code>ExternalAnnotation</code> as described in "Determining the Driver Base URI" above. One may
+    also include a custom implementation of <code>org.apache.spark.deploy.rest.kubernetes.DriverServiceManager</code> on
+    the submitter's classpath - spark-submit service loads an instance of that class. To use the custom
     implementation, set this value to the custom implementation's return value of 
     <code>DriverServiceManager#getServiceManagerType()</code>. This method should only be done as a last resort.
   </td>
