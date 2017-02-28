@@ -56,9 +56,9 @@ trait DriverServiceManager {
   }
 
   /**
-    * Guaranteed to be called before {@link createDriverService} or
-    * {@link getDriverServiceSubmissionServerUris} is called.
-    */
+   * Guaranteed to be called before {@link createDriverService} or
+   * {@link getDriverServiceSubmissionServerUris} is called.
+   */
   protected def onStart(
       kubernetesClient: KubernetesClient,
       serviceName: String,
