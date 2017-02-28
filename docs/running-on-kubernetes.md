@@ -179,6 +179,22 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.driver.submitServerMemory</code></td>
+  <td>256m</td>
+  <td>
+    The amount of memory to allocate for the driver submission server.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.driver.memoryOverhead</code></td>
+  <td>(driverMemory + driverSubmissionServerMemory) * 0.10, with minimum of 384 </td>
+  <td>
+    The amount of off-heap memory (in megabytes) to be allocated for the driver. This is memory that accounts for things
+    like VM overheads, interned strings, other native overheads, etc. This tends to grow with the driver size
+    (typically 6-10%).
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.driver.labels</code></td>
   <td>(none)</td>
   <td>

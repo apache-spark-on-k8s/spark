@@ -63,9 +63,12 @@ package object constants {
   private[spark] val ENV_EXECUTOR_MEMORY = "SPARK_EXECUTOR_MEMORY"
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"
   private[spark] val ENV_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
+  private[spark] val ENV_DRIVER_MEMORY = "SPARK_DRIVER_MEMORY"
 
   // Miscellaneous
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_SUBMIT_SSL_NAMESPACE = "kubernetes.submit"
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
+  private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
+  private[spark] val MEMORY_OVERHEAD_MIN = 384L
 }

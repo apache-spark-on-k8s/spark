@@ -60,7 +60,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     .getOrElse(
       throw new SparkException("Must specify the driver pod name"))
 
-  private val executorMemory = conf.getOption("spark.executor.memory").getOrElse("1g")
+  private val executorMemory = conf.get("spark.executor.memory", "1g")
   private val executorMemoryBytes = Utils.byteStringAsBytes(executorMemory)
 
   private val memoryOverheadBytes = conf
@@ -261,7 +261,5 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
 private object KubernetesClusterSchedulerBackend {
   private val DEFAULT_STATIC_PORT = 10000
-  private val MEMORY_OVERHEAD_FACTOR = 0.10
-  private val MEMORY_OVERHEAD_MIN = 384L
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 }
