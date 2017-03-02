@@ -90,6 +90,10 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
 
   private def closeWatch(): Unit = {
     podCompletedFuture.countDown()
+    shutdown()
+  }
+
+  def shutdown(): Unit = {
     scheduler.shutdown()
   }
 
