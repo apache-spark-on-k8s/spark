@@ -64,17 +64,17 @@ private[spark] class Client(
     .getOrElse(Array.empty[String])
 
   // Memory settings
-  private val driverMemory = sparkConf.get("spark.driver.memory", "1g")
-  private val driverMemoryBytes = Utils.byteStringAsBytes(driverMemory)
-  private val driverSubmitServerMemory = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_SERVER_MEMORY)
-  private val driverSubmitServerMemoryBytes = Utils.byteStringAsBytes(driverSubmitServerMemoryBytes)
-  private val driverContainerMemoryBytes = driverMemoryBytes + driverSubmitServerMemoryBytes
-  private val memoryOverheadBytes = sparkConf
+  private val driverMemoryMb = sparkConf.get(org.apache.spark.internal.config.DRIVER_MEMORY)
+  private val driverSubmitServerMemoryMb = sparkConf.get(KUBERNETES_DRIVER_SUBMIT_SERVER_MEMORY)
+  private val driverSubmitServerMemoryString = sparkConf.get(
+    KUBERNETES_DRIVER_SUBMIT_SERVER_MEMORY.key,
+    KUBERNETES_DRIVER_SUBMIT_SERVER_MEMORY.defaultValueString)
+  private val driverContainerMemoryMb = driverMemoryMb + driverSubmitServerMemoryMb
+  private val memoryOverheadMb = sparkConf
     .get(KUBERNETES_DRIVER_MEMORY_OVERHEAD)
-    .map(overhead => Utils.byteStringAsBytes(overhead))
-    .getOrElse(math.max((MEMORY_OVERHEAD_FACTOR * driverContainerMemoryBytes).toInt,
+    .getOrElse(math.max((MEMORY_OVERHEAD_FACTOR * driverContainerMemoryMb).toInt,
       MEMORY_OVERHEAD_MIN))
-  private val driverContainerMemoryWithOverhead = driverContainerMemoryBytes + memoryOverheadBytes
+  private val driverContainerMemoryWithOverhead = driverContainerMemoryMb + memoryOverheadMb
 
   private val waitForAppCompletion: Boolean = sparkConf.get(WAIT_FOR_APP_COMPLETION)
 
@@ -387,10 +387,10 @@ private[spark] class Client(
       .withNewPort(SUBMISSION_SERVER_PORT_NAME)
       .build()
     val driverMemoryQuantity = new QuantityBuilder(false)
-      .withAmount(driverContainerMemoryBytes.toString)
+      .withAmount(s"${driverContainerMemoryMb}M")
       .build()
     val driverMemoryLimitQuantity = new QuantityBuilder(false)
-      .withAmount(driverContainerMemoryWithOverhead.toString)
+      .withAmount(s"${driverContainerMemoryWithOverhead}M")
       .build()
     kubernetesClient.pods().createNew()
       .withNewMetadata()
@@ -428,7 +428,7 @@ private[spark] class Client(
           // Note that SPARK_DRIVER_MEMORY only affects the REST server via spark-class.
           .addNewEnv()
             .withName(ENV_DRIVER_MEMORY)
-            .withValue(driverSubmitServerMemory)
+            .withValue(driverSubmitServerMemoryString)
             .endEnv()
           .addToEnv(sslConfiguration.sslPodEnvVars: _*)
           .withNewResources()

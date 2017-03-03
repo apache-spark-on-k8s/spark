@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion}
 import org.apache.spark.internal.config.ConfigBuilder
+import org.apache.spark.network.util.ByteUnit
 
 package object config {
 
@@ -103,7 +104,7 @@ package object config {
           | overheads, etc. This tends to grow with the executor size
           | (typically 6-10%).
         """.stripMargin)
-      .stringConf
+      .bytesConf(ByteUnit.MiB)
       .createOptional
 
   private[spark] val KUBERNETES_DRIVER_MEMORY_OVERHEAD =
@@ -115,7 +116,7 @@ package object config {
           | interned strings, other native overheads, etc. This tends
           | to grow with the driver's memory size (typically 6-10%).
            """.stripMargin)
-      .stringConf
+      .bytesConf(ByteUnit.MiB)
       .createOptional
 
   private[spark] val KUBERNETES_DRIVER_LABELS =
@@ -173,8 +174,8 @@ package object config {
       .doc("""
           | The amount of memory to allocate for the driver submission server.
         """.stripMargin)
-      .stringConf
-      .createWithDefault("256m")
+      .bytesConf(ByteUnit.MiB)
+      .createWithDefaultString("256m")
 
   private[spark] val EXPOSE_KUBERNETES_DRIVER_SERVICE_UI_PORT =
     ConfigBuilder("spark.kubernetes.driver.service.exposeUiPort")
