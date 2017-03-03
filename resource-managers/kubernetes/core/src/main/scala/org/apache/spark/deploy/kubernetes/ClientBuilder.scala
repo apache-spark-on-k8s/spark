@@ -20,11 +20,12 @@ import java.io.File
 
 import com.google.common.base.Charsets
 import com.google.common.io.Files
-import io.fabric8.kubernetes.client.{Config, ConfigBuilder, DefaultKubernetesClient}
+import io.fabric8.kubernetes.client.{BaseClient, Config, ConfigBuilder, DefaultKubernetesClient}
+import okhttp3._
 
 import org.apache.spark.deploy.kubernetes.constants._
 
-private[spark] object KubernetesClientBuilder {
+private[spark] object ClientBuilder {
   private val API_SERVER_TOKEN = new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH)
   private val CA_CERT_FILE = new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH)
 
@@ -34,7 +35,7 @@ private[spark] object KubernetesClientBuilder {
    * are picked up from canonical locations, as they are injected
    * into the pod's disk space.
    */
-  def buildFromWithinPod(
+  def buildK8sClientFromWithinPod(
       kubernetesNamespace: String): DefaultKubernetesClient = {
     var clientConfigBuilder = new ConfigBuilder()
       .withApiVersion("v1")
@@ -50,5 +51,15 @@ private[spark] object KubernetesClientBuilder {
         Files.toString(API_SERVER_TOKEN, Charsets.UTF_8))
     }
     new DefaultKubernetesClient(clientConfigBuilder.build)
+  }
+
+  def buildOkhttpClientFromWithinPod(client: BaseClient): OkHttpClient = {
+    val field = classOf[BaseClient].getDeclaredField("httpClient")
+    try {
+      field.setAccessible(true)
+      field.get(client).asInstanceOf[OkHttpClient]
+    } finally {
+      field.setAccessible(false)
+    }
   }
 }

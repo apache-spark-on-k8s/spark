@@ -74,4 +74,9 @@ package object constants {
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_SUBMIT_SSL_NAMESPACE = "kubernetes.submit"
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
+
+  // TPR
+  private[spark] val TPR_API_VERSION = "apache.io/v1"
+  private[spark] val TPR_API_ENDPOINT = s"apis/%s/namespaces/%s/sparkjobs"
+  private[spark] val TPR_KIND = "SparkJob"
 }

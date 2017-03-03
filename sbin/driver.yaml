@@ -1,0 +1,8 @@
+apiVersion: "apache.io/v1"
+kind: "SparkJob"
+metadata:
+  name: "spark-job-1"
+spec:
+  image: "driver-image"
+  state: "completed"
+  num-executors: 10

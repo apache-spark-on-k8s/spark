@@ -16,17 +16,14 @@
  */
 package org.apache.spark.scheduler.cluster.kubernetes
 
-import java.util.UUID
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder
 import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 import org.apache.spark.{SparkContext, SparkException}
-import org.apache.spark.deploy.kubernetes.{Client, KubernetesClientBuilder}
+import org.apache.spark.deploy.kubernetes.ClientBuilder
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.rpc.RpcEndpointAddress
@@ -75,8 +72,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
-  private val kubernetesClient = KubernetesClientBuilder
-    .buildFromWithinPod(kubernetesNamespace)
+  private val kubernetesClient = ClientBuilder
+    .buildK8sClientFromWithinPod(kubernetesNamespace)
 
   private val driverPod = try {
     kubernetesClient.pods().inNamespace(kubernetesNamespace).
@@ -87,7 +84,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       throw new SparkException(s"Executor cannot find driver pod", throwable)
   }
 
-  override val minRegisteredRatio =
+  override val minRegisteredRatio: Double =
     if (conf.getOption("spark.scheduler.minRegisteredResourcesRatio").isEmpty) {
       0.8
     } else {
@@ -101,7 +98,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     sc.getConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT),
     CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
 
-  private val initialExecutors = getInitialTargetExecutorNumber(1)
+  private val initialExecutors = getInitialTargetExecutorNumber()
 
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
     if (Utils.isDynamicAllocationEnabled(conf)) {
@@ -237,7 +234,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
         logInfo(s"Requesting ${requestedTotal - totalExpectedExecutors.get}"
           + s" additional executors, expecting total $requestedTotal and currently" +
           s" expected ${totalExpectedExecutors.get}")
-        for (i <- 0 until (requestedTotal - totalExpectedExecutors.get)) {
+        for (_ <- 0 until (requestedTotal - totalExpectedExecutors.get)) {
           runningExecutorPods += allocateNewExecutorPod()
         }
       }
