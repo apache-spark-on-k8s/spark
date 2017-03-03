@@ -19,6 +19,7 @@ package org.apache.spark.deploy.kubernetes
 import java.util.concurrent.TimeUnit
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion}
+import org.apache.spark.deploy.rest.kubernetes.NodePortUrisDriverServiceManager
 import org.apache.spark.internal.config.ConfigBuilder
 import org.apache.spark.network.util.ByteUnit
 
@@ -131,6 +132,16 @@ package object config {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_DRIVER_ANNOTATIONS =
+    ConfigBuilder("spark.kubernetes.driver.annotations")
+      .doc("""
+             | Custom annotations that will be added to the driver pod.
+             | This should be a comma-separated list of annotation key-value
+             | pairs, where each annotation is in the format key=value.
+           """.stripMargin)
+      .stringConf
+      .createOptional
+
   private[spark] val KUBERNETES_DRIVER_SUBMIT_TIMEOUT =
     ConfigBuilder("spark.kubernetes.driverSubmitTimeout")
       .doc("""
@@ -158,6 +169,16 @@ package object config {
         """.stripMargin)
       .stringConf
       .createOptional
+
+  private[spark] val DRIVER_SUBMIT_SSL_ENABLED =
+    ConfigBuilder("spark.ssl.kubernetes.submit.enabled")
+      .doc("""
+             | Whether or not to use SSL when sending the
+             | application dependencies to the driver pod.
+             |
+           """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
 
   private[spark] val KUBERNETES_DRIVER_SERVICE_NAME =
     ConfigBuilder("spark.kubernetes.driver.service.name")
@@ -194,6 +215,16 @@ package object config {
       .internal()
       .stringConf
       .createOptional
+
+  private[spark] val DRIVER_SERVICE_MANAGER_TYPE =
+    ConfigBuilder("spark.kubernetes.driver.serviceManagerType")
+      .doc(s"""
+          | A tag indicating which class to use for creating the
+          | Kubernetes service and determining its URI for the submission
+          | client.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault(NodePortUrisDriverServiceManager.TYPE)
 
   private[spark] val WAIT_FOR_APP_COMPLETION =
     ConfigBuilder("spark.kubernetes.submit.waitAppCompletion")
