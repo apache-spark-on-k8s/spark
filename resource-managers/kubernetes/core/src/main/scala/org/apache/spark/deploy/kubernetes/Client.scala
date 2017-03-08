@@ -134,8 +134,8 @@ private[spark] class Client(
     }
     sparkConf.get(KUBERNETES_OAUTH_TOKEN_FILE).foreach { f =>
       val oauthTokenFile = new File(f)
-      require(oauthTokenFile.isFile, s"OAuth token file provided at $f does not exist or is" +
-        s" not a file.")
+      require(oauthTokenFile.isFile,
+        s"OAuth token file provided at $f does not exist or is not a file.")
       val oauthToken = Files.toString(oauthTokenFile, Charsets.UTF_8)
       k8ConfBuilder = k8ConfBuilder.withOauthToken(oauthToken)
     }

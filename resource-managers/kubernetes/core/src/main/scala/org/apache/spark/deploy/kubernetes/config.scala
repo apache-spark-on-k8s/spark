@@ -86,11 +86,11 @@ package object config {
   private[spark] val KUBERNETES_OAUTH_TOKEN_FILE =
     ConfigBuilder("spark.kubernetes.submit.oauthTokenFile")
       .doc("""
-             | File containing an OAuth token for authenticating
-             | against the Kubernetes API server. This file
-             | should be located on the submitting machine's
-             | disk.
-           """.stripMargin)
+          | File containing an OAuth token for authenticating
+          | against the Kubernetes API server. This file
+          | should be located on the submitting machine's
+          | disk.
+        """.stripMargin)
       .stringConf
       .createOptional
 
