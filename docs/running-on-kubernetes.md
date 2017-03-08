@@ -223,6 +223,14 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.submit.oauthTokenFile</code></td>
+  <td>(none)</td>
+  <td>
+    File containing an OAuth token for authenticating against the Kubernetes API server. This file should be located on
+    the submitting machine's disk.
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.submit.serviceAccountName</code></td>
   <td><code>default</code></td>
   <td>

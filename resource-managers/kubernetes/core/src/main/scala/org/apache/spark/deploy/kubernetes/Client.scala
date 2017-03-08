@@ -21,10 +21,11 @@ import java.security.SecureRandom
 import java.util.ServiceLoader
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
+import com.google.common.base.Charsets
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher, ConfigBuilder => K8SConfigBuilder}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
 import scala.collection.JavaConverters._
@@ -130,6 +131,13 @@ private[spark] class Client(
     }
     sparkConf.get(KUBERNETES_CLIENT_CERT_FILE).foreach {
       f => k8ConfBuilder = k8ConfBuilder.withClientCertFile(f)
+    }
+    sparkConf.get(KUBERNETES_OAUTH_TOKEN_FILE).foreach { f =>
+      val oauthTokenFile = new File(f)
+      require(oauthTokenFile.isFile, s"OAuth token file provided at $f does not exist or is" +
+        s" not a file.")
+      val oauthToken = Files.toString(oauthTokenFile, Charsets.UTF_8)
+      k8ConfBuilder = k8ConfBuilder.withOauthToken(oauthToken)
     }
 
     val k8ClientConfig = k8ConfBuilder.build
