@@ -94,7 +94,6 @@ package object config {
       .stringConf
       .createOptional
 
-
   private[spark] val KUBERNETES_SERVICE_ACCOUNT_NAME =
     ConfigBuilder("spark.kubernetes.submit.serviceAccountName")
       .doc("""
