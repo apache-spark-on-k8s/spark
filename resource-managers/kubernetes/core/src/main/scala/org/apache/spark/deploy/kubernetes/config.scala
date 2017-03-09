@@ -83,13 +83,14 @@ package object config {
       .stringConf
       .createOptional
 
-  private[spark] val KUBERNETES_OAUTH_TOKEN_FILE =
-    ConfigBuilder("spark.kubernetes.submit.oauthTokenFile")
+  private[spark] val KUBERNETES_OAUTH_TOKEN =
+    ConfigBuilder("spark.kubernetes.submit.oauthToken")
       .doc("""
-          | File containing an OAuth token for authenticating
-          | against the Kubernetes API server. This file
-          | should be located on the submitting machine's
-          | disk.
+          | OAuth token to use when authenticating against the
+          | against the Kubernetes API server. Note that unlike
+          | the other authentication options, this should be the
+          | exact string value of the token to use for the
+          | authentication.
         """.stripMargin)
       .stringConf
       .createOptional

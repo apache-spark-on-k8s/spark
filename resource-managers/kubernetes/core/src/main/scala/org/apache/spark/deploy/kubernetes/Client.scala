@@ -132,12 +132,10 @@ private[spark] class Client(
     sparkConf.get(KUBERNETES_CLIENT_CERT_FILE).foreach {
       f => k8ConfBuilder = k8ConfBuilder.withClientCertFile(f)
     }
-    sparkConf.get(KUBERNETES_OAUTH_TOKEN_FILE).foreach { f =>
-      val oauthTokenFile = new File(f)
-      require(oauthTokenFile.isFile,
-        s"OAuth token file provided at $f does not exist or is not a file.")
-      val oauthToken = Files.toString(oauthTokenFile, Charsets.UTF_8)
-      k8ConfBuilder = k8ConfBuilder.withOauthToken(oauthToken)
+    sparkConf.get(KUBERNETES_OAUTH_TOKEN).foreach { token =>
+      k8ConfBuilder = k8ConfBuilder.withOauthToken(token)
+      // Remove the oauth token from Spark conf so that its doesn't appear in the Spark UI.
+      sparkConf.set(KUBERNETES_OAUTH_TOKEN, "<present_but_redacted>")
     }
 
     val k8ClientConfig = k8ConfBuilder.build
