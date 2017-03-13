@@ -88,6 +88,16 @@
       <artifactId>guava</artifactId>
     </dependency>
     <!-- End of shaded deps. -->
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpkix-jdk15on</artifactId>
+      <scope>test</scope>
+    </dependency>
 
   </dependencies>
 

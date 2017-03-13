@@ -22,7 +22,7 @@ import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
 import com.google.common.base.Charsets
 import com.google.common.io.{BaseEncoding, Files}
-import io.fabric8.kubernetes.api.model.{EnvVar, EnvVarBuilder, Secret, Volume, VolumeBuilder, VolumeMount, VolumeMountBuilder}
+import io.fabric8.kubernetes.api.model.{EnvVar, EnvVarBuilder, Secret, SecretBuilder, Volume, VolumeBuilder, VolumeMount, VolumeMountBuilder}
 import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -112,13 +112,14 @@ private[spark] class SslConfigurationProvider(
         .withReadOnly(true)
         .withMountPath(sslSecretsDirectory)
         .build()
-      val sslSecrets = kubernetesClient.secrets().createNew()
+      val sslSecretsModel = new SecretBuilder()
         .withNewMetadata()
         .withName(sslSecretsName)
         .endMetadata()
         .withData(sslSecretsMap.asJava)
         .withType("Opaque")
-        .done()
+        .build()
+      val sslSecrets = kubernetesClient.secrets().create(sslSecretsModel)
       kubernetesResourceCleaner.registerOrUpdateResource(sslSecrets)
       secrets += sslSecrets
       val (driverSubmitClientTrustManager, driverSubmitClientSslContext) =

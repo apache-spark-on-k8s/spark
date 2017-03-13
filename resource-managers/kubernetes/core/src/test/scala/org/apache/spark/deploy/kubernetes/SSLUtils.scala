@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.integrationtest.sslutil
+package org.apache.spark.deploy.kubernetes
 
 import java.io.{File, FileOutputStream}
 import java.math.BigInteger
@@ -61,7 +61,8 @@ private[spark] object SSLUtils {
     keyStore.load(null, null)
     keyStore.setKeyEntry("key", keyPair.getPrivate,
       keyPassword.toCharArray, Array(jcaCertificate))
-    val tempDir = Files.createTempDirectory("temp-ssl-stores").toFile()
+    val tempDir = Files.createTempDirectory("temp-ssl-stores").toFile
+    tempDir.deleteOnExit()
     tempDir.deleteOnExit()
     val keyStoreFile = new File(tempDir, "keyStore.jks")
     Utils.tryWithResource(new FileOutputStream(keyStoreFile)) {
