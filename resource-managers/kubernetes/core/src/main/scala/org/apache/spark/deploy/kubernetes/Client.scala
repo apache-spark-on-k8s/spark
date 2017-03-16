@@ -209,7 +209,6 @@ private[spark] class Client(
           Utils.tryLogNonFatalError {
             driverServiceManager.stop()
           }
-
           // Remove the shutdown hooks that would be redundant
           Utils.tryLogNonFatalError {
             ShutdownHookManager.removeShutdownHook(resourceCleanShutdownHook)
@@ -349,7 +348,7 @@ private[spark] class Client(
   private def configureOwnerReferences(
       kubernetesClient: KubernetesClient,
       submitServerSecret: Secret,
-      sslSecrets: Array[Secret],
+      sslSecrets: Option[Secret],
       driverPod: Pod,
       driverService: Service): Service = {
     val driverPodOwnerRef = new OwnerReferenceBuilder()
@@ -428,7 +427,7 @@ private[spark] class Client(
       sslConfiguration: SslConfiguration): Pod = {
     val containerPorts = buildContainerPorts()
     val probePingHttpGet = new HTTPGetActionBuilder()
-      .withScheme(if (sslConfiguration.sslOptions.enabled) "HTTPS" else "HTTP")
+      .withScheme(if (sslConfiguration.enabled) "HTTPS" else "HTTP")
       .withPath("/v1/submissions/ping")
       .withNewPort(SUBMISSION_SERVER_PORT_NAME)
       .build()
@@ -452,7 +451,7 @@ private[spark] class Client(
             .withSecretName(submitServerSecret.getMetadata.getName)
             .endSecret()
           .endVolume()
-        .addToVolumes(sslConfiguration.sslPodVolumes: _*)
+        .addToVolumes(sslConfiguration.sslPodVolume.toSeq: _*)
         .withServiceAccount(serviceAccount.getOrElse("default"))
         .addNewContainer()
           .withName(DRIVER_CONTAINER_NAME)
@@ -463,7 +462,7 @@ private[spark] class Client(
             .withMountPath(secretDirectory)
             .withReadOnly(true)
             .endVolumeMount()
-          .addToVolumeMounts(sslConfiguration.sslPodVolumeMounts: _*)
+          .addToVolumeMounts(sslConfiguration.sslPodVolumeMount.toSeq: _*)
           .addNewEnv()
             .withName(ENV_SUBMISSION_SECRET_LOCATION)
             .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
