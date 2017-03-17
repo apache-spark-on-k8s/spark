@@ -174,11 +174,16 @@ private[spark] class Client(
             .done()
           kubernetesResourceCleaner.registerOrUpdateResource(submitServerSecret)
           val sslConfiguration = sslConfigurationProvider.getSslConfiguration()
-          val driverKubernetesSelectors = (Map(
-            SPARK_DRIVER_LABEL -> kubernetesAppId,
-            SPARK_APP_ID_LABEL -> kubernetesAppId,
-            SPARK_APP_NAME_LABEL -> appName)
-            ++ parsedCustomLabels)
+          val mountedHadoopConfigurations = new MountedHadoopConfigurationsProvider(
+            kubernetesAppId).get()
+          kubernetesResourceCleaner.registerOrUpdateResource(
+            kubernetesClient
+              .configMaps()
+              .create(mountedHadoopConfigurations.hadoopConfDir.confMap))
+          kubernetesResourceCleaner.registerOrUpdateResource(
+            kubernetesClient
+              .configMaps()
+              .create(mountedHadoopConfigurations.yarnConfDir.confMap))
           val (driverPod, driverService) = launchDriverKubernetesComponents(
             kubernetesClient,
             driverServiceManager,
@@ -294,7 +299,8 @@ private[spark] class Client(
       customLabels: Map[String, String],
       customAnnotations: Map[String, String],
       submitServerSecret: Secret,
-      sslConfiguration: SslConfiguration): (Pod, Service) = {
+      sslConfiguration: SslConfiguration,
+      mountedHadoopConfigurations: MountedHadoopConfigurations): (Pod, Service) = {
     val driverKubernetesSelectors = (Map(
       SPARK_DRIVER_LABEL -> kubernetesAppId,
       SPARK_APP_ID_LABEL -> kubernetesAppId,
@@ -327,7 +333,8 @@ private[spark] class Client(
             driverKubernetesSelectors,
             customAnnotations,
             submitServerSecret,
-            sslConfiguration)
+            sslConfiguration,
+            mountedHadoopConfigurations)
           waitForReadyKubernetesComponents(kubernetesClient, endpointsReadyFuture,
             serviceReadyFuture, podReadyFuture)
           (driverPod, driverService)
@@ -347,7 +354,9 @@ private[spark] class Client(
       submitServerSecret: Secret,
       sslSecrets: Array[Secret],
       driverPod: Pod,
-      driverService: Service): Service = {
+      driverService: Service,
+      hadoopConfDirConfigMap: ConfigMap,
+      yarnConfDirConfigMap: ConfigMap): Service = {
     val driverPodOwnerRef = new OwnerReferenceBuilder()
       .withName(driverPod.getMetadata.getName)
       .withUid(driverPod.getMetadata.getUid)
@@ -372,6 +381,24 @@ private[spark] class Client(
           .endMetadata()
         .done()
     kubernetesResourceCleaner.registerOrUpdateResource(updatedSubmitServerSecret)
+    val updatedHadoopConfDir = kubernetesClient
+      .configMaps()
+      .withName(hadoopConfDirConfigMap.getMetadata.getName)
+      .edit()
+        .editMetadata()
+          .addToOwnerReferences(driverPodOwnerRef)
+          .endMetadata()
+        .done()
+    kubernetesResourceCleaner.registerOrUpdateResource(updatedHadoopConfDir)
+    val updatedYarnConfDir = kubernetesClient
+      .configMaps()
+      .withName(yarnConfDirConfigMap.getMetadata.getName)
+      .edit()
+        .editMetadata()
+          .addToOwnerReferences(driverPodOwnerRef)
+          .endMetadata()
+        .done()
+    kubernetesResourceCleaner.registerOrUpdateResource(updatedYarnConfDir)
     val updatedService = kubernetesClient
       .services()
       .withName(driverService.getMetadata.getName)
@@ -421,7 +448,8 @@ private[spark] class Client(
       driverKubernetesSelectors: Map[String, String],
       customAnnotations: Map[String, String],
       submitServerSecret: Secret,
-      sslConfiguration: SslConfiguration): Pod = {
+      sslConfiguration: SslConfiguration,
+      mountedHadoopConfigurations: MountedHadoopConfigurations): Pod = {
     val containerPorts = buildContainerPorts()
     val probePingHttpGet = new HTTPGetActionBuilder()
       .withScheme(if (sslConfiguration.sslOptions.enabled) "HTTPS" else "HTTP")
@@ -449,6 +477,8 @@ private[spark] class Client(
             .endSecret()
           .endVolume()
         .addToVolumes(sslConfiguration.sslPodVolumes: _*)
+        .addToVolumes(mountedHadoopConfigurations.hadoopConfDir.confDirVolume)
+        .addToVolumes(mountedHadoopConfigurations.yarnConfDir.confDirVolume)
         .withServiceAccount(serviceAccount)
         .addNewContainer()
           .withName(DRIVER_CONTAINER_NAME)
@@ -460,6 +490,8 @@ private[spark] class Client(
             .withReadOnly(true)
             .endVolumeMount()
           .addToVolumeMounts(sslConfiguration.sslPodVolumeMounts: _*)
+          .addToVolumeMounts(mountedHadoopConfigurations.hadoopConfDir.confDirVolumeMount)
+          .addToVolumeMounts(mountedHadoopConfigurations.yarnConfDir.confDirVolumeMount)
           .addNewEnv()
             .withName(ENV_SUBMISSION_SECRET_LOCATION)
             .withValue(s"$secretDirectory/$SUBMISSION_APP_SECRET_NAME")
@@ -474,6 +506,8 @@ private[spark] class Client(
             .withValue(driverSubmitServerMemoryString)
             .endEnv()
           .addToEnv(sslConfiguration.sslPodEnvVars: _*)
+          .addToEnv(mountedHadoopConfigurations.hadoopConfDir.confDirEnv)
+          .addToEnv(mountedHadoopConfigurations.yarnConfDir.confDirEnv)
           .withNewResources()
             .addToRequests("memory", driverMemoryQuantity)
             .addToLimits("memory", driverMemoryLimitQuantity)
