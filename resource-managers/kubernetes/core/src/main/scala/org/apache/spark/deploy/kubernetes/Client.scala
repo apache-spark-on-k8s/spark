@@ -233,13 +233,13 @@ private[spark] class Client(
   }
 
   private def submitApplicationToDriverServer(
-                                               kubernetesClient: KubernetesClient,
-                                               driverServiceManager: DriverServiceManager,
-                                               sslConfiguration: DriverSubmitSslConfiguration,
-                                               driverService: Service,
-                                               submitterLocalFiles: Iterable[String],
-                                               submitterLocalJars: Iterable[String],
-                                               driverPodKubernetesCredentials: KubernetesCredentials): Unit = {
+      kubernetesClient: KubernetesClient,
+      driverServiceManager: DriverServiceManager,
+      sslConfiguration: DriverSubmitSslConfiguration,
+      driverService: Service,
+      submitterLocalFiles: Iterable[String],
+      submitterLocalJars: Iterable[String],
+      driverPodKubernetesCredentials: KubernetesCredentials): Unit = {
     sparkConf.getOption("spark.app.id").foreach { id =>
       logWarning(s"Warning: Provided app id in spark.app.id as $id will be" +
         s" overridden as $kubernetesAppId")
