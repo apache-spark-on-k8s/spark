@@ -48,9 +48,9 @@ private case class DriverSubmitSslConfigurationParameters(
 /**
  * Resolved from translating options provided in
  * {@link DriverSubmitSslConfigurationParameters} into Kubernetes volumes, environment variables
- * for the driver pod, client-side trust managers, and the client-side SSL context. This is used
- * for setting up the SSL connection for the submission server where the application local
- * dependencies and configuration is provided from.
+ * for the driver pod, Kubernetes secrets, client-side trust managers, and the client-side SSL
+ * context. This is used for setting up the SSL connection for the submission server where the
+ * application local dependencies and configuration is provided from.
  */
 private[spark] case class DriverSubmitSslConfiguration(
     enabled: Boolean,
@@ -65,8 +65,8 @@ private[spark] case class DriverSubmitSslConfiguration(
  * Provides the SSL configuration for bootstrapping the driver pod to listen for the driver
  * submission over SSL, and then supply the client-side configuration for establishing the
  * SSL connection. This is done in two phases: first, interpreting the raw configuration
- * values from the SparkConf object; then second, converting the configuration into the
- * appropriate Kubernetes constructs, namely the volume and volume mount to add to the
+ * values from the SparkConf object; then second, converting the configuration parameters
+ * into the appropriate Kubernetes constructs, namely the volume and volume mount to add to the
  * driver pod, and the secret to create at the API server; and finally, constructing the
  * client-side trust manager and SSL context for sending the local dependencies.
  */
