@@ -127,8 +127,9 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     })
     // spark-submit sets system properties so we have to clear them
     new SparkConf(true)
-      .getAll.map(_._1)
-      .filter(_ != "spark.docker.test.persistMinikube")
+      .getAll
+      .map(_._1)
+      .filterNot(_ == "spark.docker.test.persistMinikube")
       .foreach { System.clearProperty }
   }
 

@@ -23,7 +23,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 import org.apache.spark.{SparkContext, SparkException}
-import org.apache.spark.deploy.kubernetes.KubernetesClientBuilder
+import org.apache.spark.deploy.kubernetes.InPodKubernetesClientProvider
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.rpc.RpcEndpointAddress
@@ -73,7 +73,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
-  private val kubernetesClient = new KubernetesClientBuilder(conf, kubernetesNamespace)
+  private val kubernetesClient = new InPodKubernetesClientProvider(conf, kubernetesNamespace)
     .buildFromWithinPod()
 
   private val driverPod = try {

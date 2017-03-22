@@ -16,7 +16,7 @@
  */
 package org.apache.spark.deploy.rest.kubernetes
 
-import io.fabric8.kubernetes.api.model.{Service, ServiceBuilder}
+import io.fabric8.kubernetes.api.model.{Service, ServiceBuilder, ServicePortBuilder}
 import scala.collection.JavaConverters._
 
 import org.apache.spark.deploy.kubernetes.config._
@@ -62,6 +62,26 @@ private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManag
       }).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     nodeUrls
+  }
+
+  override def adjustDriverServiceAfterSubmission(driverService: Service): ServiceBuilder = {
+    // After submitting, adjust the service to only expose the Spark UI
+    val uiServiceType = if (sparkConf.get(EXPOSE_KUBERNETES_DRIVER_SERVICE_UI_PORT)) {
+      "NodePort"
+    } else {
+      "ClusterIP"
+    }
+    val uiPort = sparkConf.getInt("spark.ui.port", DEFAULT_UI_PORT)
+    val uiServicePort = new ServicePortBuilder()
+      .withName(UI_PORT_NAME)
+      .withPort(uiPort)
+      .withNewTargetPort(uiPort)
+      .build()
+    new ServiceBuilder(driverService)
+      .editSpec()
+      .withType(uiServiceType)
+      .withPorts(uiServicePort)
+      .endSpec()
   }
 }
 

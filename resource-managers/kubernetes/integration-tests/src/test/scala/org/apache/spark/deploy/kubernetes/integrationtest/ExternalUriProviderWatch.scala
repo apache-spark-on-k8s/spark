@@ -49,6 +49,11 @@ private[spark] class ExternalUriProviderWatch(kubernetesClient: KubernetesClient
             .edit()
               .editSpec()
                 .withType("NodePort")
+                .addNewPort()
+                  .withName(UI_PORT_NAME)
+                  .withPort(DEFAULT_UI_PORT)
+                  .withNewTargetPort(DEFAULT_UI_PORT)
+                  .endPort()
                 .endSpec()
             .done()
           val submissionServerPort = nodePortService

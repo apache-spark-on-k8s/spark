@@ -90,6 +90,15 @@ trait DriverServiceManager {
    */
   def handleSubmissionError(cause: Throwable): Unit = {}
 
+  /**
+   * Optionally adjust the driver service after the submission is complete. This
+   * can for example expose additional ports only after the application has started,
+   * or close the submission server's port from the service.
+   */
+  def adjustDriverServiceAfterSubmission(driverService: Service): ServiceBuilder = {
+    new ServiceBuilder(driverService)
+  }
+
   final def stop(): Unit = onStop()
 
   /**

@@ -36,9 +36,9 @@ import org.apache.spark.internal.Logging
  *                 logging will be disabled.
  */
 private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownLatch,
-                                                  appId: String,
-                                                  interval: Long)
-    extends Watcher[Pod] with Logging {
+    appId: String,
+    interval: Long)
+  extends Watcher[Pod] with Logging {
 
   // start timer for periodic logging
   private val scheduler = Executors.newScheduledThreadPool(1)
