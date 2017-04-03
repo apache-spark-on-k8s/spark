@@ -18,7 +18,8 @@ package org.apache.spark.scheduler.cluster.kubernetes
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder,
+    EnvVarSourceBuilder, Pod, QuantityBuilder}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
