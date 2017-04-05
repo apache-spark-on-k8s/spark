@@ -16,24 +16,14 @@
  */
 package org.apache.spark.scheduler.cluster.kubernetes
 
-import java.util.UUID
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-<<<<<<< HEAD
-import com.google.common.util.concurrent.ThreadFactoryBuilder
-import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
-||||||| parent of 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
-import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
-=======
-import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder,
-    EnvVarSourceBuilder, Pod, QuantityBuilder}
->>>>>>> 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
+import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, EnvVarSourceBuilder, Pod, QuantityBuilder}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 import org.apache.spark.{SparkContext, SparkException}
-import org.apache.spark.deploy.kubernetes.{Client, KubernetesClientBuilder}
+import org.apache.spark.deploy.kubernetes.KubernetesClientBuilder
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.rpc.RpcEndpointAddress
