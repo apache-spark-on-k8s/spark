@@ -172,7 +172,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val executorCpuQuantity = new QuantityBuilder(false)
       .withAmount(executorCores)
       .build()
-    var requiredEnv = Seq(
+    val requiredEnv = Seq(
       (ENV_EXECUTOR_PORT, executorPort.toString),
       (ENV_DRIVER_URL, driverUrl),
       (ENV_EXECUTOR_CORES, executorCores),
@@ -182,8 +182,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     ).map(env => new EnvVarBuilder()
       .withName(env._1)
       .withValue(env._2)
-      .build())
-    requiredEnv = requiredEnv ++ Seq(new EnvVarBuilder()
+      .build()) ++ Seq(new EnvVarBuilder()
       .withName(ENV_EXECUTOR_POD_IP)
       .withValueFrom(new EnvVarSourceBuilder()
         .withNewFieldRef("v1", "status.podIP")
