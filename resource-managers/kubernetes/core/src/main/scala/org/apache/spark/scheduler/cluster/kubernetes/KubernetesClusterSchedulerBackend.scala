@@ -20,8 +20,15 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
+<<<<<<< HEAD
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
+||||||| parent of 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
+import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, Pod, QuantityBuilder}
+=======
+import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder,
+    EnvVarSourceBuilder, Pod, QuantityBuilder}
+>>>>>>> 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -180,11 +187,19 @@ private[spark] class KubernetesClusterSchedulerBackend(
       (ENV_EXECUTOR_CORES, executorCores),
       (ENV_EXECUTOR_MEMORY, executorMemoryString),
       (ENV_APPLICATION_ID, applicationId()),
-      (ENV_EXECUTOR_ID, executorId)
-    ).map(env => new EnvVarBuilder()
-      .withName(env._1)
-      .withValue(env._2)
-      .build())
+      (ENV_EXECUTOR_ID, executorId))
+      .map(env => new EnvVarBuilder()
+        .withName(env._1)
+        .withValue(env._2)
+        .build()
+      ) ++ Seq(
+      new EnvVarBuilder()
+        .withName(ENV_EXECUTOR_POD_IP)
+        .withValueFrom(new EnvVarSourceBuilder()
+          .withNewFieldRef("v1", "status.podIP")
+          .build())
+        .build()
+      )
     val requiredPorts = Seq(
       (EXECUTOR_PORT_NAME, executorPort),
       (BLOCK_MANAGER_PORT_NAME, blockmanagerPort))

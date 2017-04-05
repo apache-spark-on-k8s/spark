@@ -255,8 +255,28 @@ private[spark] class Client(
     sparkConf.set("spark.app.id", kubernetesAppId)
     sparkConf.setIfMissing("spark.app.name", appName)
     sparkConf.setIfMissing("spark.driver.port", DEFAULT_DRIVER_PORT.toString)
+<<<<<<< HEAD
     sparkConf.setIfMissing("spark.blockmanager.port",
       DEFAULT_BLOCKMANAGER_PORT.toString)
+||||||| parent of 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
+    sparkConf.setIfMissing("spark.blockmanager.port",
+      DEFAULT_BLOCKMANAGER_PORT.toString)
+    sparkConf.get(KUBERNETES_SUBMIT_OAUTH_TOKEN).foreach { _ =>
+      sparkConf.set(KUBERNETES_SUBMIT_OAUTH_TOKEN, "<present_but_redacted>")
+    }
+    sparkConf.get(KUBERNETES_DRIVER_OAUTH_TOKEN).foreach { _ =>
+      sparkConf.set(KUBERNETES_DRIVER_OAUTH_TOKEN, "<present_but_redacted>")
+    }
+=======
+    sparkConf.setIfMissing("spark.driver.blockManager.port", DEFAULT_BLOCKMANAGER_PORT.toString)
+    sparkConf.setIfMissing("spark.blockManager.port", DEFAULT_BLOCKMANAGER_PORT.toString)
+    sparkConf.get(KUBERNETES_SUBMIT_OAUTH_TOKEN).foreach { _ =>
+      sparkConf.set(KUBERNETES_SUBMIT_OAUTH_TOKEN, "<present_but_redacted>")
+    }
+    sparkConf.get(KUBERNETES_DRIVER_OAUTH_TOKEN).foreach { _ =>
+      sparkConf.set(KUBERNETES_DRIVER_OAUTH_TOKEN, "<present_but_redacted>")
+    }
+>>>>>>> 0a13206df6... Register executors using pod IPs instead of pod host names (#215)
     val driverSubmitter = buildDriverSubmissionClient(
       kubernetesClient,
       driverServiceManager,
