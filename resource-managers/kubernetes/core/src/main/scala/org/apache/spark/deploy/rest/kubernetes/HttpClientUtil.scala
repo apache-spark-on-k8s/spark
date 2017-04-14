@@ -79,10 +79,10 @@ private[spark] object HttpClientUtil extends Logging {
                 matchingUriExists(uri, httpsUris)
               }
             case _ => None
-          }).getOrElse(directProxy)
-          logDebug(s"Routing $uri through ${resolvedProxy.address()} with proxy" +
-                  s" type ${resolvedProxy.`type`()}")
-          Collections.singletonList(resolvedProxy)
+        }).getOrElse(directProxy)
+        logDebug(s"Routing $uri through ${resolvedProxy.address()} with proxy" +
+          s" type ${resolvedProxy.`type`()}")
+        Collections.singletonList(resolvedProxy)
       }
 
       override def connectFailed(uri: URI, sa: SocketAddress, ioe: IOException) = {
