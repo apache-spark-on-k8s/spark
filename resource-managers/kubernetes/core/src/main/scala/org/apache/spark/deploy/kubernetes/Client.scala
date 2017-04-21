@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.kubernetes
 
 import java.io.File
+import java.net.URI
 import java.security.SecureRandom
 import java.util.ServiceLoader
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -24,15 +25,16 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder, DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher, ConfigBuilder => K8SConfigBuilder}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.deploy._
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.rest.{AppResource, ContainerAppResource, KubernetesCreateSubmissionRequest, KubernetesCredentials, RemoteAppResource, UploadedAppResource}
+import org.apache.spark.deploy.rest._
 import org.apache.spark.deploy.rest.kubernetes._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ShutdownHookManager, Utils}
@@ -103,7 +105,8 @@ private[spark] class Client(
         throw new SparkException(s"File $file does not exist or is a directory.")
       }
     }
-    if (KubernetesFileUtils.isUriLocalFile(mainAppResource) &&
+    if (!SparkSubmit.isShell(mainAppResource) &&
+      KubernetesFileUtils.isUriLocalFile(mainAppResource) &&
         !new File(Utils.resolveURI(mainAppResource).getPath).isFile) {
       throw new SparkException(s"Main app resource file $mainAppResource is not a file or" +
         s" is a directory.")
@@ -638,7 +641,13 @@ private[spark] class Client(
       submitterLocalFiles: Iterable[String],
       submitterLocalJars: Iterable[String],
       driverPodKubernetesCredentials: KubernetesCredentials): KubernetesCreateSubmissionRequest = {
-    val mainResourceUri = Utils.resolveURI(mainAppResource)
+
+    val mainResourceUri = if (SparkSubmit.isShell(mainAppResource)) {
+      new URI("nop://file")
+    } else {
+      Utils.resolveURI(mainAppResource)
+    }
+
     val resolvedAppResource: AppResource = Option(mainResourceUri.getScheme)
         .getOrElse("file") match {
       case "file" =>
@@ -647,6 +656,7 @@ private[spark] class Client(
         val fileBase64 = Base64.encodeBase64String(fileBytes)
         UploadedAppResource(resourceBase64Contents = fileBase64, name = appFile.getName)
       case "local" => ContainerAppResource(mainAppResource)
+      case "nop" => NopAppResource()
       case other => RemoteAppResource(other)
     }
     val uploadFilesBase64Contents = CompressionUtils.createTarGzip(submitterLocalFiles.map(

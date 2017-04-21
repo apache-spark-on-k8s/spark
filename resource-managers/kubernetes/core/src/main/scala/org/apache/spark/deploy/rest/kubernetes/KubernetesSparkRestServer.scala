@@ -378,6 +378,8 @@ private[spark] class KubernetesSparkRestServer(
               s" does not exist at $downloadedFilePath")
           }
           ResolvedAppResource(downloadedFilePath, resource)
+        case NopAppResource() =>
+          ResolvedAppResource("", "")
       }
     }
   }

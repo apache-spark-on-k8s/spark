@@ -16,8 +16,8 @@
  */
 package org.apache.spark.deploy.rest
 
+import com.fasterxml.jackson.annotation.JsonSubTypes.Type
 import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo}
-
 import org.apache.spark.SPARK_VERSION
 
 case class KubernetesCredentials(
@@ -53,7 +53,8 @@ case class TarGzippedData(
 @JsonSubTypes(value = Array(
   new JsonSubTypes.Type(value = classOf[UploadedAppResource], name = "UploadedAppResource"),
   new JsonSubTypes.Type(value = classOf[ContainerAppResource], name = "ContainerLocalAppResource"),
-  new JsonSubTypes.Type(value = classOf[RemoteAppResource], name = "RemoteAppResource")))
+  new JsonSubTypes.Type(value = classOf[RemoteAppResource], name = "RemoteAppResource"),
+  new JsonSubTypes.Type(value = classOf[NopAppResource], name = "NopAppResource")))
 abstract class AppResource
 
 case class UploadedAppResource(
@@ -63,6 +64,8 @@ case class UploadedAppResource(
 case class ContainerAppResource(resourcePath: String) extends AppResource
 
 case class RemoteAppResource(resource: String) extends AppResource
+
+case class NopAppResource() extends AppResource
 
 class PingResponse extends SubmitRestProtocolResponse {
   val text = "pong"
