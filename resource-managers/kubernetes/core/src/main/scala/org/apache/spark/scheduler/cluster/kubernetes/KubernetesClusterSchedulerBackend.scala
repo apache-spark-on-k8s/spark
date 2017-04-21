@@ -69,6 +69,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorMemoryWithOverhead = executorMemoryMb + memoryOverheadMb
 
   private val executorCores = conf.getOption("spark.executor.cores").getOrElse("1")
+  private val executorExtraClasspath = conf.get(
+    org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
 
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
@@ -193,6 +195,12 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .build())
         .build()
       )
+    val extraClassPathEnv = executorExtraClasspath.map { extraClassPath =>
+      new EnvVarBuilder()
+        .withName(ENV_EXECUTOR_EXTRA_CLASSPATH)
+        .withValue(extraClassPath)
+        .build()
+    }
     val requiredPorts = Seq(
       (EXECUTOR_PORT_NAME, executorPort),
       (BLOCK_MANAGER_PORT_NAME, blockmanagerPort))
@@ -228,7 +236,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
               .addToRequests("cpu", executorCpuQuantity)
               .addToLimits("cpu", executorCpuQuantity)
               .endResources()
-            .withEnv(requiredEnv.asJava)
+            .addAllToEnv(requiredEnv.asJava)
+            .addToEnv(extraClassPathEnv.toSeq: _*)
             .withPorts(requiredPorts.asJava)
             .endContainer()
           .endSpec()
