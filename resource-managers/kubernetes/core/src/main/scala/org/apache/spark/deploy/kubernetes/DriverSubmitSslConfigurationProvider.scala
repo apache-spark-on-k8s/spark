@@ -73,6 +73,7 @@ private[spark] case class DriverSubmitSslConfiguration(
 private[spark] class DriverSubmitSslConfigurationProvider(
     sparkConf: SparkConf,
     kubernetesAppId: String,
+    namespace: String,
     kubernetesClient: KubernetesClient,
     kubernetesResourceCleaner: KubernetesResourceCleaner) {
   private val SECURE_RANDOM = new SecureRandom()
@@ -162,8 +163,9 @@ private[spark] class DriverSubmitSslConfigurationProvider(
         certPemSecret
       val sslSecret = kubernetesClient.secrets().createNew()
         .withNewMetadata()
-        .withName(sslSecretsName)
-        .endMetadata()
+          .withName(sslSecretsName)
+          .withNamespace(namespace)
+          .endMetadata()
         .withData(allSecrets.asJava)
         .withType("Opaque")
         .done()
