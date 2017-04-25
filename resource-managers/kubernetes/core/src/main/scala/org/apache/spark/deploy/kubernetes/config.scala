@@ -365,7 +365,7 @@ package object config extends Logging {
         " resource staging server to download jars.")
       .internal()
       .stringConf
-      .createWithDefault(INIT_CONTAINER_DOWNLOAD_JARS_SECRET_PATH)
+      .createWithDefault(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_PATH)
 
   private[spark] val INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER =
     ConfigBuilder("spark.kubernetes.driver.initcontainer.downloadFilesResourceIdentifier")
@@ -380,7 +380,23 @@ package object config extends Logging {
         " resource staging server to download files.")
       .internal()
       .stringConf
-      .createWithDefault(INIT_CONTAINER_DOWNLOAD_FILES_SECRET_PATH)
+      .createWithDefault(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_PATH)
+
+  private[spark] val INIT_CONTAINER_REMOTE_JARS =
+    ConfigBuilder("spark.kubernetes.driver.initcontainer.remoteJars")
+      .doc("Comma-separated list of jar URIs to download in the init-container. This is inferred" +
+        " from spark.jars.")
+      .internal()
+      .stringConf
+      .createOptional
+
+  private[spark] val INIT_CONTAINER_REMOTE_FILES =
+    ConfigBuilder("spark.kubernetes.driver.initcontainer.remoteFiles")
+      .doc("Comma-separated list of file URIs to download in the init-container. This is inferred" +
+        " from spark.files.")
+      .internal()
+      .stringConf
+      .createOptional
 
   private[spark] val INIT_CONTAINER_DOCKER_IMAGE =
     ConfigBuilder("spark.kubernetes.driver.initcontainer.docker.image")
@@ -388,21 +404,37 @@ package object config extends Logging {
       .stringConf
       .createWithDefault(s"spark-driver-init:$sparkVersion")
 
-  private[spark] val DRIVER_LOCAL_JARS_DOWNLOAD_LOCATION =
-    ConfigBuilder("spark.kubernetes.driver.mountdependencies.jarsDownloadDir")
+  private[spark] val DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION =
+    ConfigBuilder("spark.kubernetes.driver.mountdependencies.submittedJars.downloadDir")
       .doc("Location to download local jars to in the driver. When using spark-submit, this" +
         " directory must be empty and will be mounted as an empty directory volume on the" +
         " driver pod.")
       .stringConf
       .createWithDefault("/var/spark-data/spark-local-jars")
 
-  private[spark] val DRIVER_LOCAL_FILES_DOWNLOAD_LOCATION =
-    ConfigBuilder("spark.kubernetes.driver.mountdependencies.filesDownloadDir")
+  private[spark] val DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION =
+    ConfigBuilder("spark.kubernetes.driver.mountdependencies.submittedFiles.downloadDir")
       .doc("Location to download local files to in the driver. When using spark-submit, this" +
         " directory must be empty and will be mounted as an empty directory volume on the" +
         " driver pod.")
       .stringConf
       .createWithDefault("/var/spark-data/spark-local-files")
+
+  private[spark] val DRIVER_REMOTE_JARS_DOWNLOAD_LOCATION =
+    ConfigBuilder("spark.kubernetes.driver.mountdependencies.remoteJars.downloadDir")
+      .doc("Location to download remotely-located (e.g. HDFS) jars to in the driver. When" +
+        " using spark-submit, this directory must be empty and will be mounted as an empty" +
+        " directory volume on the driver pod.")
+      .stringConf
+      .createWithDefault("/var/spark-data/spark-remote-jars")
+
+  private[spark] val DRIVER_REMOTE_FILES_DOWNLOAD_LOCATION =
+    ConfigBuilder("spark.kubernetes.driver.mountdependencies.remoteFiles.downloadDir")
+      .doc("Location to download remotely-located (e.g. HDFS) files to in the driver. When" +
+        " using spark-submit, this directory must be empty and will be mounted as an empty" +
+        " directory volume on the driver pod.")
+      .stringConf
+      .createWithDefault("/var/spark-data/spark-remote-files")
 
   private[spark] val DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT =
     ConfigBuilder("spark.kubernetes.mountdependencies.mountTimeout")

@@ -25,7 +25,8 @@ import org.apache.spark.{SparkConf, SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.kubernetes.SSLUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.integrationtest.minikube.Minikube
-import org.apache.spark.deploy.kubernetes.submit.v2.{MountedDependencyManagerProviderImpl, SubmissionKubernetesClientProviderImpl}
+import org.apache.spark.deploy.kubernetes.submit.v2.{DownloadRemoteDependencyManagerProviderImpl, SubmissionKubernetesClientProviderImpl, SubmittedDependencyManagerProviderImpl}
+import org.apache.spark.launcher.SparkLauncher
 
 @DoNotDiscover
 private[spark] class KubernetesV2Suite extends SparkFunSuite with BeforeAndAfter {
@@ -34,10 +35,13 @@ private[spark] class KubernetesV2Suite extends SparkFunSuite with BeforeAndAfter
   private var kubernetesTestComponents: KubernetesTestComponents = _
   private var sparkConf: SparkConf = _
   private var resourceStagingServerLauncher: ResourceStagingServerLauncher = _
+  private var staticAssetServerLauncher: StaticAssetServerLauncher = _
 
   override def beforeAll(): Unit = {
     kubernetesTestComponents = new KubernetesTestComponents
     resourceStagingServerLauncher = new ResourceStagingServerLauncher(
+      kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
+    staticAssetServerLauncher = new StaticAssetServerLauncher(
       kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
   }
 
@@ -87,6 +91,25 @@ private[spark] class KubernetesV2Suite extends SparkFunSuite with BeforeAndAfter
     runSparkAppAndVerifyCompletion(KubernetesSuite.CONTAINER_LOCAL_MAIN_APP_RESOURCE)
   }
 
+  test("Use remote resources without the resource staging server.") {
+    val assetServerUri = staticAssetServerLauncher.launchStaticAssetServer()
+    sparkConf.setJars(Seq(
+      s"$assetServerUri/${KubernetesSuite.EXAMPLES_JAR_FILE.getName}",
+      s"$assetServerUri/${KubernetesSuite.HELPER_JAR_FILE.getName}"
+    ))
+    runSparkAppAndVerifyCompletion(SparkLauncher.NO_RESOURCE)
+  }
+
+  test("Mix remote resources with submitted ones.") {
+    launchStagingServer(SSLOptions())
+    val assetServerUri = staticAssetServerLauncher.launchStaticAssetServer()
+    sparkConf.setJars(Seq(
+      KubernetesSuite.SUBMITTER_LOCAL_MAIN_APP_RESOURCE,
+      s"$assetServerUri/${KubernetesSuite.HELPER_JAR_FILE.getName}"
+    ))
+    runSparkAppAndVerifyCompletion(SparkLauncher.NO_RESOURCE)
+  }
+
   private def launchStagingServer(resourceStagingServerSslOptions: SSLOptions): Unit = {
     val resourceStagingServerPort = resourceStagingServerLauncher.launchStagingServer(
       resourceStagingServerSslOptions)
@@ -107,8 +130,10 @@ private[spark] class KubernetesV2Suite extends SparkFunSuite with BeforeAndAfter
       mainAppResource = appResource,
       kubernetesClientProvider =
         new SubmissionKubernetesClientProviderImpl(sparkConf),
-      mountedDependencyManagerProvider =
-        new MountedDependencyManagerProviderImpl(sparkConf))
+      submittedDependencyManagerProvider =
+        new SubmittedDependencyManagerProviderImpl(sparkConf),
+      remoteDependencyManagerProvider =
+        new DownloadRemoteDependencyManagerProviderImpl(sparkConf))
     client.run()
     val driverPod = kubernetesTestComponents.kubernetesClient
       .pods()

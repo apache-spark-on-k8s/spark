@@ -17,13 +17,14 @@
 package org.apache.spark.deploy.kubernetes.submit.v2
 
 import java.io.File
+import java.net.URI
 import java.util.Collections
 
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVarBuilder, HasMetadata, OwnerReferenceBuilder, PodBuilder}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.apache.spark.{SecurityManager => SparkSecurityManager, SparkConf, SparkException}
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
@@ -50,7 +51,8 @@ private[spark] class Client(
     appArgs: Array[String],
     mainAppResource: String,
     kubernetesClientProvider: SubmissionKubernetesClientProvider,
-    mountedDependencyManagerProvider: MountedDependencyManagerProvider) extends Logging {
+    submittedDependencyManagerProvider: SubmittedDependencyManagerProvider,
+    remoteDependencyManagerProvider: DownloadRemoteDependencyManagerProvider) extends Logging {
 
   private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
   private val master = resolveK8sMaster(sparkConf.get("spark.master"))
@@ -132,27 +134,33 @@ private[spark] class Client(
           .endSpec()
 
       val nonDriverPodKubernetesResources = mutable.Buffer[HasMetadata]()
+
+      // resolvedJars is all of the original Spark jars, but files on the local disk that
+      // were uploaded to the resource staging server are converted to the paths they would
+      // have been downloaded at. Similarly for resolvedFiles.
+      // If the resource staging server isn't being used, then resolvedJars = spark.jars.
       val resolvedJars = mutable.Buffer[String]()
       val resolvedFiles = mutable.Buffer[String]()
       val driverPodWithMountedDeps = maybeStagingServerUri.map { stagingServerUri =>
-        val mountedDependencyManager = mountedDependencyManagerProvider.getMountedDependencyManager(
-          kubernetesAppId,
-          stagingServerUri,
-          allLabels,
-          namespace,
-          sparkJars,
-          sparkFiles)
-        val jarsResourceIdentifier = mountedDependencyManager.uploadJars()
-        val filesResourceIdentifier = mountedDependencyManager.uploadFiles()
-        val initContainerKubernetesSecret = mountedDependencyManager.buildInitContainerSecret(
+        val submittedDependencyManager = submittedDependencyManagerProvider
+          .getSubmittedDependencyManager(
+            kubernetesAppId,
+            stagingServerUri,
+            allLabels,
+            namespace,
+            sparkJars,
+            sparkFiles)
+        val jarsResourceIdentifier = submittedDependencyManager.uploadJars()
+        val filesResourceIdentifier = submittedDependencyManager.uploadFiles()
+        val initContainerKubernetesSecret = submittedDependencyManager.buildInitContainerSecret(
           jarsResourceIdentifier.resourceSecret, filesResourceIdentifier.resourceSecret)
-        val initContainerConfigMap = mountedDependencyManager.buildInitContainerConfigMap(
+        val initContainerConfigMap = submittedDependencyManager.buildInitContainerConfigMap(
           jarsResourceIdentifier.resourceId, filesResourceIdentifier.resourceId)
-        resolvedJars ++= mountedDependencyManager.resolveSparkJars()
-        resolvedFiles ++= mountedDependencyManager.resolveSparkFiles()
+        resolvedJars ++= submittedDependencyManager.resolveSparkJars()
+        resolvedFiles ++= submittedDependencyManager.resolveSparkFiles()
         nonDriverPodKubernetesResources += initContainerKubernetesSecret
         nonDriverPodKubernetesResources += initContainerConfigMap
-        mountedDependencyManager.configurePodToMountLocalDependencies(
+        submittedDependencyManager.configurePodToMountLocalDependencies(
           driverContainer.getName, initContainerKubernetesSecret, initContainerConfigMap, basePod)
       }.getOrElse {
         sparkJars.map(Utils.resolveURI).foreach { jar =>
@@ -186,19 +194,35 @@ private[spark] class Client(
       resolvedSparkConf.get(KUBERNETES_DRIVER_OAUTH_TOKEN).foreach { _ =>
         resolvedSparkConf.set(KUBERNETES_DRIVER_OAUTH_TOKEN.key, "<present_but_redacted>")
       }
+      val remoteDependencyManager = remoteDependencyManagerProvider
+        .getDownloadRemoteDependencyManager(
+          kubernetesAppId,
+          resolvedJars,
+          resolvedFiles)
+      val downloadRemoteDependenciesConfigMap = remoteDependencyManager
+        .buildInitContainerConfigMap()
+      nonDriverPodKubernetesResources += downloadRemoteDependenciesConfigMap
+      val driverPodWithMountedAndDownloadedDeps = remoteDependencyManager
+        .configurePodToDownloadRemoteDependencies(
+          downloadRemoteDependenciesConfigMap, driverContainer.getName, driverPodWithMountedDeps)
 
-      val mountedClassPath = resolvedJars.map(Utils.resolveURI).filter { jarUri =>
-        val scheme = Option.apply(jarUri.getScheme).getOrElse("file")
-        scheme == "local" || scheme == "file"
-      }.map(_.getPath).mkString(File.pathSeparator)
+      // The resolved local classpath should *only* contain local file URIs. It consists of the
+      // driver's classpath (minus spark.driver.extraClassPath which was handled above) with the
+      // assumption that the remote dependency manager has downloaded all of the remote
+      // dependencies through its init-container, and thus replaces all the remote URIs with the
+      // local paths they were downloaded to.
+      val resolvedLocalClassPath = remoteDependencyManager.resolveLocalClasspath()
+      resolvedLocalClassPath.foreach { classPathEntry =>
+        require(Option(URI.create(classPathEntry).getScheme).isEmpty)
+      }
       val resolvedDriverJavaOpts = resolvedSparkConf.getAll.map { case (confKey, confValue) =>
           s"-D$confKey=$confValue"
       }.mkString(" ") + driverJavaOptions.map(" " + _).getOrElse("")
-      val resolvedDriverPod = driverPodWithMountedDeps.editSpec()
+      val resolvedDriverPod = driverPodWithMountedAndDownloadedDeps.editSpec()
         .editMatchingContainer(new ContainerNameEqualityPredicate(driverContainer.getName))
           .addNewEnv()
             .withName(ENV_MOUNTED_CLASSPATH)
-            .withValue(mountedClassPath)
+            .withValue(resolvedLocalClassPath.mkString(File.pathSeparator))
             .endEnv()
           .addNewEnv()
             .withName(ENV_DRIVER_JAVA_OPTS)

@@ -16,15 +16,14 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.v2
 
-import java.io.{File, FileOutputStream, StringWriter}
-import java.util.Properties
+import java.io.{File, FileOutputStream}
 import javax.ws.rs.core.MediaType
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.common.base.Charsets
 import com.google.common.io.{BaseEncoding, Files}
-import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, Container, ContainerBuilder, EmptyDirVolumeSource, PodBuilder, Secret, SecretBuilder, VolumeMount, VolumeMountBuilder}
+import io.fabric8.kubernetes.api.model.{ConfigMap, ContainerBuilder, EmptyDirVolumeSource, PodBuilder, Secret, SecretBuilder, VolumeMount, VolumeMountBuilder}
 import okhttp3.RequestBody
 import retrofit2.Call
 import scala.collection.JavaConverters._
@@ -34,11 +33,12 @@ import org.apache.spark.{SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.CompressionUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.rest.kubernetes.v1.{KubernetesCredentials, KubernetesFileUtils}
+import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
+import org.apache.spark.deploy.rest.kubernetes.v1.KubernetesCredentials
 import org.apache.spark.deploy.rest.kubernetes.v2.{ResourceStagingServiceRetrofit, RetrofitClientFactory, StagedResourceIdentifier}
 import org.apache.spark.util.Utils
 
-private[spark] trait MountedDependencyManager {
+private[spark] trait SubmittedDependencyManager {
 
   /**
    * Upload submitter-local jars to the resource staging server.
@@ -77,10 +77,10 @@ private[spark] trait MountedDependencyManager {
 }
 
 /**
- * Default implementation of a MountedDependencyManager that is backed by a
+ * Default implementation of a SubmittedDependencyManager that is backed by a
  * Resource Staging Service.
  */
-private[spark] class MountedDependencyManagerImpl(
+private[spark] class SubmittedDependencyManagerImpl(
     kubernetesAppId: String,
     podLabels: Map[String, String],
     podNamespace: String,
@@ -92,7 +92,7 @@ private[spark] class MountedDependencyManagerImpl(
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     stagingServiceSslOptions: SSLOptions,
-    retrofitClientFactory: RetrofitClientFactory) extends MountedDependencyManager {
+    retrofitClientFactory: RetrofitClientFactory) extends SubmittedDependencyManager {
   private val OBJECT_MAPPER = new ObjectMapper().registerModule(new DefaultScalaModule)
 
   private def localUriStringsToFiles(uris: Seq[String]): Iterable[File] = {
@@ -145,79 +145,57 @@ private[spark] class MountedDependencyManagerImpl(
       originalPodSpec: PodBuilder): PodBuilder = {
     val sharedVolumeMounts = Seq[VolumeMount](
       new VolumeMountBuilder()
-        .withName(DOWNLOAD_JARS_VOLUME_NAME)
+        .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME)
         .withMountPath(jarsDownloadPath)
         .build(),
       new VolumeMountBuilder()
-        .withName(DOWNLOAD_FILES_VOLUME_NAME)
+        .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME)
         .withMountPath(filesDownloadPath)
         .build())
 
-    val initContainers = Seq(new ContainerBuilder()
-      .withName("spark-driver-init")
+    val initContainer = new ContainerBuilder()
+      .withName(INIT_CONTAINER_SUBMITTED_FILES_CONTAINER_NAME)
       .withImage(initContainerImage)
       .withImagePullPolicy("IfNotPresent")
       .addNewVolumeMount()
-        .withName(INIT_CONTAINER_PROPERTIES_FILE_VOLUME)
-        .withMountPath(INIT_CONTAINER_PROPERTIES_FILE_MOUNT_PATH)
+        .withName(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME)
+        .withMountPath(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_MOUNT_PATH)
         .endVolumeMount()
       .addNewVolumeMount()
-        .withName(INIT_CONTAINER_SECRETS_VOLUME_NAME)
-        .withMountPath(INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH)
+        .withName(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME)
+        .withMountPath(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH)
         .endVolumeMount()
       .addToVolumeMounts(sharedVolumeMounts: _*)
-      .addToArgs(INIT_CONTAINER_PROPERTIES_FILE_PATH)
-      .build())
-
-    // Make sure we don't override any user-provided init containers by just appending ours to
-    // the existing list.
-    val resolvedInitContainers = originalPodSpec
-      .editMetadata()
-      .getAnnotations
-      .asScala
-      .get(INIT_CONTAINER_ANNOTATION)
-      .map { existingInitContainerAnnotation =>
-        val existingInitContainers = OBJECT_MAPPER.readValue(
-          existingInitContainerAnnotation, classOf[List[Container]])
-        existingInitContainers ++ initContainers
-      }.getOrElse(initContainers)
-    val resolvedSerializedInitContainers = OBJECT_MAPPER.writeValueAsString(resolvedInitContainers)
-    originalPodSpec
-      .editMetadata()
-        .removeFromAnnotations(INIT_CONTAINER_ANNOTATION)
-        .addToAnnotations(INIT_CONTAINER_ANNOTATION, resolvedSerializedInitContainers)
-        .endMetadata()
+      .addToArgs(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_PATH)
+      .build()
+    InitContainerUtil.appendInitContainer(originalPodSpec, initContainer)
       .editSpec()
         .addNewVolume()
-          .withName(INIT_CONTAINER_PROPERTIES_FILE_VOLUME)
+          .withName(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME)
           .withNewConfigMap()
             .withName(initContainerConfigMap.getMetadata.getName)
             .addNewItem()
-              .withKey(INIT_CONTAINER_CONFIG_MAP_KEY)
-              .withPath(INIT_CONTAINER_PROPERTIES_FILE_NAME)
+              .withKey(INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY)
+              .withPath(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_NAME)
               .endItem()
             .endConfigMap()
           .endVolume()
         .addNewVolume()
-          .withName(DOWNLOAD_JARS_VOLUME_NAME)
+          .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME)
           .withEmptyDir(new EmptyDirVolumeSource())
           .endVolume()
         .addNewVolume()
-          .withName(DOWNLOAD_FILES_VOLUME_NAME)
+          .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME)
           .withEmptyDir(new EmptyDirVolumeSource())
           .endVolume()
         .addNewVolume()
-          .withName(INIT_CONTAINER_SECRETS_VOLUME_NAME)
+          .withName(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME)
           .withNewSecret()
             .withSecretName(initContainerSecret.getMetadata.getName)
             .endSecret()
           .endVolume()
         .editMatchingContainer(new ContainerNameEqualityPredicate(driverContainerName))
           .addToVolumeMounts(sharedVolumeMounts: _*)
-          .addNewEnv()
-            .withName(ENV_UPLOADED_JARS_DIR)
-            .withValue(jarsDownloadPath)
-            .endEnv()
           .endContainer()
         .endSpec()
   }
@@ -226,14 +204,14 @@ private[spark] class MountedDependencyManagerImpl(
     val trustStoreBase64 = stagingServiceSslOptions.trustStore.map { trustStoreFile =>
       require(trustStoreFile.isFile, "Dependency server trustStore provided at" +
         trustStoreFile.getAbsolutePath + " does not exist or is not a file.")
-      (INIT_CONTAINER_TRUSTSTORE_SECRET_KEY,
+      (INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_SECRET_KEY,
         BaseEncoding.base64().encode(Files.toByteArray(trustStoreFile)))
     }.toMap
     val jarsSecretBase64 = BaseEncoding.base64().encode(jarsSecret.getBytes(Charsets.UTF_8))
     val filesSecretBase64 = BaseEncoding.base64().encode(filesSecret.getBytes(Charsets.UTF_8))
     val secretData = Map(
-      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_KEY -> jarsSecretBase64,
-      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_KEY -> filesSecretBase64) ++
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_KEY -> jarsSecretBase64,
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_KEY -> filesSecretBase64) ++
       trustStoreBase64
     val kubernetesSecret = new SecretBuilder()
       .withNewMetadata()
@@ -246,40 +224,32 @@ private[spark] class MountedDependencyManagerImpl(
 
   override def buildInitContainerConfigMap(
        jarsResourceId: String, filesResourceId: String): ConfigMap = {
-    val initContainerProperties = new Properties()
-    initContainerProperties.setProperty(RESOURCE_STAGING_SERVER_URI.key, stagingServerUri)
-    initContainerProperties.setProperty(DRIVER_LOCAL_JARS_DOWNLOAD_LOCATION.key, jarsDownloadPath)
-    initContainerProperties.setProperty(DRIVER_LOCAL_FILES_DOWNLOAD_LOCATION.key, filesDownloadPath)
-    initContainerProperties.setProperty(
-      INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key, jarsResourceId)
-    initContainerProperties.setProperty(
-      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key, INIT_CONTAINER_DOWNLOAD_JARS_SECRET_PATH)
-    initContainerProperties.setProperty(
-      INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key, filesResourceId)
-    initContainerProperties.setProperty(
-      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key, INIT_CONTAINER_DOWNLOAD_FILES_SECRET_PATH)
-    initContainerProperties.setProperty(DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT.key,
-      s"${downloadTimeoutMinutes}m")
-    stagingServiceSslOptions.trustStore.foreach { _ =>
-      initContainerProperties.setProperty(RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key,
-        INIT_CONTAINER_TRUSTSTORE_PATH)
-    }
-    initContainerProperties.setProperty(RESOURCE_STAGING_SERVER_SSL_ENABLED.key,
-      stagingServiceSslOptions.enabled.toString)
-    stagingServiceSslOptions.trustStorePassword.foreach { password =>
-      initContainerProperties.setProperty(RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key, password)
-    }
-    stagingServiceSslOptions.trustStoreType.foreach { storeType =>
-      initContainerProperties.setProperty(RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key, storeType)
-    }
-    val propertiesWriter = new StringWriter()
-    initContainerProperties.store(propertiesWriter, "Init-container properties.")
-    new ConfigMapBuilder()
-      .withNewMetadata()
-      .withName(s"$kubernetesAppId-init-properties")
-      .endMetadata()
-      .addToData(INIT_CONTAINER_CONFIG_MAP_KEY, propertiesWriter.toString)
-      .build()
+    val initContainerConfig = Map[String, String](
+      RESOURCE_STAGING_SERVER_URI.key -> stagingServerUri,
+      DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION.key -> jarsDownloadPath,
+      DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION.key -> filesDownloadPath,
+      INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key -> jarsResourceId,
+      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key ->
+        INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_PATH,
+      INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> filesResourceId,
+      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
+        INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_PATH,
+      DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT.key -> s"${downloadTimeoutMinutes}m",
+      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> stagingServiceSslOptions.enabled.toString) ++
+      stagingServiceSslOptions.trustStore.map { _ =>
+        (RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key,
+          INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_PATH)
+      }.toMap ++
+      stagingServiceSslOptions.trustStorePassword.map { password =>
+        (RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key, password)
+      }.toMap ++
+      stagingServiceSslOptions.trustStoreType.map { storeType =>
+        (RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key, storeType)
+      }.toMap
+    PropertiesConfigMapFromScalaMapBuilder.buildConfigMap(
+      s"$kubernetesAppId-staging-server-download-init",
+      INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY,
+      initContainerConfig)
   }
 
   override def resolveSparkJars(): Seq[String] = resolveLocalFiles(sparkJars, jarsDownloadPath)

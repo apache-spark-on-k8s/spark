@@ -43,8 +43,8 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.kubernetes.v2.{ResourceStagingServiceRetrofit, RetrofitClientFactory, StagedResourceIdentifier}
 import org.apache.spark.util.Utils
 
-private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with BeforeAndAfter {
-  import MountedDependencyManagerSuite.createTempFile
+private[spark] class SubmittedDependencyManagerSuite extends SparkFunSuite with BeforeAndAfter {
+  import SubmittedDependencyManagerSuite.createTempFile
 
   private val OBJECT_MAPPER = new ObjectMapper().registerModule(new DefaultScalaModule)
   private val APP_ID = "app-id"
@@ -52,8 +52,8 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
   private val NAMESPACE = "namespace"
   private val STAGING_SERVER_URI = "http://localhost:8000"
   private val INIT_CONTAINER_IMAGE = "spark-driver-init:latest"
-  private val JARS_DOWNLOAD_PATH = DRIVER_LOCAL_JARS_DOWNLOAD_LOCATION.defaultValue.get
-  private val FILES_DOWNLOAD_PATH = DRIVER_LOCAL_FILES_DOWNLOAD_LOCATION.defaultValue.get
+  private val JARS_DOWNLOAD_PATH = DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION.defaultValue.get
+  private val FILES_DOWNLOAD_PATH = DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION.defaultValue.get
   private val DOWNLOAD_TIMEOUT_MINUTES = 5
   private val LOCAL_JARS = Seq(createTempFile("jar"), createTempFile("jar"))
   private val JARS = Seq("hdfs://localhost:9000/jars/jar1.jar",
@@ -77,7 +77,7 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
   private var retrofitClientFactory: RetrofitClientFactory = _
   private var retrofitClient: ResourceStagingServiceRetrofit = _
 
-  private var dependencyManagerUnderTest: MountedDependencyManager = _
+  private var dependencyManagerUnderTest: SubmittedDependencyManager = _
 
   before {
     retrofitClientFactory = mock[RetrofitClientFactory]
@@ -86,7 +86,7 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
       retrofitClientFactory.createRetrofitClient(
         STAGING_SERVER_URI, classOf[ResourceStagingServiceRetrofit], STAGING_SERVER_SSL_OPTIONS))
       .thenReturn(retrofitClient)
-    dependencyManagerUnderTest = new MountedDependencyManagerImpl(
+    dependencyManagerUnderTest = new SubmittedDependencyManagerImpl(
       APP_ID,
       LABELS,
       NAMESPACE,
@@ -126,17 +126,17 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
     val secret = dependencyManagerUnderTest.buildInitContainerSecret("jarsSecret", "filesSecret")
     assert(secret.getMetadata.getName === s"$APP_ID-spark-init")
     val expectedSecrets = Map(
-      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_KEY -> jarsSecretBase64,
-      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_KEY -> filesSecretBase64,
-      INIT_CONTAINER_TRUSTSTORE_SECRET_KEY -> trustStoreBase64)
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_KEY -> jarsSecretBase64,
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_KEY -> filesSecretBase64,
+      INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_SECRET_KEY -> trustStoreBase64)
     assert(secret.getData.asScala === expectedSecrets)
   }
 
   test("Init container config map should contain parameters for downloading from staging server") {
     val configMap = dependencyManagerUnderTest.buildInitContainerConfigMap(
       JARS_RESOURCE_ID, FILES_RESOURCE_ID)
-    assert(configMap.getMetadata.getName === s"$APP_ID-init-properties")
-    val propertiesRawString = configMap.getData.get(INIT_CONTAINER_CONFIG_MAP_KEY)
+    assert(configMap.getMetadata.getName === s"$APP_ID-staging-server-download-init")
+    val propertiesRawString = configMap.getData.get(INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY)
     assert(propertiesRawString != null)
     val propertiesReader = new StringReader(propertiesRawString)
     val properties = new Properties()
@@ -146,16 +146,16 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
     }.toMap
     val expectedProperties = Map[String, String](
       RESOURCE_STAGING_SERVER_URI.key -> STAGING_SERVER_URI,
-      DRIVER_LOCAL_JARS_DOWNLOAD_LOCATION.key -> JARS_DOWNLOAD_PATH,
-      DRIVER_LOCAL_FILES_DOWNLOAD_LOCATION.key -> FILES_DOWNLOAD_PATH,
+      DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION.key -> JARS_DOWNLOAD_PATH,
+      DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION.key -> FILES_DOWNLOAD_PATH,
       INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key -> JARS_RESOURCE_ID,
       INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key ->
-        INIT_CONTAINER_DOWNLOAD_JARS_SECRET_PATH,
+        INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_PATH,
       INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> FILES_RESOURCE_ID,
       INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
-        INIT_CONTAINER_DOWNLOAD_FILES_SECRET_PATH,
+        INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_PATH,
       DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT.key -> s"${DOWNLOAD_TIMEOUT_MINUTES}m",
-      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key -> INIT_CONTAINER_TRUSTSTORE_PATH,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key -> INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_PATH,
       RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> "true",
       RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASSWORD,
       RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE)
@@ -188,7 +188,7 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
       initContainerRawAnnotation, classOf[Array[Container]])
     assert(initContainers.size === 1)
     val initContainer = initContainers.head
-    assert(initContainer.getName === "spark-driver-init")
+    assert(initContainer.getName === INIT_CONTAINER_SUBMITTED_FILES_CONTAINER_NAME)
     assert(initContainer.getImage === INIT_CONTAINER_IMAGE)
     assert(initContainer.getImagePullPolicy === "IfNotPresent")
     val volumeMounts = initContainer.getVolumeMounts
@@ -196,28 +196,31 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
       .map(mount => (mount.getName, mount.getMountPath))
       .toMap
     val expectedVolumeMounts = Map[String, String](
-      DOWNLOAD_JARS_VOLUME_NAME -> JARS_DOWNLOAD_PATH,
-      DOWNLOAD_FILES_VOLUME_NAME -> FILES_DOWNLOAD_PATH,
-      INIT_CONTAINER_PROPERTIES_FILE_VOLUME -> INIT_CONTAINER_PROPERTIES_FILE_MOUNT_PATH,
-      INIT_CONTAINER_SECRETS_VOLUME_NAME -> INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH)
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME -> JARS_DOWNLOAD_PATH,
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME -> FILES_DOWNLOAD_PATH,
+      INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME ->
+        INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_MOUNT_PATH,
+      INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME ->
+        INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH)
     assert(volumeMounts === expectedVolumeMounts)
   }
 
   test("Driver pod should have added volumes and volume mounts for file downloads") {
     val driverPod = configureDriverPod()
     val volumes = driverPod.getSpec.getVolumes.asScala.map(volume => (volume.getName, volume)).toMap
-    val initContainerPropertiesVolume = volumes(INIT_CONTAINER_PROPERTIES_FILE_VOLUME).getConfigMap
+    val initContainerPropertiesVolume = volumes(
+      INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME).getConfigMap
     assert(initContainerPropertiesVolume != null)
     assert(initContainerPropertiesVolume.getName === "config")
     assert(initContainerPropertiesVolume.getItems.asScala.exists { keyToPath =>
-      keyToPath.getKey == INIT_CONTAINER_CONFIG_MAP_KEY &&
-        keyToPath.getPath == INIT_CONTAINER_PROPERTIES_FILE_NAME
+      keyToPath.getKey == INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY &&
+        keyToPath.getPath == INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_NAME
     })
-    val jarsVolume = volumes(DOWNLOAD_JARS_VOLUME_NAME)
+    val jarsVolume = volumes(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME)
     assert(jarsVolume.getEmptyDir != null)
-    val filesVolume = volumes(DOWNLOAD_FILES_VOLUME_NAME)
+    val filesVolume = volumes(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME)
     assert(filesVolume.getEmptyDir != null)
-    val initContainerSecretVolume = volumes(INIT_CONTAINER_SECRETS_VOLUME_NAME)
+    val initContainerSecretVolume = volumes(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME)
     assert(initContainerSecretVolume.getSecret != null)
     assert(initContainerSecretVolume.getSecret.getSecretName === "secret")
     val driverContainer = driverPod.getSpec
@@ -229,13 +232,9 @@ private[spark] class MountedDependencyManagerSuite extends SparkFunSuite with Be
       .map(mount => (mount.getName, mount.getMountPath))
       .toMap
     val expectedVolumeMountNamesAndPaths = Map[String, String](
-      DOWNLOAD_JARS_VOLUME_NAME -> JARS_DOWNLOAD_PATH,
-      DOWNLOAD_FILES_VOLUME_NAME -> FILES_DOWNLOAD_PATH)
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME -> JARS_DOWNLOAD_PATH,
+      INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME -> FILES_DOWNLOAD_PATH)
     assert(driverContainerVolumeMounts === expectedVolumeMountNamesAndPaths)
-    val envs = driverContainer.getEnv
-    assert(envs.size() === 1)
-    assert(envs.asScala.head.getName === ENV_UPLOADED_JARS_DIR)
-    assert(envs.asScala.head.getValue === JARS_DOWNLOAD_PATH)
   }
 
   private def configureDriverPod(): Pod = {
@@ -313,7 +312,7 @@ private class UploadDependenciesArgumentsCapturingAnswer(returnValue: StagedReso
   }
 }
 
-private object MountedDependencyManagerSuite {
+private object SubmittedDependencyManagerSuite {
   def createTempFile(extension: String): String = {
     val dir = Utils.createTempDir()
     val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")

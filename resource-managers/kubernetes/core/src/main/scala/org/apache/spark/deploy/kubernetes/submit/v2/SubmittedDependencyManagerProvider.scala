@@ -20,35 +20,35 @@ import org.apache.spark.{SecurityManager => SparkSecurityManager, SparkConf}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.rest.kubernetes.v2.RetrofitClientFactoryImpl
 
-private[spark] trait MountedDependencyManagerProvider {
-  def getMountedDependencyManager(
+private[spark] trait SubmittedDependencyManagerProvider {
+  def getSubmittedDependencyManager(
     kubernetesAppId: String,
     stagingServerUri: String,
     podLabels: Map[String, String],
     podNamespace: String,
     sparkJars: Seq[String],
-    sparkFiles: Seq[String]): MountedDependencyManager
+    sparkFiles: Seq[String]): SubmittedDependencyManager
 }
 
-private[spark] class MountedDependencyManagerProviderImpl(sparkConf: SparkConf)
-    extends MountedDependencyManagerProvider {
-  override def getMountedDependencyManager(
+private[spark] class SubmittedDependencyManagerProviderImpl(sparkConf: SparkConf)
+    extends SubmittedDependencyManagerProvider {
+  override def getSubmittedDependencyManager(
       kubernetesAppId: String,
       stagingServerUri: String,
       podLabels: Map[String, String],
       podNamespace: String,
       sparkJars: Seq[String],
-      sparkFiles: Seq[String]): MountedDependencyManager = {
+      sparkFiles: Seq[String]): SubmittedDependencyManager = {
     val resourceStagingServerSslOptions = new SparkSecurityManager(sparkConf)
       .getSSLOptions("kubernetes.resourceStagingServer")
-    new MountedDependencyManagerImpl(
+    new SubmittedDependencyManagerImpl(
       kubernetesAppId,
       podLabels,
       podNamespace,
       stagingServerUri,
       sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE),
-      sparkConf.get(DRIVER_LOCAL_JARS_DOWNLOAD_LOCATION),
-      sparkConf.get(DRIVER_LOCAL_FILES_DOWNLOAD_LOCATION),
+      sparkConf.get(DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION),
+      sparkConf.get(DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION),
       sparkConf.get(DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT),
       sparkJars,
       sparkFiles,

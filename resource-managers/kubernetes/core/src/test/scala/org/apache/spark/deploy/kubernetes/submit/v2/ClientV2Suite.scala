@@ -22,7 +22,8 @@ import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, Container, 
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.fabric8.kubernetes.client.dsl.{MixedOperation, NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable, PodResource}
 import org.hamcrest.{BaseMatcher, Description}
-import org.mockito.Matchers.{any, anyVararg, argThat, startsWith, eq => mockitoEq}
+import org.mockito.{AdditionalAnswers, Mockito}
+import org.mockito.Matchers.{any, anyVararg, argThat, eq => mockitoEq, startsWith}
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
@@ -63,6 +64,11 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     "filesId", "filesSecret")
   private val MOUNTED_FILES_ANNOTATION_KEY = "mountedFiles"
 
+  private val downloadRemoteDependenciesConfigMap = new ConfigMapBuilder()
+    .withNewMetadata().withName("init-container").endMetadata()
+    .addToData("key", "value")
+    .build()
+
   private var sparkConf: SparkConf = _
   private var submissionKubernetesClientProvider: SubmissionKubernetesClientProvider = _
   private var submissionKubernetesClient: KubernetesClient = _
@@ -71,12 +77,18 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     HasMetadata, Boolean]
   private var podOperations: PODS = _
   private var resourceListOperations: RESOURCES = _
-  private var mountedDependencyManagerProvider: MountedDependencyManagerProvider = _
-  private var mountedDependencyManager: MountedDependencyManager = _
+  private var submittedDependencyManagerProvider: SubmittedDependencyManagerProvider = _
+  private var remoteDependencyManagerProvider: DownloadRemoteDependencyManagerProvider = _
+  private var remoteDependencyManager: DownloadRemoteDependencyManager = _
+  private var mountedDependencyManager: SubmittedDependencyManager = _
   private var captureCreatedPodAnswer: SelfArgumentCapturingAnswer[Pod] = _
   private var captureCreatedResourcesAnswer: AllArgumentsCapturingAnswer[HasMetadata, RESOURCES] = _
+  private var capturedJars: Option[Seq[String]] = None
+  private var capturedFiles: Option[Seq[String]] = None
 
   before {
+    capturedJars = None
+    capturedFiles = None
     sparkConf = new SparkConf(true)
       .set("spark.app.name", APP_NAME)
       .set("spark.master", "k8s://https://localhost:443")
@@ -88,8 +100,30 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     submissionKubernetesClient = mock[KubernetesClient]
     podOperations = mock[PODS]
     resourceListOperations = mock[RESOURCES]
-    mountedDependencyManagerProvider = mock[MountedDependencyManagerProvider]
-    mountedDependencyManager = mock[MountedDependencyManager]
+    submittedDependencyManagerProvider = mock[SubmittedDependencyManagerProvider]
+    mountedDependencyManager = mock[SubmittedDependencyManager]
+    remoteDependencyManagerProvider = mock[DownloadRemoteDependencyManagerProvider]
+    remoteDependencyManager = mock[DownloadRemoteDependencyManager]
+    when(remoteDependencyManagerProvider.getDownloadRemoteDependencyManager(any(), any(), any()))
+      .thenAnswer(new Answer[DownloadRemoteDependencyManager] {
+        override def answer(invocationOnMock: InvocationOnMock): DownloadRemoteDependencyManager = {
+          capturedJars = Some(invocationOnMock.getArgumentAt(1, classOf[Seq[String]]))
+          capturedFiles = Some(invocationOnMock.getArgumentAt(2, classOf[Seq[String]]))
+          remoteDependencyManager
+        }
+      })
+    when(remoteDependencyManager.buildInitContainerConfigMap())
+      .thenReturn(downloadRemoteDependenciesConfigMap)
+    when(remoteDependencyManager.resolveLocalClasspath()).thenAnswer(new Answer[Seq[String]] {
+      override def answer(invocationOnMock: InvocationOnMock): Seq[String] = {
+        assert(capturedJars.isDefined)
+        capturedJars.toSeq.flatten.map(Utils.resolveURI(_).getPath)
+      }
+    })
+    when(remoteDependencyManager.configurePodToDownloadRemoteDependencies(
+      mockitoEq(downloadRemoteDependenciesConfigMap),
+      any(),
+      any())).thenAnswer(AdditionalAnswers.returnsArgAt(2))
     when(submissionKubernetesClientProvider.get).thenReturn(submissionKubernetesClient)
     when(submissionKubernetesClient.pods()).thenReturn(podOperations)
     captureCreatedPodAnswer = new SelfArgumentCapturingAnswer[Pod]
@@ -176,9 +210,9 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     runWithMountedDependencies(initContainerConfigMap, initContainerSecret)
     val driverPod = captureCreatedPodAnswer.capturedArgument
     assert(captureCreatedResourcesAnswer.capturedArguments != null)
-    assert(captureCreatedResourcesAnswer.capturedArguments.size === 2)
+    assert(captureCreatedResourcesAnswer.capturedArguments.size === 3)
     assert(captureCreatedResourcesAnswer.capturedArguments.toSet ===
-      Set(initContainerSecret, initContainerConfigMap))
+      Set(initContainerSecret, initContainerConfigMap, downloadRemoteDependenciesConfigMap))
     captureCreatedResourcesAnswer.capturedArguments.foreach { resource =>
       val driverPodOwnerReferences = resource.getMetadata.getOwnerReferences
       assert(driverPodOwnerReferences.size === 1)
@@ -211,12 +245,51 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     }
   }
 
+  test("Remote dependency manager should configure the driver pod and the local classpath") {
+    Mockito.reset(remoteDependencyManager)
+    when(remoteDependencyManager
+        .configurePodToDownloadRemoteDependencies(
+          mockitoEq(downloadRemoteDependenciesConfigMap), any(), any()))
+        .thenAnswer(new Answer[PodBuilder]() {
+      override def answer(invocationOnMock: InvocationOnMock): PodBuilder = {
+        val originalPod = invocationOnMock.getArgumentAt(2, classOf[PodBuilder])
+        originalPod.editMetadata().addToLabels("added-remote-dependency", "true").endMetadata()
+      }
+    })
+    when(remoteDependencyManager.resolveLocalClasspath())
+      .thenReturn(Seq("/app/jars/resolved-jar-1.jar", "/app/jars/resolved-jar-2.jar"))
+    when(remoteDependencyManager.buildInitContainerConfigMap())
+      .thenReturn(downloadRemoteDependenciesConfigMap)
+    val createdDriverPod = createAndGetDriverPod()
+    Mockito.verify(remoteDependencyManager).configurePodToDownloadRemoteDependencies(
+      mockitoEq(downloadRemoteDependenciesConfigMap),
+      any(),
+      any())
+    assert(createdDriverPod.getMetadata.getLabels.get("added-remote-dependency") === "true")
+    val driverContainer = createdDriverPod
+      .getSpec
+      .getContainers
+      .asScala
+      .find(_.getName == DRIVER_CONTAINER_NAME)
+    assert(driverContainer.isDefined)
+    driverContainer.foreach { container =>
+      val env = container.getEnv.asScala
+      val mountedClasspathEnv = env.find(_.getName == ENV_MOUNTED_CLASSPATH)
+      assert(mountedClasspathEnv.isDefined)
+      mountedClasspathEnv.foreach { classpathEnv =>
+        assert(classpathEnv.getValue ===
+          "/app/jars/resolved-jar-1.jar:/app/jars/resolved-jar-2.jar")
+      }
+    }
+  }
+
   private def getInitContainerSecret(): Secret = {
     new SecretBuilder()
       .withNewMetadata().withName(s"$APP_NAME-init-container-secret").endMetadata()
       .addToData(
-        INIT_CONTAINER_DOWNLOAD_JARS_SECRET_KEY, DOWNLOAD_JARS_RESOURCE_IDENTIFIER.resourceSecret)
-      .addToData(INIT_CONTAINER_DOWNLOAD_FILES_SECRET_KEY,
+        INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_KEY,
+        DOWNLOAD_JARS_RESOURCE_IDENTIFIER.resourceSecret)
+      .addToData(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_KEY,
         DOWNLOAD_FILES_RESOURCE_IDENTIFIER.resourceSecret)
       .build()
   }
@@ -247,7 +320,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
         description.appendText("Checks if the labels contain the app ID and app name.")
       }
     }
-    when(mountedDependencyManagerProvider.getMountedDependencyManager(
+    when(submittedDependencyManagerProvider.getSubmittedDependencyManager(
       startsWith(APP_NAME),
       mockitoEq(STAGING_SERVER_URI),
       argThat(labelsMatcher),
@@ -303,7 +376,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       APP_ARGS,
       MAIN_APP_RESOURCE,
       submissionKubernetesClientProvider,
-      mountedDependencyManagerProvider)
+      submittedDependencyManagerProvider,
+      remoteDependencyManagerProvider)
   }
 
   private class SelfArgumentCapturingAnswer[T: ClassTag] extends Answer[T] {

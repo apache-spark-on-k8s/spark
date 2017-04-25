@@ -70,7 +70,6 @@ package object constants {
   private[spark] val ENV_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
   private[spark] val ENV_EXECUTOR_POD_IP = "SPARK_EXECUTOR_POD_IP"
   private[spark] val ENV_DRIVER_MEMORY = "SPARK_DRIVER_MEMORY"
-  private[spark] val ENV_UPLOADED_JARS_DIR = "SPARK_UPLOADED_JARS_DIR"
   private[spark] val ENV_SUBMIT_EXTRA_CLASSPATH = "SPARK_SUBMIT_EXTRA_CLASSPATH"
   private[spark] val ENV_MOUNTED_CLASSPATH = "SPARK_MOUNTED_CLASSPATH"
   private[spark] val ENV_DRIVER_MAIN_CLASS = "SPARK_DRIVER_CLASS"
@@ -92,25 +91,59 @@ package object constants {
 
   // V2 submission init container
   private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
-  private[spark] val INIT_CONTAINER_SECRETS_VOLUME_NAME = "dependency-secret"
-  private[spark] val INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH = "/mnt/secrets/spark-init"
-  private[spark] val INIT_CONTAINER_DOWNLOAD_JARS_SECRET_KEY = "downloadJarsSecret"
-  private[spark] val INIT_CONTAINER_DOWNLOAD_FILES_SECRET_KEY = "downloadFilesSecret"
-  private[spark] val INIT_CONTAINER_TRUSTSTORE_SECRET_KEY = "trustStore"
-  private[spark] val INIT_CONTAINER_DOWNLOAD_JARS_SECRET_PATH =
-    s"$INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH/$INIT_CONTAINER_DOWNLOAD_JARS_SECRET_KEY"
-  private[spark] val INIT_CONTAINER_DOWNLOAD_FILES_SECRET_PATH =
-    s"$INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH/$INIT_CONTAINER_DOWNLOAD_FILES_SECRET_KEY"
-  private[spark] val INIT_CONTAINER_TRUSTSTORE_PATH =
-    s"$INIT_CONTAINER_SECRETS_VOLUME_MOUNT_PATH/$INIT_CONTAINER_TRUSTSTORE_SECRET_KEY"
-  private[spark] val INIT_CONTAINER_DOWNLOAD_CREDENTIALS_PATH =
-    "/mnt/secrets/kubernetes-credentials"
-  private[spark] val INIT_CONTAINER_CONFIG_MAP_KEY = "init-driver"
-  private[spark] val INIT_CONTAINER_PROPERTIES_FILE_VOLUME = "init-container-properties"
-  private[spark] val INIT_CONTAINER_PROPERTIES_FILE_MOUNT_PATH = "/etc/spark-init/"
-  private[spark] val INIT_CONTAINER_PROPERTIES_FILE_NAME = "init-driver.properties"
-  private[spark] val INIT_CONTAINER_PROPERTIES_FILE_PATH =
-    s"$INIT_CONTAINER_PROPERTIES_FILE_MOUNT_PATH/$INIT_CONTAINER_PROPERTIES_FILE_NAME"
-  private[spark] val DOWNLOAD_JARS_VOLUME_NAME = "download-jars"
-  private[spark] val DOWNLOAD_FILES_VOLUME_NAME = "download-files"
+
+  // Init container for downloading submitted files from the staging server.
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_CONTAINER_NAME =
+    "spark-driver-download-submitted-files"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME =
+    "resource-staging-server-secret"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH =
+    "/mnt/secrets/spark-init"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_KEY =
+    "downloadSubmittedJarsSecret"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_KEY =
+    "downloadSubmittedFilesSecret"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_SECRET_KEY = "trustStore"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_PATH =
+    s"$INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH/" +
+      s"$INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_KEY"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_PATH =
+    s"$INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH/" +
+      s"$INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_KEY"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_PATH =
+    s"$INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH/" +
+      s"$INIT_CONTAINER_SUBMITTED_FILES_TRUSTSTORE_SECRET_KEY"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY =
+    "download-submitted-files"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME =
+    "download-submitted-files-properties"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_MOUNT_PATH =
+    "/etc/spark-init/download-submitted-files"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_NAME =
+    "init-driver-download-submitted-files.properties"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_PATH =
+    s"$INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_MOUNT_PATH/" +
+      s"$INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_NAME"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME =
+    "download-submitted-jars"
+  private[spark] val INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME =
+    "download-submitted-files"
+
+  // Init container for fetching remote dependencies.
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_CONTAINER_NAME =
+    "spark-driver-download-remote-files"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_CONFIG_MAP_KEY =
+    "download-remote-files"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_VOLUME =
+    "download-remote-files-properties"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_MOUNT_PATH =
+    "/etc/spark-init/download-remote-files"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_NAME =
+    "init-driver-download-remote-files.properties"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_PATH =
+    s"$INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_MOUNT_PATH/" +
+      s"$INIT_CONTAINER_REMOTE_FILES_PROPERTIES_FILE_NAME"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_DOWNLOAD_JARS_VOLUME_NAME = "download-remote-jars"
+  private[spark] val INIT_CONTAINER_REMOTE_FILES_DOWNLOAD_FILES_VOLUME_NAME =
+    "download-remote-files"
 }
