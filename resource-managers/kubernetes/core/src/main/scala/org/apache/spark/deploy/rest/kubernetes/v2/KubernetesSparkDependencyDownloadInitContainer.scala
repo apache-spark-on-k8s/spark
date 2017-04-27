@@ -111,18 +111,18 @@ private[spark] class KubernetesSparkDependencyDownloadInitContainer(
     sparkConf.get(INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION))
 
   private val stagingServerJarsDownloadDir = new File(
-    sparkConf.get(DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION))
+    sparkConf.get(SUBMITTED_JARS_DOWNLOAD_LOCATION))
   private val stagingServerFilesDownloadDir = new File(
-    sparkConf.get(DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION))
+    sparkConf.get(SUBMITTED_FILES_DOWNLOAD_LOCATION))
 
   private val remoteJars = sparkConf.get(INIT_CONTAINER_REMOTE_JARS)
   private val remoteFiles = sparkConf.get(INIT_CONTAINER_REMOTE_FILES)
   private val remoteJarsDownloadDir = new File(
-    sparkConf.get(DRIVER_REMOTE_JARS_DOWNLOAD_LOCATION))
+    sparkConf.get(REMOTE_JARS_DOWNLOAD_LOCATION))
   private val remoteFilesDownloadDir = new File(
-    sparkConf.get(DRIVER_REMOTE_FILES_DOWNLOAD_LOCATION))
+    sparkConf.get(REMOTE_FILES_DOWNLOAD_LOCATION))
 
-  private val downloadTimeoutMinutes = sparkConf.get(DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT)
+  private val downloadTimeoutMinutes = sparkConf.get(MOUNT_DEPENDENCIES_INIT_TIMEOUT)
 
   def run(): Unit = {
     val resourceStagingServerJarsDownload = Future[Unit] {

@@ -85,6 +85,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private var captureCreatedResourcesAnswer: AllArgumentsCapturingAnswer[HasMetadata, RESOURCES] = _
   private var credentialsMounterProvider: DriverPodKubernetesCredentialsMounterProvider = _
   private var credentialsMounter: DriverPodKubernetesCredentialsMounter = _
+  private var submittedFilesInitContainerBootstrap: SparkPodInitContainerBootstrap = _
+  private var downloadRemoteFilesInitContainerBootstrap: SparkPodInitContainerBootstrap = _
   private var capturedJars: Option[Seq[String]] = None
   private var capturedFiles: Option[Seq[String]] = None
 
@@ -108,6 +110,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     remoteDependencyManager = mock[DownloadRemoteDependencyManager]
     credentialsMounterProvider = mock[DriverPodKubernetesCredentialsMounterProvider]
     credentialsMounter = mock[DriverPodKubernetesCredentialsMounter]
+    submittedFilesInitContainerBootstrap = mock[SparkPodInitContainerBootstrap]
+    downloadRemoteFilesInitContainerBootstrap = mock[SparkPodInitContainerBootstrap]
     when(remoteDependencyManagerProvider.getDownloadRemoteDependencyManager(any(), any(), any()))
       .thenAnswer(new Answer[DownloadRemoteDependencyManager] {
         override def answer(invocationOnMock: InvocationOnMock): DownloadRemoteDependencyManager = {
@@ -124,10 +128,13 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
         capturedJars.toSeq.flatten.map(Utils.resolveURI(_).getPath)
       }
     })
-    when(remoteDependencyManager.configurePodToDownloadRemoteDependencies(
-      mockitoEq(downloadRemoteDependenciesConfigMap),
-      any(),
-      any())).thenAnswer(AdditionalAnswers.returnsArgAt(2))
+    when(remoteDependencyManager.getInitContainerBootstrap(downloadRemoteDependenciesConfigMap))
+      .thenReturn(downloadRemoteFilesInitContainerBootstrap)
+    when(downloadRemoteFilesInitContainerBootstrap.bootstrapInitContainerAndVolumes(
+        mockitoEq(DRIVER_CONTAINER_NAME), any()))
+      .thenAnswer(AdditionalAnswers.returnsArgAt(1))
+    when(remoteDependencyManager.configureExecutorsToFetchRemoteDependencies(any(), any()))
+      .thenAnswer(AdditionalAnswers.returnsArgAt(0))
     when(submissionKubernetesClientProvider.get).thenReturn(submissionKubernetesClient)
     when(submissionKubernetesClient.pods()).thenReturn(podOperations)
     captureCreatedPodAnswer = new SelfArgumentCapturingAnswer[Pod]
@@ -189,32 +196,52 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     sparkConf.set(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS, "-Dopt1=opt1value")
     sparkConf.set("spark.logConf", "true")
     val createdDriverPod = createAndGetDriverPod()
-    val maybeDriverContainer = getDriverContainer(createdDriverPod)
-    maybeDriverContainer.foreach { driverContainer =>
+    val maybeJvmOptions = getDriverJvmOptions(createdDriverPod)
+    assert(maybeJvmOptions.isDefined)
+    maybeJvmOptions.foreach { jvmOptions =>
+      assert(jvmOptions("opt1") === "opt1value")
+      assert(jvmOptions.contains("spark.app.id"))
+      assert(jvmOptions("spark.jars") === MAIN_APP_RESOURCE)
+      assert(jvmOptions(KUBERNETES_DRIVER_POD_NAME.key).startsWith(APP_NAME))
+      assert(jvmOptions("spark.app.name") === APP_NAME)
+      assert(jvmOptions("spark.logConf") === "true")
+    }
+  }
+
+  // Tests with local dependencies with the mounted dependency manager.
+  private def getDriverJvmOptions(driverPod: Pod): Option[Map[String, String]] = {
+    val maybeDriverContainer = getDriverContainer(driverPod)
+    val maybeJvmOptions = maybeDriverContainer.flatMap { driverContainer =>
       val maybeJvmOptionsEnv = driverContainer.getEnv
         .asScala
         .find(_.getName == ENV_DRIVER_JAVA_OPTS)
-      assert(maybeJvmOptionsEnv.isDefined)
-      maybeJvmOptionsEnv.foreach { jvmOptionsEnv =>
+      maybeJvmOptionsEnv.map { jvmOptionsEnv =>
         val jvmOptions = jvmOptionsEnv.getValue.split(" ")
         jvmOptions.foreach { opt => assert(opt.startsWith("-D")) }
-        val optionKeyValues = jvmOptions.map { option =>
+        jvmOptions.map { option =>
           val withoutDashDPrefix = option.stripPrefix("-D")
           val split = withoutDashDPrefix.split('=')
           assert(split.length == 2)
           (split(0), split(1))
         }.toMap
-        assert(optionKeyValues("opt1") === "opt1value")
-        assert(optionKeyValues.contains("spark.app.id"))
-        assert(optionKeyValues("spark.jars") === MAIN_APP_RESOURCE)
-        assert(optionKeyValues(KUBERNETES_DRIVER_POD_NAME.key).startsWith(APP_NAME))
-        assert(optionKeyValues("spark.app.name") === APP_NAME)
-        assert(optionKeyValues("spark.logConf") === "true")
       }
+    }
+    maybeJvmOptions
+  }
+
+  test("Uploading local dependencies should configure executors to pull from the" +
+    " resource staging server") {
+    val initContainerConfigMap = getInitContainerConfigMap
+    val initContainerSecret = getInitContainerSecret
+    runWithMountedDependencies(initContainerConfigMap, initContainerSecret)
+    val driverPod = captureCreatedPodAnswer.capturedArgument
+    val jvmOptions = getDriverJvmOptions(driverPod)
+    assert(jvmOptions.isDefined)
+    jvmOptions.foreach { options =>
+      assert(options("spark.testing.configuredExecutorsMountLocal") === "true")
     }
   }
 
-  // Tests with local dependencies with the mounted dependency manager.
   test("Uploading local dependencies should create Kubernetes secrets and config map") {
     val initContainerConfigMap = getInitContainerConfigMap
     val initContainerSecret = getInitContainerSecret
@@ -257,13 +284,16 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Remote dependency manager should configure the driver pod and the local classpath") {
-    Mockito.reset(remoteDependencyManager)
-    when(remoteDependencyManager
-        .configurePodToDownloadRemoteDependencies(
-          mockitoEq(downloadRemoteDependenciesConfigMap), any(), any()))
+    Mockito.reset(remoteDependencyManager, downloadRemoteFilesInitContainerBootstrap)
+    when(remoteDependencyManager.configureExecutorsToFetchRemoteDependencies(any(), any()))
+      .thenAnswer(AdditionalAnswers.returnsFirstArg())
+    when(remoteDependencyManager.getInitContainerBootstrap(downloadRemoteDependenciesConfigMap))
+      .thenReturn(downloadRemoteFilesInitContainerBootstrap)
+    when(downloadRemoteFilesInitContainerBootstrap.bootstrapInitContainerAndVolumes(
+          mockitoEq(DRIVER_CONTAINER_NAME), any()))
         .thenAnswer(new Answer[PodBuilder]() {
       override def answer(invocationOnMock: InvocationOnMock): PodBuilder = {
-        val originalPod = invocationOnMock.getArgumentAt(2, classOf[PodBuilder])
+        val originalPod = invocationOnMock.getArgumentAt(1, classOf[PodBuilder])
         originalPod.editMetadata().addToLabels("added-remote-dependency", "true").endMetadata()
       }
     })
@@ -272,9 +302,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(remoteDependencyManager.buildInitContainerConfigMap())
       .thenReturn(downloadRemoteDependenciesConfigMap)
     val createdDriverPod = createAndGetDriverPod()
-    Mockito.verify(remoteDependencyManager).configurePodToDownloadRemoteDependencies(
-      mockitoEq(downloadRemoteDependenciesConfigMap),
-      any(),
+    Mockito.verify(remoteDependencyManager)
+      .getInitContainerBootstrap(downloadRemoteDependenciesConfigMap)
+    Mockito.verify(downloadRemoteFilesInitContainerBootstrap).bootstrapInitContainerAndVolumes(
+      mockitoEq(DRIVER_CONTAINER_NAME),
       any())
     assert(createdDriverPod.getMetadata.getLabels.get("added-remote-dependency") === "true")
     val driverContainer = createdDriverPod
@@ -347,20 +378,30 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(mountedDependencyManager.buildInitContainerConfigMap(
       DOWNLOAD_JARS_RESOURCE_IDENTIFIER.resourceId, DOWNLOAD_FILES_RESOURCE_IDENTIFIER.resourceId))
       .thenReturn(initContainerConfigMap)
+    when(mountedDependencyManager.configureExecutorsToFetchSubmittedDependencies(
+        any(), any(), any()))
+      .thenAnswer(new Answer[SparkConf]() {
+        override def answer(invocationOnMock: InvocationOnMock): SparkConf = {
+          val originalSparkConf = invocationOnMock.getArgumentAt(0, classOf[SparkConf])
+          originalSparkConf.clone().set("spark.testing.configuredExecutorsMountLocal", "true")
+        }
+      })
     when(mountedDependencyManager.resolveSparkJars()).thenReturn(RESOLVED_SPARK_JARS)
     when(mountedDependencyManager.resolveSparkFiles()).thenReturn(RESOLVED_SPARK_FILES)
-    when(mountedDependencyManager.configurePodToMountLocalDependencies(
-      mockitoEq(DRIVER_CONTAINER_NAME),
-      mockitoEq(initContainerSecret),
-      mockitoEq(initContainerConfigMap),
-      any())).thenAnswer(new Answer[PodBuilder] {
-      override def answer(invocationOnMock: InvocationOnMock): PodBuilder = {
-        val basePod = invocationOnMock.getArgumentAt(3, classOf[PodBuilder])
-        basePod.editMetadata().addToAnnotations(MOUNTED_FILES_ANNOTATION_KEY, "true").endMetadata()
-      }
-    })
-    val clientUnderTest = createClient()
-    clientUnderTest.run()
+    when(mountedDependencyManager.getInitContainerBootstrap(
+      initContainerSecret,
+      initContainerConfigMap)).thenReturn(submittedFilesInitContainerBootstrap)
+    when(submittedFilesInitContainerBootstrap.bootstrapInitContainerAndVolumes(
+        mockitoEq(DRIVER_CONTAINER_NAME), any()))
+      .thenAnswer(new Answer[PodBuilder]() {
+        override def answer(invocationOnMock: InvocationOnMock): PodBuilder = {
+          val basePod = invocationOnMock.getArgumentAt(1, classOf[PodBuilder])
+          basePod.editMetadata()
+            .addToAnnotations(MOUNTED_FILES_ANNOTATION_KEY, "true")
+            .endMetadata()
+        }
+      })
+    createAndGetDriverPod()
   }
 
   private def getDriverContainer(driverPod: Pod): Option[Container] = {

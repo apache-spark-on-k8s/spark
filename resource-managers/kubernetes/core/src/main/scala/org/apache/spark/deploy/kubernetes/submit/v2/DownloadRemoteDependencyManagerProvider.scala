@@ -37,8 +37,8 @@ private[spark] class DownloadRemoteDependencyManagerProviderImpl(
       kubernetesAppId,
       sparkJars,
       sparkFiles,
-      sparkConf.get(DRIVER_REMOTE_JARS_DOWNLOAD_LOCATION),
-      sparkConf.get(DRIVER_REMOTE_FILES_DOWNLOAD_LOCATION),
+      sparkConf.get(REMOTE_JARS_DOWNLOAD_LOCATION),
+      sparkConf.get(REMOTE_FILES_DOWNLOAD_LOCATION),
       sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE))
   }
 }

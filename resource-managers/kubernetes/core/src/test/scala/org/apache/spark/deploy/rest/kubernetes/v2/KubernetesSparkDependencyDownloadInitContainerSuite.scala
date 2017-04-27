@@ -141,8 +141,8 @@ class KubernetesSparkDependencyDownloadInitContainerSuite
       .set(INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION, DOWNLOAD_JARS_SECRET_LOCATION)
       .set(INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER, FILES_RESOURCE_ID)
       .set(INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION, DOWNLOAD_FILES_SECRET_LOCATION)
-      .set(DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION, downloadJarsDir.getAbsolutePath)
-      .set(DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION, downloadFilesDir.getAbsolutePath)
+      .set(SUBMITTED_JARS_DOWNLOAD_LOCATION, downloadJarsDir.getAbsolutePath)
+      .set(SUBMITTED_FILES_DOWNLOAD_LOCATION, downloadFilesDir.getAbsolutePath)
       .set(RESOURCE_STAGING_SERVER_SSL_ENABLED, true)
       .set(RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE, TRUSTSTORE_FILE.getAbsolutePath)
       .set(RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD, TRUSTSTORE_PASSWORD)
@@ -155,8 +155,8 @@ class KubernetesSparkDependencyDownloadInitContainerSuite
         "http://localhost:9000/jar1.jar,hdfs://localhost:9000/jar2.jar")
       .set(INIT_CONTAINER_REMOTE_FILES,
         "http://localhost:9000/file.txt")
-      .set(DRIVER_REMOTE_JARS_DOWNLOAD_LOCATION, downloadJarsDir.getAbsolutePath)
-      .set(DRIVER_REMOTE_FILES_DOWNLOAD_LOCATION, downloadFilesDir.getAbsolutePath)
+      .set(REMOTE_JARS_DOWNLOAD_LOCATION, downloadJarsDir.getAbsolutePath)
+      .set(REMOTE_FILES_DOWNLOAD_LOCATION, downloadFilesDir.getAbsolutePath)
   }
 
   private def checkWrittenFilesAreTheSameAsOriginal(

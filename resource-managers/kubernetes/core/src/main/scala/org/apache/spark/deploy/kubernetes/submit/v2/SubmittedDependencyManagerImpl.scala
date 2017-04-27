@@ -23,13 +23,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.common.base.Charsets
 import com.google.common.io.{BaseEncoding, Files}
-import io.fabric8.kubernetes.api.model.{ConfigMap, ContainerBuilder, EmptyDirVolumeSource, PodBuilder, Secret, SecretBuilder, VolumeMount, VolumeMountBuilder}
+import io.fabric8.kubernetes.api.model.{ConfigMap, Secret, SecretBuilder}
 import okhttp3.RequestBody
 import retrofit2.Call
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.apache.spark.{SparkException, SSLOptions}
+import org.apache.spark.{SparkConf, SparkException, SSLOptions}
 import org.apache.spark.deploy.kubernetes.CompressionUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
@@ -52,11 +52,9 @@ private[spark] trait SubmittedDependencyManager {
    */
   def uploadFiles(): StagedResourceIdentifier
 
-  def configurePodToMountLocalDependencies(
-    driverContainerName: String,
+  def getInitContainerBootstrap(
     initContainerSecret: Secret,
-    initContainerConfigMap: ConfigMap,
-    originalPodSpec: PodBuilder): PodBuilder
+    initContainerConfigMap: ConfigMap): SparkPodInitContainerBootstrap
 
   def buildInitContainerSecret(jarsSecret: String, filesSecret: String): Secret
 
@@ -74,6 +72,15 @@ private[spark] trait SubmittedDependencyManager {
    * the locations they will be downloaded to on the driver's disk.
    */
   def resolveSparkFiles(): Seq[String]
+
+  /**
+   * Adjusts the Spark configuration such that the scheduler backend will configure
+   * executor pods to attach an init-container that fetches these submitted dependencies.
+   */
+  def configureExecutorsToFetchSubmittedDependencies(
+    sparkConf: SparkConf,
+    initContainerConfigMap: ConfigMap,
+    initContainerSecret: Secret): SparkConf
 }
 
 /**
@@ -138,66 +145,19 @@ private[spark] class SubmittedDependencyManagerImpl(
     getTypedResponseResult(uploadResponse)
   }
 
-  override def configurePodToMountLocalDependencies(
-      driverContainerName: String,
+  override def getInitContainerBootstrap(
       initContainerSecret: Secret,
-      initContainerConfigMap: ConfigMap,
-      originalPodSpec: PodBuilder): PodBuilder = {
-    val sharedVolumeMounts = Seq[VolumeMount](
-      new VolumeMountBuilder()
-        .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME)
-        .withMountPath(jarsDownloadPath)
-        .build(),
-      new VolumeMountBuilder()
-        .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME)
-        .withMountPath(filesDownloadPath)
-        .build())
-
-    val initContainer = new ContainerBuilder()
-      .withName(INIT_CONTAINER_SUBMITTED_FILES_CONTAINER_NAME)
-      .withImage(initContainerImage)
-      .withImagePullPolicy("IfNotPresent")
-      .addNewVolumeMount()
-        .withName(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME)
-        .withMountPath(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_MOUNT_PATH)
-        .endVolumeMount()
-      .addNewVolumeMount()
-        .withName(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME)
-        .withMountPath(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH)
-        .endVolumeMount()
-      .addToVolumeMounts(sharedVolumeMounts: _*)
-      .addToArgs(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_PATH)
-      .build()
-    InitContainerUtil.appendInitContainer(originalPodSpec, initContainer)
-      .editSpec()
-        .addNewVolume()
-          .withName(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_VOLUME)
-          .withNewConfigMap()
-            .withName(initContainerConfigMap.getMetadata.getName)
-            .addNewItem()
-              .withKey(INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY)
-              .withPath(INIT_CONTAINER_SUBMITTED_FILES_PROPERTIES_FILE_NAME)
-              .endItem()
-            .endConfigMap()
-          .endVolume()
-        .addNewVolume()
-          .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_VOLUME_NAME)
-          .withEmptyDir(new EmptyDirVolumeSource())
-          .endVolume()
-        .addNewVolume()
-          .withName(INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_VOLUME_NAME)
-          .withEmptyDir(new EmptyDirVolumeSource())
-          .endVolume()
-        .addNewVolume()
-          .withName(INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_NAME)
-          .withNewSecret()
-            .withSecretName(initContainerSecret.getMetadata.getName)
-            .endSecret()
-          .endVolume()
-        .editMatchingContainer(new ContainerNameEqualityPredicate(driverContainerName))
-          .addToVolumeMounts(sharedVolumeMounts: _*)
-          .endContainer()
-        .endSpec()
+      initContainerConfigMap: ConfigMap): SparkPodInitContainerBootstrap = {
+    new SparkPodInitContainerBootstrapImpl(
+      INIT_CONTAINER_SUBMITTED_FILES_SUFFIX,
+      initContainerConfigMap.getMetadata.getName,
+      INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY,
+      initContainerImage,
+      jarsDownloadPath,
+      filesDownloadPath,
+      Some(InitContainerSecretConfiguration(
+        secretName = initContainerSecret.getMetadata.getName,
+        secretMountPath = INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH)))
   }
 
   override def buildInitContainerSecret(jarsSecret: String, filesSecret: String): Secret = {
@@ -226,15 +186,15 @@ private[spark] class SubmittedDependencyManagerImpl(
        jarsResourceId: String, filesResourceId: String): ConfigMap = {
     val initContainerConfig = Map[String, String](
       RESOURCE_STAGING_SERVER_URI.key -> stagingServerUri,
-      DRIVER_SUBMITTED_JARS_DOWNLOAD_LOCATION.key -> jarsDownloadPath,
-      DRIVER_SUBMITTED_FILES_DOWNLOAD_LOCATION.key -> filesDownloadPath,
+      SUBMITTED_JARS_DOWNLOAD_LOCATION.key -> jarsDownloadPath,
+      SUBMITTED_FILES_DOWNLOAD_LOCATION.key -> filesDownloadPath,
       INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key -> jarsResourceId,
       INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key ->
         INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_JARS_SECRET_PATH,
       INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> filesResourceId,
       INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
         INIT_CONTAINER_SUBMITTED_FILES_DOWNLOAD_FILES_SECRET_PATH,
-      DRIVER_MOUNT_DEPENDENCIES_INIT_TIMEOUT.key -> s"${downloadTimeoutMinutes}m",
+      MOUNT_DEPENDENCIES_INIT_TIMEOUT.key -> s"${downloadTimeoutMinutes}m",
       RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> stagingServiceSslOptions.enabled.toString) ++
       stagingServiceSslOptions.trustStore.map { _ =>
         (RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key,
@@ -255,6 +215,21 @@ private[spark] class SubmittedDependencyManagerImpl(
   override def resolveSparkJars(): Seq[String] = resolveLocalFiles(sparkJars, jarsDownloadPath)
 
   override def resolveSparkFiles(): Seq[String] = resolveLocalFiles(sparkFiles, filesDownloadPath)
+
+  override def configureExecutorsToFetchSubmittedDependencies(
+      sparkConf: SparkConf,
+      initContainerConfigMap: ConfigMap,
+      initContainerSecret: Secret): SparkConf = {
+    sparkConf.clone()
+      .set(EXECUTOR_INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP,
+        initContainerConfigMap.getMetadata.getName)
+      .set(EXECUTOR_INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY,
+        INIT_CONTAINER_SUBMITTED_FILES_CONFIG_MAP_KEY)
+      .set(EXECUTOR_INIT_CONTAINER_SUBMITTED_FILES_RESOURCE_STAGING_SERVER_SECRET,
+        initContainerSecret.getMetadata.getName)
+      .set(EXECUTOR_INIT_CONTAINER_SUBMITTED_FILES_RESOURCE_STAGING_SERVER_SECRET_DIR,
+        INIT_CONTAINER_SUBMITTED_FILES_SECRETS_VOLUME_MOUNT_PATH)
+  }
 
   private def resolveLocalFiles(
       allFileUriStrings: Seq[String], localDownloadRoot: String): Seq[String] = {

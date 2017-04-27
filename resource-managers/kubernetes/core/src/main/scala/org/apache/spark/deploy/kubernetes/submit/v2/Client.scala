@@ -156,11 +156,11 @@ private[spark] class Client(
       // If the resource staging server isn't being used, then resolvedJars = spark.jars.
       val resolvedJars = mutable.Buffer[String]()
       val resolvedFiles = mutable.Buffer[String]()
-      val driverPodWithMountedDeps = maybeStagingServerUri.map { stagingServerUri =>
+      val (resolvedSparkConf, driverPodWithMountedDeps) = maybeStagingServerUri.map { stagingUri =>
         val submittedDependencyManager = submittedDependencyManagerProvider
           .getSubmittedDependencyManager(
             kubernetesAppId,
-            stagingServerUri,
+            stagingUri,
             allLabels,
             namespace,
             sparkJars,
@@ -175,11 +175,16 @@ private[spark] class Client(
         resolvedFiles ++= submittedDependencyManager.resolveSparkFiles()
         nonDriverPodKubernetesResources += initContainerKubernetesSecret
         nonDriverPodKubernetesResources += initContainerConfigMap
-        submittedDependencyManager.configurePodToMountLocalDependencies(
-          driverContainer.getName,
-          initContainerKubernetesSecret,
-          initContainerConfigMap,
-          driverPodWithMountedDriverKubernetesCredentials)
+        val bootstrappedPod = submittedDependencyManager.getInitContainerBootstrap(
+            initContainerKubernetesSecret, initContainerConfigMap)
+          .bootstrapInitContainerAndVolumes(
+            driverContainer.getName, driverPodWithMountedDriverKubernetesCredentials)
+        val sparkConfWithExecutorInitContainer = submittedDependencyManager
+          .configureExecutorsToFetchSubmittedDependencies(
+            sparkConfWithDriverPodKubernetesCredentialLocations,
+            initContainerConfigMap,
+            initContainerKubernetesSecret)
+        (sparkConfWithExecutorInitContainer, bootstrappedPod)
       }.getOrElse {
         sparkJars.map(Utils.resolveURI).foreach { jar =>
           require(Option.apply(jar.getScheme).getOrElse("file") != "file",
@@ -193,9 +198,9 @@ private[spark] class Client(
         }
         resolvedJars ++= sparkJars
         resolvedFiles ++= sparkFiles
-        driverPodWithMountedDriverKubernetesCredentials
+        (sparkConfWithDriverPodKubernetesCredentialLocations.clone(),
+          driverPodWithMountedDriverKubernetesCredentials)
       }
-      val resolvedSparkConf = sparkConfWithDriverPodKubernetesCredentialLocations.clone()
       if (resolvedJars.nonEmpty) {
         resolvedSparkConf.set("spark.jars", resolvedJars.mkString(","))
       }
@@ -215,8 +220,11 @@ private[spark] class Client(
         .buildInitContainerConfigMap()
       nonDriverPodKubernetesResources += downloadRemoteDependenciesConfigMap
       val driverPodWithMountedAndDownloadedDeps = remoteDependencyManager
-        .configurePodToDownloadRemoteDependencies(
-          downloadRemoteDependenciesConfigMap, driverContainer.getName, driverPodWithMountedDeps)
+        .getInitContainerBootstrap(downloadRemoteDependenciesConfigMap)
+        .bootstrapInitContainerAndVolumes(driverContainer.getName, driverPodWithMountedDeps)
+      val sparkConfExecutorsFetchRemoteDeps = remoteDependencyManager
+        .configureExecutorsToFetchRemoteDependencies(
+          resolvedSparkConf, downloadRemoteDependenciesConfigMap)
 
       // The resolved local classpath should *only* contain local file URIs. It consists of the
       // driver's classpath (minus spark.driver.extraClassPath which was handled above) with the
@@ -227,8 +235,10 @@ private[spark] class Client(
       resolvedLocalClassPath.foreach { classPathEntry =>
         require(Option(URI.create(classPathEntry).getScheme).isEmpty)
       }
-      val resolvedDriverJavaOpts = resolvedSparkConf.getAll.map { case (confKey, confValue) =>
-          s"-D$confKey=$confValue"
+      sparkConfExecutorsFetchRemoteDeps.set(
+        EXECUTOR_RESOLVED_MOUNTED_CLASSPATH, resolvedLocalClassPath)
+      val resolvedDriverJavaOpts = sparkConfExecutorsFetchRemoteDeps.getAll.map {
+        case (confKey, confValue) => s"-D$confKey=$confValue"
       }.mkString(" ") + driverJavaOptions.map(" " + _).getOrElse("")
       val resolvedDriverPod = driverPodWithMountedAndDownloadedDeps.editSpec()
         .editMatchingContainer(new ContainerNameEqualityPredicate(driverContainer.getName))
