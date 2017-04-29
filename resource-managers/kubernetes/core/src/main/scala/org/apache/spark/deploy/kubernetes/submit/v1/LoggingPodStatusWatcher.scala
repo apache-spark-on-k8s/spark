@@ -44,14 +44,17 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   private val logRunnable: Runnable = new Runnable {
     override def run() = logShortStatus()
   }
-  if (interval > 0) {
-    scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
-  }
 
   private var pod: Option[Pod] = Option.empty
   private def phase: String = pod.map(_.getStatus().getPhase()).getOrElse("unknown")
   private def status: String = pod.map(_.getStatus().getContainerStatuses().toString())
     .getOrElse("unknown")
+
+  def start(): Unit = {
+    if (interval > 0) {
+      scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
+    }
+  }
 
   override def eventReceived(action: Action, pod: Pod): Unit = {
     this.pod = Option(pod)
