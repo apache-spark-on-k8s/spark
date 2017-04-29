@@ -28,10 +28,9 @@ import org.apache.spark.SparkFunSuite
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.{IntegrationTestBackend, IntegrationTestBackendFactory}
 
 private[spark] class KubernetesSuite extends SparkFunSuite {
-  private var testBackend: IntegrationTestBackend = _
+  private val testBackend: IntegrationTestBackend = IntegrationTestBackendFactory.getTestBackend()
 
   override def beforeAll(): Unit = {
-    testBackend = IntegrationTestBackendFactory.getTestBackend()
     testBackend.initialize()
   }
 
