@@ -22,18 +22,19 @@ import org.apache.spark.deploy.kubernetes.config.resolveK8sMaster
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTestBackend
 import org.apache.spark.deploy.kubernetes.integrationtest.constants.GCE_TEST_BACKEND
 
-class GCETestBackend extends IntegrationTestBackend {
-  val master = System.getProperty("spark.kubernetes.test.master")
-  var k8ConfBuilder = new ConfigBuilder()
-    .withApiVersion("v1")
-    .withMasterUrl(resolveK8sMaster(master))
-  val k8ClientConfig = k8ConfBuilder.build
-  val defaultClient = new DefaultKubernetesClient(k8ClientConfig)
+private[spark] class GCETestBackend(val master: String) extends IntegrationTestBackend {
+  private var defaultClient: DefaultKubernetesClient = _
 
-  override def getKubernetesClient: DefaultKubernetesClient = {
-    return defaultClient
+  override def initialize(): Unit = {
+    var k8ConfBuilder = new ConfigBuilder()
+      .withApiVersion("v1")
+      .withMasterUrl(resolveK8sMaster(master))
+    defaultClient = new DefaultKubernetesClient(k8ConfBuilder.build)
   }
 
-  override def cleanUp: Unit = {}
-  override def name: String = GCE_TEST_BACKEND
+  override def getKubernetesClient(): DefaultKubernetesClient = {
+    defaultClient
+  }
+
+  override def name(): String = GCE_TEST_BACKEND
 }

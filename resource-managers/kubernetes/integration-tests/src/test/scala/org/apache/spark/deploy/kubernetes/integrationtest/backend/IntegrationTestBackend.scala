@@ -23,17 +23,18 @@ import org.apache.spark.deploy.kubernetes.integrationtest.backend.GCE.GCETestBac
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.minikube.{Minikube, MinikubeTestBackend}
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 
-abstract class IntegrationTestBackend {
-  def name: String
-  def getKubernetesClient: DefaultKubernetesClient
-  def cleanUp: Unit
+private[spark] trait IntegrationTestBackend {
+  def name(): String
+  def initialize(): Unit
+  def getKubernetesClient(): DefaultKubernetesClient
+  def cleanUp(): Unit = {}
 }
 
-object IntegrationTestBackendFactory {
-  def getTestBackend: IntegrationTestBackend = {
+private[spark] object IntegrationTestBackendFactory {
+  def getTestBackend(): IntegrationTestBackend = {
     Option(System.getProperty("spark.kubernetes.test.master")).map {
       master =>
-        new GCETestBackend()
+        new GCETestBackend(master)
     }.getOrElse {
         new MinikubeTestBackend()
     }

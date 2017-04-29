@@ -31,11 +31,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite {
   private var testBackend: IntegrationTestBackend = _
 
   override def beforeAll(): Unit = {
-    testBackend = IntegrationTestBackendFactory.getTestBackend
+    testBackend = IntegrationTestBackendFactory.getTestBackend()
+    testBackend.initialize()
   }
 
   override def afterAll(): Unit = {
-    testBackend.cleanUp
+    testBackend.cleanUp()
   }
 
   override def nestedSuites: scala.collection.immutable.IndexedSeq[Suite] = {

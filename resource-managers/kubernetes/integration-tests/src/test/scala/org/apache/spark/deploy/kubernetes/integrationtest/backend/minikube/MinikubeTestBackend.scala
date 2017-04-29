@@ -22,20 +22,26 @@ import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTes
 import org.apache.spark.deploy.kubernetes.integrationtest.constants.MINIKUBE_TEST_BACKEND
 import org.apache.spark.deploy.kubernetes.integrationtest.docker.SparkDockerImageBuilder
 
-class MinikubeTestBackend extends IntegrationTestBackend {
-  Minikube.startMinikube()
-  new SparkDockerImageBuilder(Minikube.getDockerEnv).buildSparkDockerImages()
-  val defaultClient = Minikube.getKubernetesClient
+private[spark] class MinikubeTestBackend extends IntegrationTestBackend {
+  private var defaultClient: DefaultKubernetesClient = _
 
-  override def getKubernetesClient: DefaultKubernetesClient = {
-    return defaultClient
+  override def initialize(): Unit = {
+    Minikube.startMinikube()
+    new SparkDockerImageBuilder(Minikube.getDockerEnv).buildSparkDockerImages()
+    defaultClient = Minikube.getKubernetesClient
   }
 
-  override def cleanUp: Unit = {
+  override def getKubernetesClient(): DefaultKubernetesClient = {
+    defaultClient
+  }
+
+  override def cleanUp(): Unit = {
     if (!System.getProperty("spark.docker.test.persistMinikube", "false").toBoolean) {
       Minikube.deleteMinikube()
     }
   }
 
-  override def name: String = MINIKUBE_TEST_BACKEND
+  override def name(): String = MINIKUBE_TEST_BACKEND
+
+
 }
