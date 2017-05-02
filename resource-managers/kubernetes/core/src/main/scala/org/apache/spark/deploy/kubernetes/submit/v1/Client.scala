@@ -50,7 +50,8 @@ private[spark] class Client(
   private val launchTime = System.currentTimeMillis
   private val appName = sparkConf.getOption("spark.app.name")
     .getOrElse("spark")
-  private val kubernetesAppId = s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-")
+  private val kubernetesAppId = sparkConf.getOption("spark.kubernetes.driver.pod.name")
+    .getOrElse(s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-"))
   private val secretName = s"$SUBMISSION_APP_SECRET_PREFIX-$kubernetesAppId"
   private val secretDirectory = s"$DRIVER_CONTAINER_SUBMISSION_SECRETS_BASE_DIR/$kubernetesAppId"
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
