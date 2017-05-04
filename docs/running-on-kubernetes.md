@@ -351,6 +351,13 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.driver.pod.name</code></td>
+  <td><code>(none)</code></td>
+  <td>
+    Name of the driver pod
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.submission.waitAppCompletion</code></td>
   <td><code>true</code></td>
   <td>

@@ -177,7 +177,7 @@ private[spark] class Client(
       if (resolvedFiles.nonEmpty) {
         resolvedSparkConf.set("spark.files", resolvedFiles.mkString(","))
       }
-      resolvedSparkConf.set(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
+      resolvedSparkConf.setIfMissing(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
       resolvedSparkConf.set("spark.app.id", kubernetesAppId)
       // We don't need this anymore since we just set the JVM options on the environment
       resolvedSparkConf.remove(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)

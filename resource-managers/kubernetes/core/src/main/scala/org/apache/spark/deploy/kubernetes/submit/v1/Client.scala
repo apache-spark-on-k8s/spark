@@ -248,7 +248,7 @@ private[spark] class Client(
       logWarning(s"Warning: Provided app id in spark.app.id as $id will be" +
         s" overridden as $kubernetesAppId")
     }
-    sparkConf.set(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
+    sparkConf.setIfMissing(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
     sparkConf.set(KUBERNETES_DRIVER_SERVICE_NAME, driverService.getMetadata.getName)
     sparkConf.set("spark.app.id", kubernetesAppId)
     sparkConf.setIfMissing("spark.app.name", appName)
