@@ -77,4 +77,9 @@ package object constants {
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
   private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
   private[spark] val MEMORY_OVERHEAD_MIN = 384L
+
+  // Annotations
+  private[spark] val SCHEDULER_TAINTS_ANNOTATION = "scheduler.alpha.kubernetes.io/taints"
+  private[spark] val SCHEDULER_MASTER_TAINT_KEY = "node.alpha.kubernetes.io/ismaster"
+  private[spark] val SCHEDULER_MASTER_TAINT_EFFECT = "NoSchedule"
 }

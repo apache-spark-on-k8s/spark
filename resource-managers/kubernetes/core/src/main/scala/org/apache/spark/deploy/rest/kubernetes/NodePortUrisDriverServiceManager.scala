@@ -16,9 +16,11 @@
  */
 package org.apache.spark.deploy.rest.kubernetes
 
-import io.fabric8.kubernetes.api.model.{Service, ServiceBuilder}
-import scala.collection.JavaConverters._
+import com.fasterxml.jackson.annotation.{JsonIgnoreProperties, JsonProperty}
+import com.fasterxml.jackson.databind.ObjectMapper
+import io.fabric8.kubernetes.api.model.{Node, Service, ServiceBuilder}
 
+import scala.collection.JavaConverters._
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
@@ -28,9 +30,11 @@ import org.apache.spark.internal.Logging
  * at the address of any of the nodes through the service's node port.
  */
 private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManager with Logging {
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  case class SchedulerAnnotation(@JsonProperty("key") key: String,
+                                 @JsonProperty("effect") effect: String)
 
   override def getServiceManagerType: String = NodePortUrisDriverServiceManager.TYPE
-
   override def customizeDriverService(driverServiceTemplate: ServiceBuilder): ServiceBuilder = {
     driverServiceTemplate.editSpec().withType("NodePort").endSpec()
   }
@@ -49,7 +53,7 @@ private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManag
       .head.getNodePort
     val nodeUrls = kubernetesClient.nodes.list.getItems.asScala
       .filterNot(node => node.getSpec.getUnschedulable != null &&
-        node.getSpec.getUnschedulable)
+        node.getSpec.getUnschedulable && nodeHasUnschedulableTaint(node))
       .flatMap(_.getStatus.getAddresses.asScala)
       // The list contains hostnames, internal and external IP addresses.
       // (https://kubernetes.io/docs/admin/node/#addresses)
@@ -62,6 +66,27 @@ private[spark] class NodePortUrisDriverServiceManager extends DriverServiceManag
       }).toSet
     require(nodeUrls.nonEmpty, "No nodes found to contact the driver!")
     nodeUrls
+  }
+
+  private def nodeHasUnschedulableTaint(node: Node): Boolean = {
+    val schedulerTaints = node.getMetadata.getAnnotations
+      .get(SCHEDULER_TAINTS_ANNOTATION)
+    schedulerTaints match {
+      case null =>
+        return false
+
+      case json =>
+        try {
+          val mapper = new ObjectMapper()
+          val taints = mapper.readValue(json, classOf[Array[SchedulerAnnotation]])
+          return taints.exists(t => t.key == SCHEDULER_MASTER_TAINT_KEY
+            && t.effect == SCHEDULER_MASTER_TAINT_EFFECT)
+        } catch {
+          case e: Throwable =>
+            logWarning(s"Failed to parse taints on node ${node.getMetadata.getName}", e)
+        }
+    }
+    false
   }
 }
 
