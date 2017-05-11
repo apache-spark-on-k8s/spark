@@ -58,7 +58,7 @@ private[spark] class Client(
   private val appName = sparkConf.getOption("spark.app.name")
     .getOrElse("spark")
   private val kubernetesAppId = s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-")
-  private val kubernetesDriverPodName = sparkConf.getOption("spark.kubernetes.driver.pod.name")
+  private val kubernetesDriverPodName = sparkConf.get(KUBERNETES_DRIVER_POD_NAME)
     .getOrElse(kubernetesAppId)
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
   private val maybeStagingServerUri = sparkConf.get(RESOURCE_STAGING_SERVER_URI)
