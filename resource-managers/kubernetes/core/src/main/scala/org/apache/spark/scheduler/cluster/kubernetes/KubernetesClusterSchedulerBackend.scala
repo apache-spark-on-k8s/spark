@@ -17,20 +17,21 @@
 package org.apache.spark.scheduler.cluster.kubernetes
 
 import java.io.Closeable
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 
-import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder,
-    EnvVarSourceBuilder, Pod, QuantityBuilder}
-import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 
 import org.apache.spark.{SparkContext, SparkException}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.internal.Logging
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
@@ -105,6 +106,38 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   private val initialExecutors = getInitialTargetExecutorNumber(1)
 
+  private val podAllocationInterval = conf.get(KUBERNETES_ALLOCATION_BATCH_DELAY)
+  require(podAllocationInterval > 0, s"Allocation batch delay " +
+    s"${KUBERNETES_ALLOCATION_BATCH_DELAY} " +
+    s"is ${podAllocationInterval}, should be a positive integer")
+
+  private val podAllocationSize = conf.get(KUBERNETES_ALLOCATION_BATCH_SIZE)
+  require(podAllocationSize > 0, s"Allocation batch size " +
+    s"${KUBERNETES_ALLOCATION_BATCH_SIZE} " +
+    s"is ${podAllocationSize}, should be a positive integer")
+
+  private val allocator = ThreadUtils
+    .newDaemonSingleThreadScheduledExecutor("kubernetes-pod-allocator")
+
+  private val allocatorRunnable: Runnable = new Runnable {
+    override def run(): Unit = {
+      if (totalRegisteredExecutors.get() < runningExecutorPods.size) {
+        logDebug("Waiting for pending executors before scaling")
+      } else if (totalExpectedExecutors.get() <= runningExecutorPods.size) {
+        logDebug("Maximum allowed executor limit reached. Not scaling up further.")
+      } else {
+        RUNNING_EXECUTOR_PODS_LOCK.synchronized {
+          for (i <- 0 until math.min(
+            totalExpectedExecutors.get - runningExecutorPods.size, podAllocationSize)) {
+            runningExecutorPods += allocateNewExecutorPod()
+            logInfo(
+              s"Requesting a new executor, total executors is now ${runningExecutorPods.size}")
+          }
+        }
+      }
+    }
+  }
+
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
     if (Utils.isDynamicAllocationEnabled(conf)) {
       val minNumExecutors = conf.getInt("spark.dynamicAllocation.minExecutors", 0)
@@ -118,6 +151,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     } else {
       conf.getInt("spark.executor.instances", defaultNumExecutors)
     }
+
   }
 
   override def applicationId(): String = conf.get("spark.app.id", super.applicationId())
@@ -130,12 +164,20 @@ private[spark] class KubernetesClusterSchedulerBackend(
     super.start()
     executorWatchResource.set(kubernetesClient.pods().withLabel(SPARK_APP_ID_LABEL, applicationId())
       .watch(new ExecutorPodsWatcher()))
+
+    allocator.scheduleWithFixedDelay(
+      allocatorRunnable, 0, podAllocationInterval.get, TimeUnit.SECONDS)
+
     if (!Utils.isDynamicAllocationEnabled(sc.conf)) {
       doRequestTotalExecutors(initialExecutors)
     }
   }
 
   override def stop(): Unit = {
+    // stop allocation of new resources.
+    allocator.shutdown()
+
+
     // send stop message to executors so they shut down cleanly
     super.stop()
 
@@ -253,17 +295,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = Future[Boolean] {
-    RUNNING_EXECUTOR_PODS_LOCK.synchronized {
-      if (requestedTotal > totalExpectedExecutors.get) {
-        logInfo(s"Requesting ${requestedTotal - totalExpectedExecutors.get}"
-          + s" additional executors, expecting total $requestedTotal and currently" +
-          s" expected ${totalExpectedExecutors.get}")
-        for (i <- 0 until (requestedTotal - totalExpectedExecutors.get)) {
-          runningExecutorPods += allocateNewExecutorPod()
-        }
-      }
-      totalExpectedExecutors.set(requestedTotal)
-    }
+    totalExpectedExecutors.set(requestedTotal)
     true
   }
 
