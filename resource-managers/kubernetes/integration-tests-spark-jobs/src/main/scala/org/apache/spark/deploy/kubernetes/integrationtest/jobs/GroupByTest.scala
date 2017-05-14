@@ -46,7 +46,7 @@ object GroupByTest {
     pairs1.count()
 
     // scalastyle:off println
-    println(pairs1.groupByKey(numReducers).count())
+    println("The Result is", pairs1.groupByKey(numReducers).count())
     // scalastyle:on println
     spark.stop()
   }
