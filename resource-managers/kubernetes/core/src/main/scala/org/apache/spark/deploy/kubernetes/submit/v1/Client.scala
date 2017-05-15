@@ -152,7 +152,7 @@ private[spark] class Client(
           .pods()
           .withName(kubernetesAppId)
           .watch(loggingWatch)) { _ =>
-        loggingWatch.start
+        loggingWatch.start()
         val resourceCleanShutdownHook = ShutdownHookManager.addShutdownHook(() =>
           kubernetesResourceCleaner.deleteAllRegisteredResourcesFromKubernetes(kubernetesClient))
         val cleanupServiceManagerHook = ShutdownHookManager.addShutdownHook(
