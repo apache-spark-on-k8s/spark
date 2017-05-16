@@ -354,7 +354,7 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td><code>spark.kubernetes.driver.pod.name</code></td>
   <td><code>(none)</code></td>
   <td>
-    Name of the driver pod
+    Name of the driver pod. If not set, the driver pod name is set to "spark.app.name" suffixed by the current timestamp to avoid name conflicts.
   </td>
 </tr>
 <tr>
