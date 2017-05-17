@@ -19,7 +19,7 @@ FROM openjdk:8-alpine
 
 # If this docker file is being used in the context of building your images from a Spark distribution, the docker build
 # command should be invoked from the top level directory of the Spark distribution. E.g.:
-# docker build -t spark-executor:latest -f dockerfiles/executor/Dockerfile .
+# docker build -t spark-shuffle:latest -f dockerfiles/shuffle/Dockerfile .
 
 RUN apk upgrade --update
 RUN apk add --update bash
@@ -36,8 +36,4 @@ ENV SPARK_HOME /opt/spark
 
 WORKDIR /opt/spark
 
-# TODO support spark.executor.extraClassPath
-CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/*" && \
-    if ! [ -z ${SPARK_MOUNTED_CLASSPATH}+x} ]; then SPARK_CLASSPATH="$SPARK_MOUNTED_CLASSPATH:$SPARK_CLASSPATH"; fi && \
-    if ! [ -z ${SPARK_EXECUTOR_EXTRA_CLASSPATH+x} ]; then SPARK_CLASSPATH="$SPARK_EXECUTOR_EXTRA_CLASSPATH:$SPARK_CLASSPATH"; fi && \
-    exec ${JAVA_HOME}/bin/java -Dspark.executor.port=$SPARK_EXECUTOR_PORT -Xms$SPARK_EXECUTOR_MEMORY -Xmx$SPARK_EXECUTOR_MEMORY -cp $SPARK_CLASSPATH org.apache.spark.executor.CoarseGrainedExecutorBackend --driver-url $SPARK_DRIVER_URL --executor-id $SPARK_EXECUTOR_ID --cores $SPARK_EXECUTOR_CORES --app-id $SPARK_APPLICATION_ID --hostname $SPARK_EXECUTOR_POD_IP
+CMD ["/bin/sh","-c","/opt/spark/bin/spark-class org.apache.spark.deploy.ExternalShuffleService 1"]

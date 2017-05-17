@@ -14,6 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.rest.kubernetes.v2
 
-case class StagedResourceIdentifier(resourceId: String, resourceSecret: String)
+package org.apache.spark.deploy.kubernetes
+
+import org.apache.spark.SparkException
+
+object ConfigurationUtils {
+  def parseKeyValuePairs(
+    maybeKeyValues: Option[String],
+    configKey: String,
+    keyValueType: String): Map[String, String] = {
+
+    maybeKeyValues.map(keyValues => {
+      keyValues.split(",").map(_.trim).filterNot(_.isEmpty).map(keyValue => {
+        keyValue.split("=", 2).toSeq match {
+          case Seq(k, v) =>
+            (k, v)
+          case _ =>
+            throw new SparkException(s"Custom $keyValueType set by $configKey must be a" +
+              s" comma-separated list of key-value pairs, with format <key>=<value>." +
+              s" Got value: $keyValue. All values: $keyValues")
+        }
+      }).toMap
+    }).getOrElse(Map.empty[String, String])
+  }
+}
