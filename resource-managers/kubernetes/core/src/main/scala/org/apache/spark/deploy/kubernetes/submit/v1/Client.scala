@@ -51,6 +51,8 @@ private[spark] class Client(
   private val appName = sparkConf.getOption("spark.app.name")
     .getOrElse("spark")
   private val kubernetesAppId = s"$appName-$launchTime".toLowerCase.replaceAll("\\.", "-")
+  private val kubernetesDriverPodName = sparkConf.get(KUBERNETES_DRIVER_POD_NAME)
+    .getOrElse(kubernetesAppId)
   private val secretName = s"$SUBMISSION_APP_SECRET_PREFIX-$kubernetesAppId"
   private val secretDirectory = s"$DRIVER_CONTAINER_SUBMISSION_SECRETS_BASE_DIR/$kubernetesAppId"
   private val driverDockerImage = sparkConf.get(DRIVER_DOCKER_IMAGE)
@@ -150,7 +152,7 @@ private[spark] class Client(
         loggingInterval)
       Utils.tryWithResource(kubernetesClient
           .pods()
-          .withName(kubernetesAppId)
+          .withName(kubernetesDriverPodName)
           .watch(loggingWatch)) { _ =>
         loggingWatch.start()
         val resourceCleanShutdownHook = ShutdownHookManager.addShutdownHook(() =>
@@ -248,7 +250,7 @@ private[spark] class Client(
       logWarning(s"Warning: Provided app id in spark.app.id as $id will be" +
         s" overridden as $kubernetesAppId")
     }
-    sparkConf.set(KUBERNETES_DRIVER_POD_NAME, kubernetesAppId)
+    sparkConf.setIfMissing(KUBERNETES_DRIVER_POD_NAME, kubernetesDriverPodName)
     sparkConf.set(KUBERNETES_DRIVER_SERVICE_NAME, driverService.getMetadata.getName)
     sparkConf.set("spark.app.id", kubernetesAppId)
     sparkConf.setIfMissing("spark.app.name", appName)
@@ -315,7 +317,7 @@ private[spark] class Client(
     val podWatcher = new DriverPodReadyWatcher(podReadyFuture)
     Utils.tryWithResource(kubernetesClient
         .pods()
-        .withName(kubernetesAppId)
+        .withName(kubernetesDriverPodName)
         .watch(podWatcher)) { _ =>
       Utils.tryWithResource(kubernetesClient
           .services()
@@ -446,7 +448,7 @@ private[spark] class Client(
       .build()
     val driverPod = kubernetesClient.pods().createNew()
       .withNewMetadata()
-        .withName(kubernetesAppId)
+        .withName(kubernetesDriverPodName)
         .withLabels(driverKubernetesSelectors.asJava)
         .withAnnotations(customAnnotations.asJava)
         .endMetadata()
@@ -539,7 +541,9 @@ private[spark] class Client(
   private class DriverEndpointsReadyWatcher(resolvedDriverEndpoints: SettableFuture[Endpoints])
       extends Watcher[Endpoints] {
     override def eventReceived(action: Action, endpoints: Endpoints): Unit = {
-      if ((action == Action.ADDED) || (action == Action.MODIFIED)
+      if ((action == Action.ADDED || action == Action.MODIFIED)
+          && (endpoints != null)
+          && (endpoints.getSubsets != null)
           && endpoints.getSubsets.asScala.nonEmpty
           && endpoints.getSubsets.asScala.exists(_.getAddresses.asScala.nonEmpty)
           && !resolvedDriverEndpoints.isDone) {
@@ -555,7 +559,7 @@ private[spark] class Client(
   private class DriverServiceReadyWatcher(resolvedDriverService: SettableFuture[Service])
       extends Watcher[Service] {
     override def eventReceived(action: Action, service: Service): Unit = {
-      if ((action == Action.ADDED) || (action == Action.MODIFIED)
+      if ((action == Action.ADDED || action == Action.MODIFIED)
           && !resolvedDriverService.isDone) {
         resolvedDriverService.set(service)
       }
@@ -570,7 +574,7 @@ private[spark] class Client(
       kubernetesClient: KubernetesClient,
       e: Throwable): String = {
     val driverPod = try {
-      kubernetesClient.pods().withName(kubernetesAppId).get()
+      kubernetesClient.pods().withName(kubernetesDriverPodName).get()
     } catch {
       case throwable: Throwable =>
         logError(s"Timed out while waiting $driverSubmitTimeoutSecs seconds for the" +
