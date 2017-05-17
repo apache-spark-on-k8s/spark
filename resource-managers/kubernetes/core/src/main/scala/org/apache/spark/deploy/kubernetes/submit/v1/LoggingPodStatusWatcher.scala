@@ -41,7 +41,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
     extends Watcher[Pod] with Logging {
 
   // start timer for periodic logging
-  private val scheduler = ThreadUtils.newDaemonSingleThreadExecutor("logging-pod-status-watcher")
+  private val scheduler = ThreadUtils.newDaemonSingleThreadScheduledExecutor("logging-pod-status-watcher")
   private val logRunnable: Runnable = new Runnable {
     override def run() = logShortStatus()
   }
@@ -53,7 +53,7 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
 
   def start(): Unit = {
     if (interval > 0) {
-      scheduler.scheduleWithFixedDelay(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
+      scheduler.scheduleAtFixedRate(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
     }
   }
 
