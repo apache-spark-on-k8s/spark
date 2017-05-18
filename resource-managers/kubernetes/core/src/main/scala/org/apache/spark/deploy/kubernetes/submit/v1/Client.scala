@@ -231,7 +231,15 @@ private[spark] class Client(
         if (waitForAppCompletion) {
           logInfo(s"Waiting for application $kubernetesAppId to finish...")
           driverPodCompletedLatch.await()
-          logInfo(s"Application $kubernetesAppId finished.")
+
+          val exitMessage = loggingWatch.getDriverPodExitStatus match {
+            case (Some(error), _) => s"failed with error: $error"
+            case (None, 0) => "finished successfully"
+            case (None, code) =>
+              s"failed with exit code $code. You may want to check the driver pod logs."
+          }
+
+          logInfo(s"Application $kubernetesAppId $exitMessage")
         } else {
           logInfo(s"Application $kubernetesAppId successfully launched.")
         }
