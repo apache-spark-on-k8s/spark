@@ -52,6 +52,9 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
   private def status: String = pod.map(_.getStatus().getContainerStatuses().toString())
     .getOrElse("unknown")
 
+  private var driverPodExitCode: Int = 0
+  private var driverPodErrorMessage: Option[String] = None
+
   def start(): Unit = {
     if (interval > 0) {
       scheduler.scheduleAtFixedRate(logRunnable, 0, interval, TimeUnit.MILLISECONDS)
@@ -62,14 +65,17 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
     this.pod = Option(pod)
     action match {
       case Action.DELETED =>
+        driverPodErrorMessage = Some("the driver pod was deleted")
         closeWatch()
 
       case Action.ERROR =>
+        driverPodErrorMessage = Some("error happened with the driver pod")
         closeWatch()
 
       case _ =>
         logLongStatus()
         if (hasCompleted()) {
+          driverPodExitCode = getDriverPodExitCode
           closeWatch()
         }
     }
@@ -129,4 +135,10 @@ private[kubernetes] class LoggingPodStatusWatcher(podCompletedFuture: CountDownL
       s"\n\t $k: $newValue"
     }.mkString("")
   }
+
+  def getDriverPodExitCode: Int = {
+    pod.get.getStatus().getContainerStatuses().asScala.last.getState.getTerminated.getExitCode
+  }
+
+  def getDriverPodExitStatus: (Option[String], Int) = (driverPodErrorMessage, driverPodExitCode)
 }
