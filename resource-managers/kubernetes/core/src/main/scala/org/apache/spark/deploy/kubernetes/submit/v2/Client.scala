@@ -217,7 +217,11 @@ private[spark] class Client(
             throw e
         }
         if (waitForAppCompletion) {
+          logInfo(s"Waiting for application $kubernetesAppId to finish...")
           loggingPodStatusWatcher.awaitCompletion()
+          logInfo(s"Application $kubernetesAppId finished.")
+        } else {
+          logInfo(s"Deployed Spark application $kubernetesAppId into Kubernetes.")
         }
       }
     }

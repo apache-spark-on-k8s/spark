@@ -101,9 +101,6 @@ private[spark] class Client(
 
   def run(): Unit = {
     logInfo(s"Starting application $kubernetesAppId in Kubernetes...")
-    loggingInterval.foreach { interval =>
-      require(interval > 0, "Logging interval must be a positive number.")
-    }
     val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
     val submitterLocalJars = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars)
     (submitterLocalFiles ++ submitterLocalJars).foreach { file =>
