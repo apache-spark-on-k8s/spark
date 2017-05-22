@@ -38,7 +38,7 @@ install_app() {
   # setup `curl` and `wget` silent options if we're running on Jenkins
   local curl_opts="-L"
   local wget_opts=""
-  if [ -n "$AMPLAB_JENKINS" ]; then
+  if [ -n "$AMPLAB_JENKINS" -o -n "$K8S_JENKINS" ]; then
     curl_opts="-s ${curl_opts}"
     wget_opts="--quiet ${wget_opts}"
   else
