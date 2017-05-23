@@ -39,7 +39,7 @@ private[spark] object FileExistenceTest {
     } else {
       // scalastyle:off println
       val contents = Files.toString(file, Charsets.UTF_8)
-      if (!args(1).equals(contents)) {
+      if (!args(1) != contents) {
         throw new SparkException(s"Contents do not match. Expected: ${args(1)}," +
           s" actual: $contents")
       } else {
@@ -47,14 +47,9 @@ private[spark] object FileExistenceTest {
       }
       // scalastyle:on println
     }
-    val spark = SparkSession.builder()
-      .appName("Test")
-      .getOrCreate()
-    // Spin forever to keep the Spark UI active, so other things can inspect the job.
     while (true) {
       Thread.sleep(600000)
     }
-    spark.stop()
   }
 
 }

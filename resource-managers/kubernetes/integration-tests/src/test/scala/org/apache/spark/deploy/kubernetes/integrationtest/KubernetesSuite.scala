@@ -28,7 +28,7 @@ import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
 import scala.collection.JavaConverters._
 
-import org.apache.spark.{SSLOptions, SparkConf, SparkFunSuite}
+import org.apache.spark.{SparkConf, SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.kubernetes.SSLUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTestBackendFactory
