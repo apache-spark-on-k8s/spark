@@ -39,7 +39,7 @@ private[spark] object FileExistenceTest {
     } else {
       // scalastyle:off println
       val contents = Files.toString(file, Charsets.UTF_8)
-      if (!args(1) != contents) {
+      if (args(1) != contents) {
         throw new SparkException(s"Contents do not match. Expected: ${args(1)}," +
           s" actual: $contents")
       } else {
