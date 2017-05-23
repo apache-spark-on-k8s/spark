@@ -77,6 +77,8 @@ private[spark] class KubernetesTaskSetManager(
 // To support mocks in unit tests.
 private[kubernetes] class InetAddressUtil {
 
+  // NOTE: This does issue a network call to DNS. Caching is done internally by the InetAddress
+  // class for both hits and misses.
   def getFullHostName(ipAddress: String): String = {
     InetAddress.getByName(ipAddress).getCanonicalHostName
   }
