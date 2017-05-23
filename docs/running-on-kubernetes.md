@@ -12,7 +12,7 @@ feature set is currently limited and not well-tested. This should not be used in
 using [kubectl](https://kubernetes.io/docs/user-guide/prereqs/). If you do not already have a working Kubernetes
 cluster, you may setup a test cluster on your local machine using
 [minikube](https://kubernetes.io/docs/getting-started-guides/minikube/).
-  * We recommend that minikube be updated to the most recent version (0.18.0 at the time of this documentation), as some
+  * We recommend that minikube be updated to the most recent version (0.19.0 at the time of this documentation), as some
   earlier versions may not start up the kubernetes cluster with all the necessary components.
 * You must have appropriate permissions to create and list [pods](https://kubernetes.io/docs/user-guide/pods/),
 [ConfigMaps](https://kubernetes.io/docs/tasks/configure-pod-container/configmap/) and
@@ -109,9 +109,10 @@ Application dependencies that are being submitted from your machine need to be s
 that the driver and executor can then communicate with to retrieve those dependencies. A YAML file denoting a minimal
 set of Kubernetes resources that runs this service is located in the file `conf/kubernetes-resource-staging-server.yaml`.
 This YAML file configures a Deployment with one pod running the resource staging server configured with a ConfigMap,
-and exposes the server through a Service with a given NodePort.
+and exposes the server through a Service with a fixed NodePort. Deploying a resource staging server with the included
+YAML file requires you to have permissions to create Deployments, Services, and ConfigMaps.
 
-To run the resource staging server with default configurations, the Kubernetes resources can simply be created:
+To run the resource staging server with default configurations, the Kubernetes resources can be created:
 
     kubectl create -f conf/kubernetes-resource-staging-server.yaml
 
@@ -120,7 +121,7 @@ and then you can compute the value of Pi as follows:
     bin/spark-submit \
       --deploy-mode cluster \
       --class org.apache.spark.examples.SparkPi \
-      --master k8s://https://<k8s-apiserver-host>:<k8s-apiserver-port> \
+      --master k8s://<k8s-apiserver-host>:<k8s-apiserver-port> \
       --kubernetes-namespace default \
       --conf spark.executor.instances=5 \
       --conf spark.app.name=spark-pi \
@@ -132,6 +133,13 @@ and then you can compute the value of Pi as follows:
 
 The Docker image for the resource staging server may also be built from source, in a similar manner to the driver
 and executor images. The Dockerfile is provided in `dockerfiles/resource-staging-server/Dockerfile`.
+
+The provided YAML file specifically sets the NodePort to 31000 on the service's specification. If port 31000 is not
+available on any of the nodes of your cluster, you should remove the NodePort field from the service's specification
+and allow the Kubernetes cluster to determine the NodePort itself. Be sure to provide the correct port in the resource
+staging server URI when submitting your application, in accordance to the NodePort chosen by the Kubernetes cluster.
+
+### Dependency Management Without The Resource Staging Server
 
 Note that this resource staging server is only required for submitting local dependencies. If your application's
 dependencies are all hosted in remote locations like HDFS or http servers, they may be referred to by their appropriate
@@ -163,7 +171,7 @@ If our local proxy were listening on port 8001, we would have our submission loo
       --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.1.0-kubernetes-0.1.0-alpha.2 \
       --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.1.0-kubernetes-0.1.0-alpha.2 \
       --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.1.0-kubernetes-0.1.0-alpha.2 \
-      examples/jars/spark_examples_2.11-2.2.0.jar
+      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar
 
 Communication between Spark and Kubernetes clusters is performed using the fabric8 kubernetes-client library.
 The above mechanism using `kubectl proxy` can be used when we have authentication providers that the fabric8
@@ -180,8 +188,8 @@ on Kubernetes assumes that a cluster administrator has set up one or more shuffl
 
 A sample configuration file is provided in `conf/kubernetes-shuffle-service.yaml` which can be customized as needed
 for a particular cluster. It is important to note that `spec.template.metadata.labels` are setup appropriately for the shuffle
-service because there may be multiple shuffle service instances running in a cluster. The labels give us a way to target a particular
-shuffle service.
+service because there may be multiple shuffle service instances running in a cluster. The labels give Spark applications
+a way to target a particular shuffle service.
 
 For example, if the shuffle service we want to use is in the default namespace, and
 has pods with labels `app=spark-shuffle-service` and `spark-version=2.1.0`, we can
@@ -200,7 +208,7 @@ the command may then look like the following:
       --conf spark.shuffle.service.enabled=true \
       --conf spark.kubernetes.shuffle.namespace=default \
       --conf spark.kubernetes.shuffle.labels="app=spark-shuffle-service,spark-version=2.1.0" \
-      examples/jars/spark_examples_2.11-2.2.0.jar 10 400000 2
+      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar 10 400000 2
 
 ## Advanced
 
@@ -218,13 +226,45 @@ be set by `spark.ssl.kubernetes.resourceStagingServer.keyStore`.
 In addition to the settings specified by the previously linked security page, the resource staging server supports the
 following additional configurations:
 
-- `spark.ssl.kubernetes.resourceStagingServer.keyPem` and `spark.ssl.kubernetes.resourceStagingServer.serverCertPem`, to
-use PEM-encoded keys and certificates instead of Java keyStore files. Note that both of these must be specified
-simultaneously. If these are provided, then `spark.ssl.kubernetes.resourceStagingServer.keyStore` must not be specified.
-- `spark.ssl.kubernetes.resourceStagingServer.keyStorePasswordFile`, to provide the keyStore's password using a file
-instead of a static value. This is useful if the keyStore's password is to be mounted into the container with a secret.
-- `spark.ssl.kubernetes.resourceStagingServer.keyPasswordFile`, to provide the keyStore's key password using a file
-instead of a static value. This is useful if the key password is to be mounted into the container with a secret.
+<table class="table">
+<tr><th>Property Name</th><th>Default</th><th>Meaning</th></tr>
+<tr>
+  <td><code>spark.ssl.kubernetes.resourceStagingServer.keyPem</code></td>
+  <td>(none)</td>
+  <td>
+    Private key file encoded in PEM format that the resource staging server uses to secure connections over TLS. If this
+    is specified, the associated public key file must be specified in
+    <code>spark.ssl.kubernetes.resourceStagingServer.serverCertPem</code>. PEM files and a keyStore file (set by
+    <code>spark.ssl.kubernetes.resourceStagingServer.keyStore</code>) cannot both be specified at the same time.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.ssl.kubernetes.resourceStagingServer.serverCertPem</code></td>
+  <td>(none)</td>
+  <td>
+    Certificate file encoded in PEM format that the resource staging server uses to secure connections over TLS. If this
+    is specified, the associated private key file must be specified in
+    <code>spark.ssl.kubernetes.resourceStagingServer.keyPem</code>. PEM files and a keyStore file (set by
+    <code>spark.ssl.kubernetes.resourceStagingServer.keyStore</code>) cannot both be specified at the same time.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.ssl.kubernetes.resourceStagingServer.keyStorePasswordFile</code></td>
+  <td>(none)</td>
+  <td>
+    Provides the KeyStore password through a file in the container instead of a static value. This is useful if the
+    keyStore's password is to be mounted into the container with a secret.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.ssl.kubernetes.resourceStagingServer.keyPasswordFile</code></td>
+  <td>(none)</td>
+  <td>
+    Provides the keyStore's key password using a file in the container instead of a static value. This is useful if the
+    keyStore's key password is to be mounted into the container with a secret.
+  </td>
+</tr>
+</table>
 
 Note that while the properties can be set in the ConfigMap, you will still need to consider the means of mounting the
 appropriate secret files into the resource staging server's container. A common mechanism that is used for this is
@@ -235,8 +275,7 @@ specification in the provided YAML file accordingly.
 Finally, when you submit your application, you must specify either a trustStore or a PEM-encoded certificate file to
 communicate with the resource staging server over TLS. The trustStore can be set with
 `spark.ssl.kubernetes.resourceStagingServer.trustStore`, or a certificate file can be set with
-`spark.ssl.kubernetes.resourceStagingServer.clientCertPem`. For example, our example that computes Pi may now look like
-this:
+`spark.ssl.kubernetes.resourceStagingServer.clientCertPem`. For example, our SparkPi example now looks like this:
 
     bin/spark-submit \
       --deploy-mode cluster \
@@ -464,63 +503,59 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td><code>spark.kubernetes.resourceStagingServer.uri</code></td>
   <td>(none)</td>
   <td>
-    URI of the resource staging server to communicate with when submitting local dependencies. Note that this URI must
-    be reachable by both the submitting machine and the pods running in the cluster. If the pods need to reach the
-    staging server at a different URI, set the value of <code>spark.kubernetes.resourceStagingServer.internal.uri</code>
-    as discussed below.
+    URI of the resource staging server that Spark should use to distribute the application's local dependencies. Note
+    that by default, this URI must be reachable by both the submitting machine and the pods running in the cluster. If
+    one URI is not simultaneously reachable both by the submitter and the driver/executor pods, configure the pods to
+    access the staging server at a different URI by setting
+    <code>spark.kubernetes.resourceStagingServer.internal.uri</code> as discussed below.
   </td>
 </tr>
 <tr>
   <td><code>spark.kubernetes.resourceStagingServer.internal.uri</code></td>
-  <td>(none)</td>
+  <td>Value of <code>spark.kubernetes.resourceStagingServer.uri</code></td>
   <td>
     URI of the resource staging server to communicate with when init-containers bootstrap the driver and executor pods
-    with submitted local dependencies. Note that this URI must by the pods running in the cluster. If this is not
-    provided, it defaults to the value specified by <code>spark.kubernetes.resourceStagingServer.uri</code>. This is
-    useful to set if the resource staging server has a separate "internal" URI that must be accessed by components
-    running in the cluster.
+    with submitted local dependencies. Note that this URI must by the pods running in the cluster. This is useful to
+    set if the resource staging server has a separate "internal" URI that must be accessed by components running in the
+    cluster.
   </td>
 </tr>
 <tr>
   <td><code>spark.ssl.kubernetes.resourceStagingServer.internal.trustStore</code></td>
-  <td>(none)</td>
+  <td>Value of <code>spark.ssl.kubernetes.resourceStagingServer.trustStore</code></td>
   <td>
     Location of the trustStore file to use when communicating with the resource staging server over TLS, as
-    init-containers bootstrap the driver and executor pods with submitted local dependencies. If this is not provided,
-    it defaults to the value of <code>spark.ssl.kubernetes.resourceStagingServer.trustStore</code>. This can be a
-    URI with a scheme of <code>local://</code>, which denotes that the file is pre-mounted on the pod's disk. A uri
-    without a scheme or a scheme of <code>file://</code> will result in this file being mounted from the submitting
-    machine's disk as a secret into the init-containers.
+    init-containers bootstrap the driver and executor pods with submitted local dependencies. This can be a URI with a
+    scheme of <code>local://</code>, which denotes that the file is pre-mounted on the pod's disk. A uri without a
+    scheme or a scheme of <code>file://</code> will result in this file being mounted from the submitting machine's
+    disk as a secret into the init-containers.
   </td>
 </tr>
 <tr>
   <td><code>spark.ssl.kubernetes.resourceStagingServer.internal.trustStorePassword</code></td>
-  <td>(none)</td>
+  <td>Value of <code><code>spark.ssl.kubernetes.resourceStagingServer.trustStorePassword</code></td>
   <td>
     Password of the trustStore file that is used when communicating with the resource staging server over TLS, as
-    init-containers bootstrap the driver and executor pods with submitted local dependencies. If this is not provided,
-    it defaults to the value of <code>spark.ssl.kubernetes.resourceStagingServer.trustStorePassword</code>.
+    init-containers bootstrap the driver and executor pods with submitted local dependencies.
   </td>
 </tr>
 <tr>
   <td><code>spark.ssl.kubernetes.resourceStagingServer.internal.trustStoreType</code></td>
-  <td>(none)</td>
+  <td>Value of <code><code>spark.ssl.kubernetes.resourceStagingServer.trustStoreType</code></td>
   <td>
     Type of the trustStore file that is used when communicating with the resource staging server over TLS, when
-    init-containers bootstrap the driver and executor pods with submitted local dependencies. If this is not provided,
-    it defaults to the value of <code>spark.ssl.kubernetes.resourceStagingServer.trustStoreType</code>.
+    init-containers bootstrap the driver and executor pods with submitted local dependencies.
   </td>
 </tr>
 <tr>
   <td><code>spark.ssl.kubernetes.resourceStagingServer.internal.clientCertPem</code></td>
-  <td>(none)</td>
+  <td>Value of <code>spark.ssl.kubernetes.resourceStagingServer.clientCertPem</code></td>
   <td>
     Location of the certificate file to use when communicating with the resource staging server over TLS, as
-    init-containers bootstrap the driver and executor pods with submitted local dependencies. If this is not provided,
-    it defaults to the value of <code>spark.ssl.kubernetes.resourceStagingServer.clientCertPem</code>. This can be a
-    URI with a scheme of <code>local://</code>, which denotes that the file is pre-mounted on the pod's disk. A uri
-    without a scheme or a scheme of <code>file://</code> will result in this file being mounted from the submitting
-    machine's disk as a secret into the init-containers.
+    init-containers bootstrap the driver and executor pods with submitted local dependencies. This can be a URI with a
+    scheme of <code>local://</code>, which denotes that the file is pre-mounted on the pod's disk. A uri without a
+    scheme or a scheme of <code>file://</code> will result in this file being mounted from the submitting machine's
+    disk as a secret into the init-containers.
   </td>
 </tr>
 <tr>
