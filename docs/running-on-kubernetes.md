@@ -215,7 +215,7 @@ the command may then look like the following:
 ### Securing the Resource Staging Server with TLS
 
 The default configuration of the resource staging server is not secured with TLS. It is highly recommended to configure
-this.
+this to protect the secrets and jars/files being submitted through the staging server.
 
 The YAML file in `conf/kubernetes-resource-staging-server.yaml` includes a ConfigMap resource that holds the resource
 staging server's configuration. The properties can be adjusted here to make the resource staging server listen over TLS.
