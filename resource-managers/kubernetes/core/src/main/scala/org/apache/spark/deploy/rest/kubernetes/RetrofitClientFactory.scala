@@ -17,11 +17,13 @@
 package org.apache.spark.deploy.rest.kubernetes
 
 import java.io.FileInputStream
+import java.net.{InetSocketAddress, URI}
 import java.security.{KeyStore, SecureRandom}
 import javax.net.ssl.{SSLContext, TrustManagerFactory, X509TrustManager}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import io.fabric8.kubernetes.client.Config
 import okhttp3.{Dispatcher, OkHttpClient}
 import retrofit2.Retrofit
 import retrofit2.converter.jackson.JacksonConverterFactory
@@ -41,7 +43,27 @@ private[spark] object RetrofitClientFactoryImpl extends RetrofitClientFactory {
 
   def createRetrofitClient[T](baseUrl: String, serviceType: Class[T], sslOptions: SSLOptions): T = {
     val dispatcher = new Dispatcher(ThreadUtils.newDaemonCachedThreadPool(s"http-client-$baseUrl"))
-    val okHttpClientBuilder = new OkHttpClient.Builder().dispatcher(dispatcher)
+    val serviceUri = URI.create(baseUrl)
+    val maybeAllProxy = Option.apply(System.getProperty(Config.KUBERNETES_ALL_PROXY))
+    val serviceUriScheme = serviceUri.getScheme
+    val maybeHttpProxy = (if (serviceUriScheme.equalsIgnoreCase("https")) {
+      Option.apply(System.getProperty(Config.KUBERNETES_HTTPS_PROXY))
+    } else if (serviceUriScheme.equalsIgnoreCase("http")) {
+      Option.apply(System.getProperty(Config.KUBERNETES_HTTP_PROXY))
+    } else {
+      maybeAllProxy
+    }).map(uriStringToProxy)
+    val maybeNoProxy = Option.apply(System.getProperty(Config.KUBERNETES_NO_PROXY))
+      .map(_.split(","))
+      .toSeq
+      .flatten
+    val resolvedProxy = maybeNoProxy.find(_ == serviceUri.getHost)
+      .map( _ => java.net.Proxy.NO_PROXY)
+      .orElse(maybeHttpProxy)
+      .getOrElse(java.net.Proxy.NO_PROXY)
+    val okHttpClientBuilder = new OkHttpClient.Builder()
+      .dispatcher(dispatcher)
+      .proxy(resolvedProxy)
     sslOptions.trustStore.foreach { trustStoreFile =>
       require(trustStoreFile.isFile, s"TrustStore provided at ${trustStoreFile.getAbsolutePath}"
         + " does not exist, or is not a file.")
@@ -69,4 +91,9 @@ private[spark] object RetrofitClientFactoryImpl extends RetrofitClientFactory {
       .create(serviceType)
   }
 
+  private def uriStringToProxy(uriString: String): java.net.Proxy = {
+    val uriObject = URI.create(uriString)
+    new java.net.Proxy(java.net.Proxy.Type.HTTP,
+        new InetSocketAddress(uriObject.getHost, uriObject.getPort))
+  }
 }
