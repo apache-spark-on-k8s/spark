@@ -30,13 +30,14 @@ import retrofit2.converter.jackson.JacksonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 
 import org.apache.spark.SSLOptions
+import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ThreadUtils, Utils}
 
 private[spark] trait RetrofitClientFactory {
   def createRetrofitClient[T](baseUrl: String, serviceType: Class[T], sslOptions: SSLOptions): T
 }
 
-private[spark] object RetrofitClientFactoryImpl extends RetrofitClientFactory {
+private[spark] object RetrofitClientFactoryImpl extends RetrofitClientFactory with Logging {
 
   private val OBJECT_MAPPER = new ObjectMapper().registerModule(new DefaultScalaModule)
   private val SECURE_RANDOM = new SecureRandom()
@@ -64,6 +65,8 @@ private[spark] object RetrofitClientFactoryImpl extends RetrofitClientFactory {
     val okHttpClientBuilder = new OkHttpClient.Builder()
       .dispatcher(dispatcher)
       .proxy(resolvedProxy)
+    logDebug(s"Proxying to $baseUrl through address ${resolvedProxy.address()} with proxy of" +
+      s" type ${resolvedProxy.`type`()}")
     sslOptions.trustStore.foreach { trustStoreFile =>
       require(trustStoreFile.isFile, s"TrustStore provided at ${trustStoreFile.getAbsolutePath}"
         + " does not exist, or is not a file.")
