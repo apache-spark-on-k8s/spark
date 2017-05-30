@@ -17,16 +17,18 @@
 package org.apache.spark.scheduler.cluster.kubernetes
 
 import java.io.Closeable
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, Future}
 
 import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.io.FilenameUtils
-import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
 
 import org.apache.spark.{SparkContext, SparkEnv, SparkException}
 import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, SparkPodInitContainerBootstrap}
@@ -154,10 +156,24 @@ private[spark] class KubernetesClusterSchedulerBackend(
       } else if (totalExpectedExecutors.get() <= runningExecutorPods.size) {
         logDebug("Maximum allowed executor limit reached. Not scaling up further.")
       } else {
+        val executorPodsWithIPs = EXECUTOR_PODS_BY_IPS_LOCK.synchronized {
+            executorPodsByIPs.values.toList
+          }
+        val nodeToLocalTaskCount = mutable.Map[String, Int]() ++
+          KubernetesClusterSchedulerBackend.this.synchronized {
+            hostToLocalTaskCount
+          }
+        for (pod <- executorPodsWithIPs) {
+          nodeToLocalTaskCount.remove(pod.getSpec.getNodeName).nonEmpty ||
+            nodeToLocalTaskCount.remove(pod.getStatus.getHostIP).nonEmpty ||
+            nodeToLocalTaskCount.remove(
+              InetAddress.getByName(pod.getStatus.getHostIP).getCanonicalHostName).nonEmpty
+        }
+        val preferredNodes = nodeToLocalTaskCount.toMap[String, Int]
         RUNNING_EXECUTOR_PODS_LOCK.synchronized {
           for (i <- 0 until math.min(
             totalExpectedExecutors.get - runningExecutorPods.size, podAllocationSize)) {
-            runningExecutorPods += allocateNewExecutorPod()
+            runningExecutorPods += allocateNewExecutorPod(preferredNodes)
             logInfo(
               s"Requesting a new executor, total executors is now ${runningExecutorPods.size}")
           }
@@ -241,7 +257,13 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  private def allocateNewExecutorPod(): (String, Pod) = {
+  /**
+    * Allocates a new executor pod
+    * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
+    *                        from data locality if an executor launches on the cluster node.
+    * @return A tuple of the new executor name and the Pod data structure.
+    */
+  private def allocateNewExecutorPod(nodeToTaskCount: Map[String, Int]): (String, Pod) = {
     val executorId = EXECUTOR_ID_COUNTER.incrementAndGet().toString
     val name = s"${applicationId()}-exec-$executorId"
 
@@ -348,14 +370,49 @@ private[spark] class KubernetesClusterSchedulerBackend(
             .endSpec()
         }
       }.getOrElse(basePodBuilder)
-    val resolvedExecutorPod = executorInitContainerBootstrap.map { bootstrap =>
-      bootstrap.bootstrapInitContainerAndVolumes(
-        "executor",
-        withMaybeShuffleConfigPodBuilder)
-    }.getOrElse(withMaybeShuffleConfigPodBuilder)
+    val executorInitContainerPodBuilder = executorInitContainerBootstrap.map {
+        bootstrap =>
+          bootstrap.bootstrapInitContainerAndVolumes(
+            "executor",
+            withMaybeShuffleConfigPodBuilder)
+      }.getOrElse(withMaybeShuffleConfigPodBuilder)
+
+    val resolvedExecutorPodBuilder = if (nodeToTaskCount.nonEmpty) {
+      val taskTotal = nodeToTaskCount.foldLeft(0)(_ + _._2)
+      // Normalize to node affinity weights in 1 to 100 range.
+      val nodeToWeight = nodeToTaskCount.map{
+        case (node, taskCount) =>
+          (node, math.min(100, math.max(1, math.round(taskCount * 100.0 / taskTotal))))}
+      val weightToNodes = nodeToWeight.values.map(
+        weight => (weight, nodeToWeight.keys.filter(nodeToWeight(_) == weight))).toMap
+      // TODO: Use non-annotation syntax when we switch to K8s version 1.6.
+      val nodeAffinity = s"""{
+          |"nodeAffinity": {
+            |"preferredDuringSchedulingIgnoredDuringExecution": [
+            ${(for ((weight, nodes) <- weightToNodes) yield
+              s"""{"weight": $weight,
+                  |"preference": {
+                    |"matchExpressions": [{
+                      |"key": "kubernetes.io/hostname",
+                      |"operator": "In",
+                      |"values": ${nodes.mkString("[\"", "\",\"", "\"]")}
+                    |}]
+                  |}
+                 |}"""
+              ).mkString(",")}
+            |]
+          |}
+        |}""".stripMargin.replaceAll("\n", " ")
+      logDebug(s"Adding nodeAffinity as annotation $nodeAffinity")
+      executorInitContainerPodBuilder.editMetadata()
+          .addToAnnotations(ANNOTATION_EXECUTOR_NODE_AFFINITY, nodeAffinity)
+        .endMetadata()
+    } else {
+      executorInitContainerPodBuilder
+    }
 
     try {
-      (executorId, kubernetesClient.pods.create(resolvedExecutorPod.build()))
+      (executorId, kubernetesClient.pods.create(resolvedExecutorPodBuilder.build()))
     } catch {
       case throwable: Throwable =>
         logError("Failed to allocate executor pod.", throwable)
