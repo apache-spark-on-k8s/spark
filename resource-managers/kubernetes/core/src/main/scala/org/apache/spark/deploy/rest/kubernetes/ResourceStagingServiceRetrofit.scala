@@ -29,14 +29,14 @@ import org.apache.spark.deploy.kubernetes.submit.SubmittedResourceIdAndSecret
 private[spark] trait ResourceStagingServiceRetrofit {
 
   @Multipart
-  @retrofit2.http.POST("/api/v0/resources/")
+  @retrofit2.http.POST("api/v0/resources/")
   def uploadResources(
       @retrofit2.http.Part("resources") resources: RequestBody,
       @retrofit2.http.Part("resourcesOwner") resourcesOwner: RequestBody)
       : Call[SubmittedResourceIdAndSecret]
 
   @Streaming
-  @retrofit2.http.GET("/api/v0/resources/{resourceId}")
+  @retrofit2.http.GET("api/v0/resources/{resourceId}")
   def downloadResources(
     @Path("resourceId") resourceId: String,
     @retrofit2.http.Header("Authorization") resourceSecret: String): Call[ResponseBody]
