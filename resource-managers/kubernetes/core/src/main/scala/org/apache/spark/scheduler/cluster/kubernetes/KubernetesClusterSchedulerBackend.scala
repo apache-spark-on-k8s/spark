@@ -258,11 +258,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   /**
-    * Allocates a new executor pod
-    * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
-    *                        from data locality if an executor launches on the cluster node.
-    * @return A tuple of the new executor name and the Pod data structure.
-    */
+   * Allocates a new executor pod
+   * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
+   *                        from data locality if an executor launches on the cluster node.
+   * @return A tuple of the new executor name and the Pod data structure.
+   */
   private def allocateNewExecutorPod(nodeToTaskCount: Map[String, Int]): (String, Pod) = {
     val executorId = EXECUTOR_ID_COUNTER.incrementAndGet().toString
     val name = s"${applicationId()}-exec-$executorId"
