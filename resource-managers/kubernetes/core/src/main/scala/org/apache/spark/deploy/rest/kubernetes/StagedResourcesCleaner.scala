@@ -89,7 +89,7 @@ private class StagedResourcesCleanerImpl(
               .withName(resource.stagedResourceOwner.ownerNamespace)
               .get()
           if (namespace == null) {
-            logInfo(s"Resource with id $resourceId is being removed. The owner's namespace" +
+            logInfo(s"Resource files with id $resourceId is being removed. The owner's namespace" +
               s" ${resource.stagedResourceOwner.ownerNamespace} was not found.")
             stagedResourcesStore.removeResources(resourceId)
             RESOURCE_LOCK.synchronized {
@@ -108,9 +108,9 @@ private class StagedResourcesCleanerImpl(
               .list()
               .getItems
               .isEmpty) {
-              logInfo(s"Resource with id $resourceId is being removed. Owners of the resource" +
-                s" with namespace: ${resource.stagedResourceOwner.ownerNamespace}, type:" +
-                s" ${resource.stagedResourceOwner.ownerType}, and labels:" +
+              logInfo(s"Resource files with id $resourceId is being removed. Owners of the" +
+                s" resource with namespace: ${resource.stagedResourceOwner.ownerNamespace}," +
+                s" type: ${resource.stagedResourceOwner.ownerType}, and labels:" +
                 s" ${resource.stagedResourceOwner.ownerLabels} was not found on the API server.")
               stagedResourcesStore.removeResources(resourceId)
               RESOURCE_LOCK.synchronized {
