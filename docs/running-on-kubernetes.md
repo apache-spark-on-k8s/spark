@@ -480,16 +480,17 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td><code>spark.kubernetes.executor.labels</code></td>
   <td>(none)</td>
   <td>
-    Custom labels that will be added to the executor pods. This should be a comma-separated list of label key-value pairs,
-    where each label is in the format <code>key=value</code>.
+    Custom labels that will be added to the executor pods. This should be a comma-separated list of label key-value
+    pairs, where each label is in the format <code>key=value</code>. Note that Spark also adds its own labels to the
+    executor pods for bookkeeping purposes.
   </td>
 </tr>
 <tr>
   <td><code>spark.kubernetes.executor.annotations</code></td>
   <td>(none)</td>
   <td>
-    Custom annotations that will be added to the executor pods. This should be a comma-separated list of label key-value
-    pairs, where each annotation is in the format <code>key=value</code>.
+    Custom annotations that will be added to the executor pods. This should be a comma-separated list of annotation
+    key-value pairs, where each annotation is in the format <code>key=value</code>.
   </td>
 </tr>
 <tr>
