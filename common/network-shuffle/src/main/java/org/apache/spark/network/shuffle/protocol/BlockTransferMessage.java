@@ -23,6 +23,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
 import org.apache.spark.network.protocol.Encodable;
+import org.apache.spark.network.shuffle.protocol.kubernetes.RegisterKubernetesApp;
 import org.apache.spark.network.shuffle.protocol.mesos.RegisterDriver;
 import org.apache.spark.network.shuffle.protocol.mesos.ShuffleServiceHeartbeat;
 
@@ -42,7 +43,7 @@ public abstract class BlockTransferMessage implements Encodable {
   /** Preceding every serialized message is its type, which allows us to deserialize it. */
   public enum Type {
     OPEN_BLOCKS(0), UPLOAD_BLOCK(1), REGISTER_EXECUTOR(2), STREAM_HANDLE(3), REGISTER_DRIVER(4),
-    HEARTBEAT(5);
+    HEARTBEAT(5), REGISTER_KUBERNETES_APP(6);
 
     private final byte id;
 
@@ -67,6 +68,7 @@ public abstract class BlockTransferMessage implements Encodable {
         case 3: return StreamHandle.decode(buf);
         case 4: return RegisterDriver.decode(buf);
         case 5: return ShuffleServiceHeartbeat.decode(buf);
+        case 6: return RegisterKubernetesApp.decode(buf);
         default: throw new IllegalArgumentException("Unknown message type: " + type);
       }
     }
