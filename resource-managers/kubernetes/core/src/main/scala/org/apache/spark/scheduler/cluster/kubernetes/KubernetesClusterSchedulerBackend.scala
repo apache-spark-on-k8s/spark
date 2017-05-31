@@ -65,7 +65,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
       s"Custom executor labels cannot contain $SPARK_APP_ID_LABEL as it is reserved for Spark.")
   require(
       !executorLabels.contains(SPARK_EXECUTOR_ID_LABEL),
-      s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for Spark.")
+      s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for" +
+        s" Spark.")
   private val executorAnnotations = ConfigurationUtils.parseKeyValuePairs(
       conf.get(KUBERNETES_EXECUTOR_ANNOTATIONS),
       KUBERNETES_EXECUTOR_ANNOTATIONS.key,
