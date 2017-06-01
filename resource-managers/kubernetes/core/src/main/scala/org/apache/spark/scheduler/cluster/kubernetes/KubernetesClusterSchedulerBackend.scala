@@ -21,14 +21,15 @@ import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
-
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import io.fabric8.kubernetes.api.model.{ContainerPortBuilder, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.io.FilenameUtils
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, Future}
 
 import org.apache.spark.{SparkContext, SparkEnv, SparkException}
 import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, SparkPodInitContainerBootstrap}
@@ -164,6 +165,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
             hostToLocalTaskCount
           }
         for (pod <- executorPodsWithIPs) {
+          // Remove cluster nodes that are running our executors already.
           nodeToLocalTaskCount.remove(pod.getSpec.getNodeName).nonEmpty ||
             nodeToLocalTaskCount.remove(pod.getStatus.getHostIP).nonEmpty ||
             nodeToLocalTaskCount.remove(
@@ -181,6 +183,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
       }
     }
   }
+
+  private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
     if (Utils.isDynamicAllocationEnabled(conf)) {
@@ -382,30 +386,21 @@ private[spark] class KubernetesClusterSchedulerBackend(
       // Normalize to node affinity weights in 1 to 100 range.
       val nodeToWeight = nodeToTaskCount.map{
         case (node, taskCount) =>
-          (node, math.min(100, math.max(1, math.round(taskCount * 100.0 / taskTotal))))}
+          (node, math.min(100, math.max(1, math.round(taskCount * 100.0 / taskTotal).toInt)))}
       val weightToNodes = nodeToWeight.values.map(
         weight => (weight, nodeToWeight.keys.filter(nodeToWeight(_) == weight))).toMap
+      val nodeAffinity = NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution =
+          for ((weight, nodes) <- weightToNodes) yield
+            WeightedPreference(weight,
+              Preference(Array(MatchExpression("kubernetes.io/hostname", "In", nodes))))
+        )
+      val nodeAffinityJson =
+        s"""{"nodeAffinity": ${objectMapper.writeValueAsString(nodeAffinity)}}"""
+
       // TODO: Use non-annotation syntax when we switch to K8s version 1.6.
-      val nodeAffinity = s"""{
-          |"nodeAffinity": {
-            |"preferredDuringSchedulingIgnoredDuringExecution": [
-            ${(for ((weight, nodes) <- weightToNodes) yield
-              s"""{"weight": $weight,
-                  |"preference": {
-                    |"matchExpressions": [{
-                      |"key": "kubernetes.io/hostname",
-                      |"operator": "In",
-                      |"values": ${nodes.mkString("[\"", "\",\"", "\"]")}
-                    |}]
-                  |}
-                 |}"""
-              ).mkString(",")}
-            |]
-          |}
-        |}""".stripMargin.replaceAll("\n", " ")
-      logDebug(s"Adding nodeAffinity as annotation $nodeAffinity")
+      logDebug(s"Adding nodeAffinity as annotation $nodeAffinityJson")
       executorInitContainerPodBuilder.editMetadata()
-          .addToAnnotations(ANNOTATION_EXECUTOR_NODE_AFFINITY, nodeAffinity)
+          .addToAnnotations(ANNOTATION_EXECUTOR_NODE_AFFINITY, nodeAffinityJson)
         .endMetadata()
     } else {
       executorInitContainerPodBuilder
@@ -526,3 +521,9 @@ private object KubernetesClusterSchedulerBackend {
   private val DEFAULT_STATIC_PORT = 10000
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 }
+
+case class NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution:
+                        Iterable[WeightedPreference])
+case class WeightedPreference(weight: Int, preference: Preference)
+case class Preference(matchExpressions: Array[MatchExpression])
+case class MatchExpression(key: String, operator: String, values: Iterable[String])
