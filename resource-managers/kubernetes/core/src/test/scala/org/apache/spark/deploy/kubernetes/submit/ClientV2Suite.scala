@@ -49,7 +49,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val ALL_EXPECTED_LABELS = Map(
       CUSTOM_LABEL_KEY -> CUSTOM_LABEL_VALUE,
       SPARK_APP_ID_LABEL -> APP_ID,
-      SPARK_APP_NAME_LABEL -> APP_NAME)
+      SPARK_APP_NAME_LABEL -> APP_NAME,
+      SPARK_ROLE_LABEL -> "driver")
   private val CUSTOM_ANNOTATION_KEY = "customAnnotation"
   private val CUSTOM_ANNOTATION_VALUE = "customAnnotationValue"
   private val INIT_CONTAINER_SECRET_NAME = "init-container-secret"

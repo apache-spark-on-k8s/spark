@@ -102,8 +102,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
-  private val kubernetesClient = new DriverPodKubernetesClientProvider(conf, kubernetesNamespace)
-    .get
+  private val kubernetesClient = new DriverPodKubernetesClientProvider(conf,
+    Some(kubernetesNamespace)).get
 
   private val driverPod = try {
     kubernetesClient.pods().inNamespace(kubernetesNamespace).
@@ -194,8 +194,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  // This method is factored out for testability
-  protected def getShuffleClient(): KubernetesExternalShuffleClient = {
+  private def getShuffleClient(): KubernetesExternalShuffleClient = {
     new KubernetesExternalShuffleClient(
       SparkTransportConf.fromSparkConf(conf, "shuffle"),
       sc.env.securityManager,
@@ -493,8 +492,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
                 val shufflePodIp = shufflePodCache.get.getShufflePodForExecutor(nodeName)
 
                 // Inform the shuffle pod about this application so it can watch.
-                kubernetesExternalShuffleClient.get
-                  .registerDriverWithShuffleService(shufflePodIp, externalShufflePort)
+                kubernetesExternalShuffleClient.foreach(
+                  _.registerDriverWithShuffleService(shufflePodIp, externalShufflePort))
 
                 resolvedProperties = resolvedProperties ++ Seq(
                   (SPARK_SHUFFLE_SERVICE_HOST.key, shufflePodIp))

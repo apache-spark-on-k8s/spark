@@ -20,6 +20,7 @@ package org.apache.spark.deploy.kubernetes
 import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
@@ -46,9 +47,9 @@ private[spark] class KubernetesShuffleBlockHandler (
   transportConf: TransportConf)
   extends ExternalShuffleBlockHandler(transportConf, null) with Logging {
 
-  private var connectedApps: Set[String] = Set()
+  private var connectedApps = mutable.Set.empty[String]
+  private var shuffleWatch: Option[Watch] = ShuffleWatcher()
   private val CONNECTED_APPS_LOCK = new Object
-  private val Watch: Option[Watch] = ShuffleWatcher()
 
   protected override def handleMessage(
     message: BlockTransferMessage,
@@ -72,7 +73,7 @@ private[spark] class KubernetesShuffleBlockHandler (
 
   private def ShuffleWatcher(): Option[Watch] = {
     try {
-      val kubernetesClient = new DriverPodKubernetesClientProvider(sparkConf, "default").get
+      val kubernetesClient = new DriverPodKubernetesClientProvider(sparkConf).get
       Some(kubernetesClient
         .pods()
         .withLabels(Map(SPARK_ROLE_LABEL -> "driver").asJava)
@@ -80,11 +81,14 @@ private[spark] class KubernetesShuffleBlockHandler (
           override def eventReceived(action: Watcher.Action, p: Pod): Unit = {
             action match {
               case Action.DELETED | Action.ERROR =>
-                val appId = p.getMetadata.getLabels.getOrDefault(SPARK_APP_ID_LABEL, "")
-                CONNECTED_APPS_LOCK.synchronized {
-                  if (connectedApps.contains(appId)) {
-                    connectedApps -= appId
-                    applicationRemoved(appId, true)
+                val labels = p.getMetadata.getLabels
+                if (labels.containsKey(SPARK_APP_ID_LABEL)) {
+                  val appId = labels.get(SPARK_APP_ID_LABEL)
+                  CONNECTED_APPS_LOCK.synchronized {
+                    if (connectedApps.contains(appId)) {
+                      connectedApps -= appId
+                      applicationRemoved(appId, true)
+                    }
                   }
                 }
               case Action.ADDED | Action.MODIFIED =>
