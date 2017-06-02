@@ -141,32 +141,39 @@ private[spark] class KubernetesExternalShuffleService(
   protected override def newShuffleBlockHandler(
       tConf: TransportConf): ExternalShuffleBlockHandler = {
     val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
-          conf.get(KUBERNETES_SHUFFLE_APISERVER_URI),
-          None,
-          APISERVER_AUTH_SHUFFLE_SERVICE_CONF_PREFIX,
-          conf,
-          Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH))
-              .filter( _ => conf.get(KUBERNETES_SHUFFLE_USE_SERVICE_ACCOUNT_CREDENTIALS)),
-          Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH))
-              .filter( _ => conf.get(KUBERNETES_SHUFFLE_USE_SERVICE_ACCOUNT_CREDENTIALS)))
+        conf.get(KUBERNETES_SHUFFLE_APISERVER_URI),
+        None,
+        APISERVER_AUTH_SHUFFLE_SERVICE_CONF_PREFIX,
+        conf,
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH))
+            .filter( _ => conf.get(KUBERNETES_SHUFFLE_USE_SERVICE_ACCOUNT_CREDENTIALS)),
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH))
+            .filter( _ => conf.get(KUBERNETES_SHUFFLE_USE_SERVICE_ACCOUNT_CREDENTIALS)))
     val newBlockHandler = new KubernetesShuffleBlockHandler(tConf, kubernetesClient)
-    newBlockHandler.start()
-
-    // TODO: figure out a better way of doing this.
-    // This is necessary because the constructor is not called
-    // when this class is initialized through ExternalShuffleService.
-    if (shuffleBlockHandlers == null) {
+    try {
+      newBlockHandler.start()
+      // TODO: figure out a better way of doing this.
+      // This is necessary because the constructor is not called
+      // when this class is initialized through ExternalShuffleService.
+      if (shuffleBlockHandlers == null) {
         shuffleBlockHandlers = mutable.Buffer.empty[KubernetesShuffleBlockHandler]
+      }
+      shuffleBlockHandlers += newBlockHandler
+      newBlockHandler
+    } catch {
+      case e: Throwable =>
+        newBlockHandler.close()
+        throw e
     }
-    shuffleBlockHandlers += newBlockHandler
-    newBlockHandler
   }
 
   override def stop(): Unit = {
     try {
       super.stop()
     } finally {
-      shuffleBlockHandlers.foreach(_.close())
+      if (shuffleBlockHandlers != null) {
+        shuffleBlockHandlers.foreach(_.close())
+      }
     }
   }
 }
