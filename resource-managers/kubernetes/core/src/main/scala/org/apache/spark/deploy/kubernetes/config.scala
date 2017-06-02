@@ -55,6 +55,8 @@ package object config extends Logging {
       "spark.kubernetes.authenticate.driver.mounted"
   private[spark] val APISERVER_AUTH_RESOURCE_STAGING_SERVER_CONF_PREFIX =
       "spark.kubernetes.authenticate.resourceStagingServer"
+  private[spark] val APISERVER_AUTH_SHUFFLE_SERVICE_CONF_PREFIX =
+      "spark.kubernetes.authenticate.shuffleService"
   private[spark] val OAUTH_TOKEN_CONF_SUFFIX = "oauthToken"
   private[spark] val OAUTH_TOKEN_FILE_CONF_SUFFIX = "oauthTokenFile"
   private[spark] val CLIENT_KEY_FILE_CONF_SUFFIX = "clientKeyFile"
@@ -121,6 +123,22 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_EXECUTOR_LABELS =
+    ConfigBuilder("spark.kubernetes.executor.labels")
+      .doc("Custom labels that will be added to the executor pods. This should be a" +
+        " comma-separated list of label key-value pairs, where each label is in the format" +
+        " key=value.")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_EXECUTOR_ANNOTATIONS =
+    ConfigBuilder("spark.kubernetes.executor.annotations")
+      .doc("Custom annotations that will be added to the executor pods. This should be a" +
+        " comma-separated list of annotation key-value pairs, where each annotation is in the" +
+        " format key=value.")
+      .stringConf
+      .createOptional
+
   private[spark] val KUBERNETES_DRIVER_POD_NAME =
     ConfigBuilder("spark.kubernetes.driver.pod.name")
       .doc("Name of the driver pod.")
@@ -152,6 +170,19 @@ package object config extends Logging {
       .doc("Path to the shared shuffle directories.")
       .stringConf
       .createOptional
+
+  private[spark] val KUBERNETES_SHUFFLE_APISERVER_URI =
+    ConfigBuilder("spark.kubernetes.shuffle.apiServer.url")
+      .doc("URL to the Kubernetes API server that the shuffle service will monitor for Spark pods.")
+      .stringConf
+      .createWithDefault(KUBERNETES_MASTER_INTERNAL_URL)
+
+  private[spark] val KUBERNETES_SHUFFLE_USE_SERVICE_ACCOUNT_CREDENTIALS =
+    ConfigBuilder(s"$APISERVER_AUTH_SHUFFLE_SERVICE_CONF_PREFIX.useServiceAccountCredentials")
+      .doc("Whether or not to use service account credentials when contacting the API server from" +
+        " the shuffle service.")
+      .booleanConf
+      .createWithDefault(true)
 
   private[spark] val KUBERNETES_ALLOCATION_BATCH_SIZE =
     ConfigBuilder("spark.kubernetes.allocation.batch.size")

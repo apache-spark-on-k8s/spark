@@ -33,8 +33,9 @@ import org.apache.spark.util.ThreadUtils
  */
 private[spark] object SparkKubernetesClientFactory {
 
-  def createKubernetesClient(master: String,
-      namespace: String,
+  def createKubernetesClient(
+      master: String,
+      namespace: Option[String],
       kubernetesAuthConfPrefix: String,
       sparkConf: SparkConf,
       maybeServiceAccountToken: Option[File],
@@ -63,9 +64,8 @@ private[spark] object SparkKubernetesClientFactory {
     val baseConfigBuilder = new ConfigBuilder()
         .withApiVersion("v1")
         .withMasterUrl(master)
-        .withNamespace(namespace)
         .withWebsocketPingInterval(0)
-    val withAuthConfig = new OptionConfigurableConfigBuilder(baseConfigBuilder)
+    val withOptionalConfigurations = new OptionConfigurableConfigBuilder(baseConfigBuilder)
       .withOption(oauthTokenValue) {
         (token, configBuilder) => configBuilder.withOauthToken(token)
       }.withOption(oauthTokenFile) {
@@ -77,12 +77,14 @@ private[spark] object SparkKubernetesClientFactory {
         (file, configBuilder) => configBuilder.withClientKeyFile(file)
       }.withOption(clientCertFile) {
         (file, configBuilder) => configBuilder.withClientCertFile(file)
+      }.withOption(namespace) {
+        (ns, configBuilder) => configBuilder.withNamespace(ns)
       }.build()
-    val baseHttpClient = HttpClientUtils.createHttpClient(withAuthConfig)
+    val baseHttpClient = HttpClientUtils.createHttpClient(withOptionalConfigurations)
     val httpClientWithCustomDispatcher = baseHttpClient.newBuilder()
       .dispatcher(dispatcher)
       .build()
-    new DefaultKubernetesClient(httpClientWithCustomDispatcher, withAuthConfig)
+    new DefaultKubernetesClient(httpClientWithCustomDispatcher, withOptionalConfigurations)
   }
 
   private class OptionConfigurableConfigBuilder(configBuilder: ConfigBuilder) {

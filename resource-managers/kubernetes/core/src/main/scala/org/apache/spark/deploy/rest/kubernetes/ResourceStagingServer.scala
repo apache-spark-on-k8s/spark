@@ -110,7 +110,7 @@ object ResourceStagingServer {
     // Namespace doesn't matter because we list resources from various namespaces
     val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
         apiServerUri,
-        "default",
+        None,
         APISERVER_AUTH_RESOURCE_STAGING_SERVER_CONF_PREFIX,
         sparkConf,
         Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH))

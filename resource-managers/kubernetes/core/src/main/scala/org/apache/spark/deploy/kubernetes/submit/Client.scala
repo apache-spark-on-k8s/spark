@@ -24,7 +24,7 @@ import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.JavaConverters._
 
 import org.apache.spark.{SparkConf, SparkException}
-import org.apache.spark.deploy.kubernetes.SparkKubernetesClientFactory
+import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, SparkKubernetesClientFactory}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.kubernetes.ResourceStagingServerSslOptionsProviderImpl
@@ -77,18 +77,19 @@ private[spark] class Client(
   def run(): Unit = {
     validateNoDuplicateFileNames(sparkJars)
     validateNoDuplicateFileNames(sparkFiles)
-    val parsedCustomLabels = parseKeyValuePairs(customLabels, KUBERNETES_DRIVER_LABELS.key,
-      "labels")
+    val parsedCustomLabels = ConfigurationUtils.parseKeyValuePairs(
+        customLabels, KUBERNETES_DRIVER_LABELS.key, "labels")
     require(!parsedCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
       s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping operations.")
     require(!parsedCustomLabels.contains(SPARK_APP_NAME_LABEL), s"Label with key" +
       s" $SPARK_APP_NAME_LABEL is not allowed as it is reserved for Spark bookkeeping operations.")
-    val allLabels = parsedCustomLabels ++
-      Map(SPARK_APP_ID_LABEL -> kubernetesAppId, SPARK_APP_NAME_LABEL -> appName)
-    val parsedCustomAnnotations = parseKeyValuePairs(
-      customAnnotations,
-      KUBERNETES_DRIVER_ANNOTATIONS.key,
-      "annotations")
+    val allLabels = parsedCustomLabels ++ Map(
+        SPARK_APP_ID_LABEL -> kubernetesAppId,
+        SPARK_APP_NAME_LABEL -> appName,
+        SPARK_ROLE_LABEL -> "driver")
+    val parsedCustomAnnotations = ConfigurationUtils.parseKeyValuePairs(
+        customAnnotations, KUBERNETES_DRIVER_ANNOTATIONS.key, "annotations")
+
     val driverExtraClasspathEnv = driverExtraClasspath.map { classPath =>
       new EnvVarBuilder()
         .withName(ENV_SUBMIT_EXTRA_CLASSPATH)
@@ -231,24 +232,6 @@ private[spark] class Client(
           s" file name $fileName is shared by all of these URIs: $urisWithFileName")
     }
   }
-
-  private def parseKeyValuePairs(
-      maybeKeyValues: Option[String],
-      configKey: String,
-      keyValueType: String): Map[String, String] = {
-    maybeKeyValues.map(keyValues => {
-      keyValues.split(",").map(_.trim).filterNot(_.isEmpty).map(keyValue => {
-        keyValue.split("=", 2).toSeq match {
-          case Seq(k, v) =>
-            (k, v)
-          case _ =>
-            throw new SparkException(s"Custom $keyValueType set by $configKey must be a" +
-              s" comma-separated list of key-value pairs, with format <key>=<value>." +
-              s" Got value: $keyValue. All values: $keyValues")
-        }
-      }).toMap
-    }).getOrElse(Map.empty[String, String])
-  }
 }
 
 private[spark] object Client {
@@ -290,7 +273,7 @@ private[spark] object Client {
         sslOptionsProvider.getSslOptions)
     Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
         master,
-        namespace,
+        Some(namespace),
         APISERVER_AUTH_SUBMISSION_CONF_PREFIX,
         sparkConf,
         None,
