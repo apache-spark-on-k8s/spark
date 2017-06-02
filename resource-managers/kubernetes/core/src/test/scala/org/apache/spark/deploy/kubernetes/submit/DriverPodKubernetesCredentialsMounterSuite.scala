@@ -111,17 +111,17 @@ class DriverPodKubernetesCredentialsMounterSuite
         val baseSparkConf = new SparkConf()
         val resolvedSparkConf =
           credentialsMounter.setDriverPodKubernetesCredentialLocations(baseSparkConf)
-        assert(resolvedSparkConf.get(
+        assert(resolvedSparkConf.getOption(
             s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CLIENT_KEY_FILE_CONF_SUFFIX") ===
             expectedClientKeyFile)
-        assert(resolvedSparkConf.get(
+        assert(resolvedSparkConf.getOption(
             s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CLIENT_CERT_FILE_CONF_SUFFIX") ===
             expectedClientCertFile)
-        assert(resolvedSparkConf.get(
+        assert(resolvedSparkConf.getOption(
             s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX") ===
             expectedCaCertFile)
-        assert(resolvedSparkConf.get(
-            s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_CONF_SUFFIX") ===
+        assert(resolvedSparkConf.getOption(
+            s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_FILE_CONF_SUFFIX") ===
             expectedOAuthTokenFile)
     }
   }
