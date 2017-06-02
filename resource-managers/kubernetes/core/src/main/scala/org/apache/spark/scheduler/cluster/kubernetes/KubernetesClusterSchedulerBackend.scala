@@ -287,7 +287,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
     // name as the hostname.  This preserves uniqueness since the end of name contains
     // executorId and applicationId
     val hostname = name.substring(Math.max(0, name.length - 63))
-    
     val resolvedExecutorLabels = Map(
       SPARK_EXECUTOR_ID_LABEL -> executorId,
       SPARK_APP_ID_LABEL -> applicationId(),
