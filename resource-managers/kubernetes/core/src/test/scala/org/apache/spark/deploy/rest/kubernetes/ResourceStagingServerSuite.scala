@@ -96,7 +96,6 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter {
     val resourcesOwner = StagedResourcesOwner(
       ownerLabels = labels,
       ownerNamespace = namespace,
-      ownerMonitoringCredentials = StagedResourcesOwnerMonitoringCredentials(None, None, None),
       ownerType = StagedResourcesOwnerType.Pod)
     val resourcesOwnerJson = OBJECT_MAPPER.writeValueAsString(resourcesOwner)
     val resourcesOwnerRequestBody = RequestBody.create(

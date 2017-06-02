@@ -30,12 +30,13 @@ import scala.collection.JavaConverters._
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.util.Clock
 
-private[spark] class StagedResourcesCleanerSuite
-    extends SparkFunSuite with BeforeAndAfter {
+private[spark] class StagedResourcesCleanerSuite extends SparkFunSuite with BeforeAndAfter {
 
   private type PODS = MixedOperation[Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]]
   private type PODSWITHLABELS = FilterWatchListDeletable[
       Pod, PodList, java.lang.Boolean, Watch, Watcher[Pod]]
+  private type PODSINNAMESPACE = NonNamespaceOperation[
+      Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]]
   private type NAMESPACES = NonNamespaceOperation[
       Namespace, NamespaceList, DoneableNamespace, Resource[Namespace, DoneableNamespace]]
   private type NAMESPACEWITHNAME = Resource[Namespace, DoneableNamespace]
@@ -46,18 +47,13 @@ private[spark] class StagedResourcesCleanerSuite
   private val RESOURCE_ID = "resource-id"
   private val POD_NAMESPACE = "namespace"
   private val POD_LABELS = Map("label1" -> "label1value", "label2" -> "label2value")
-  private val POD_MONITORING_CREDENTIALS = StagedResourcesOwnerMonitoringCredentials(
-      Some("token"), Some("clientKey"), Some("clientCert"))
   private val RESOURCES_OWNER = StagedResourcesOwner(
     ownerNamespace = POD_NAMESPACE,
     ownerLabels = POD_LABELS,
-    ownerType = StagedResourcesOwnerType.Pod,
-    ownerMonitoringCredentials = POD_MONITORING_CREDENTIALS)
+    ownerType = StagedResourcesOwnerType.Pod)
 
   @Mock
   private var stagedResourcesStore: StagedResourcesStore = _
-  @Mock
-  private var kubernetesClientProvider: ResourceStagingServiceKubernetesClientProvider = _
   @Mock
   private var kubernetesClient: KubernetesClient = _
   @Mock
@@ -66,6 +62,8 @@ private[spark] class StagedResourcesCleanerSuite
   private var cleanerExecutorService: ScheduledExecutorService = _
   @Mock
   private var podOperations: PODS = _
+  @Mock
+  private var podsInNamespaceOperations: PODSINNAMESPACE = _
   @Mock
   private var podsWithLabelsOperations: PODSWITHLABELS = _
   @Mock
@@ -78,13 +76,11 @@ private[spark] class StagedResourcesCleanerSuite
     MockitoAnnotations.initMocks(this)
     cleanerUnderTest = new StagedResourcesCleanerImpl(
         stagedResourcesStore,
-        kubernetesClientProvider,
+        kubernetesClient,
         cleanerExecutorService,
         clock,
         INITIAL_ACCESS_EXPIRATION_MS,
         CLEANUP_INTERVAL_MS)
-    when(kubernetesClientProvider.getKubernetesClient(POD_NAMESPACE, POD_MONITORING_CREDENTIALS))
-        .thenReturn(kubernetesClient)
     when(kubernetesClient.pods()).thenReturn(podOperations)
     when(podOperations.withLabels(POD_LABELS.asJava)).thenReturn(podsWithLabelsOperations)
     when(kubernetesClient.namespaces()).thenReturn(namespaceOperations)
@@ -107,7 +103,9 @@ private[spark] class StagedResourcesCleanerSuite
     when(clock.getTimeMillis()).thenReturn(CURRENT_TIME + INITIAL_ACCESS_EXPIRATION_MS)
     when(namespaceOperations.withName(POD_NAMESPACE)).thenReturn(namedNamespaceOperations)
     when(namedNamespaceOperations.get()).thenReturn(new Namespace())
-    when(podOperations.withLabels(POD_LABELS.asJava)).thenReturn(podsWithLabelsOperations)
+    when(podOperations.inNamespace(POD_NAMESPACE)).thenReturn(podsInNamespaceOperations)
+    when(podsInNamespaceOperations.withLabels(POD_LABELS.asJava))
+        .thenReturn(podsWithLabelsOperations)
     when(podsWithLabelsOperations.list()).thenReturn(
         new PodListBuilder().addNewItemLike(new Pod()).endItem().build())
     cleanupRunnable.run()
@@ -121,6 +119,9 @@ private[spark] class StagedResourcesCleanerSuite
     when(clock.getTimeMillis()).thenReturn(CURRENT_TIME + INITIAL_ACCESS_EXPIRATION_MS)
     when(namespaceOperations.withName(POD_NAMESPACE)).thenReturn(namedNamespaceOperations)
     when(namedNamespaceOperations.get()).thenReturn(new Namespace())
+    when(podOperations.inNamespace(POD_NAMESPACE)).thenReturn(podsInNamespaceOperations)
+    when(podsInNamespaceOperations.withLabels(POD_LABELS.asJava))
+      .thenReturn(podsWithLabelsOperations)
     when(podsWithLabelsOperations.list()).thenReturn(new PodListBuilder().build())
     cleanupRunnable.run()
     verify(stagedResourcesStore).removeResources(RESOURCE_ID)

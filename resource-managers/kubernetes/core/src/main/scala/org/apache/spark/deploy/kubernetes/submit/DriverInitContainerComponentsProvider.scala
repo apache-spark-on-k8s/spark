@@ -48,6 +48,7 @@ private[spark] trait DriverInitContainerComponentsProvider {
 private[spark] class DriverInitContainerComponentsProviderImpl(
     sparkConf: SparkConf,
     kubernetesAppId: String,
+    namespace: String,
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     resourceStagingServerExternalSslOptions: SSLOptions)
@@ -100,15 +101,10 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
   private val maybeSecretName = maybeResourceStagingServerUri.map { _ =>
     s"$kubernetesAppId-init-secret"
   }
-  private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
   private val configMapName = s"$kubernetesAppId-init-config"
   private val configMapKey = s"$kubernetesAppId-init-config-key"
   private val initContainerImage = sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE)
   private val downloadTimeoutMinutes = sparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT)
-
-  private val kubernetesApiClientKeyFile = sparkConf.get(KUBERNETES_SUBMIT_CLIENT_KEY_FILE)
-  private val kubernetesApiClientCertFile = sparkConf.get(KUBERNETES_SUBMIT_CLIENT_CERT_FILE)
-  private val kubernetesApiOauthToken = sparkConf.get(KUBERNETES_SUBMIT_OAUTH_TOKEN)
 
   override def provideInitContainerConfigMapBuilder(
       maybeSubmittedResourceIds: Option[SubmittedResourceIds])
@@ -167,9 +163,6 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
         stagingServerUri,
         sparkJars,
         sparkFiles,
-        kubernetesApiClientKeyFile.map(new File(_)),
-        kubernetesApiClientCertFile.map(new File(_)),
-        kubernetesApiOauthToken,
         resourceStagingServerExternalSslOptions,
         RetrofitClientFactoryImpl)
     }

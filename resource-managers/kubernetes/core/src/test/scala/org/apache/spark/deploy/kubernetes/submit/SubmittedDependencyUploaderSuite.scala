@@ -32,7 +32,7 @@ import retrofit2.{Call, Response}
 
 import org.apache.spark.{SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.kubernetes.CompressionUtils
-import org.apache.spark.deploy.rest.kubernetes.{ResourceStagingServiceRetrofit, RetrofitClientFactory, StagedResourcesOwner, StagedResourcesOwnerMonitoringCredentials}
+import org.apache.spark.deploy.rest.kubernetes.{ResourceStagingServiceRetrofit, RetrofitClientFactory, StagedResourcesOwner}
 import org.apache.spark.util.Utils
 
 private[spark] class SubmittedDependencyUploaderSuite extends SparkFunSuite with BeforeAndAfter {
@@ -91,9 +91,6 @@ private[spark] class SubmittedDependencyUploaderSuite extends SparkFunSuite with
       STAGING_SERVER_URI,
       JARS,
       FILES,
-      Some(new File(CLIENT_KEY_FILE)),
-      Some(new File(CLIENT_CERT_FILE)),
-      Some(OAUTH_TOKEN),
       STAGING_SERVER_SSL_OPTIONS,
       retrofitClientFactory)
   }
@@ -114,11 +111,6 @@ private[spark] class SubmittedDependencyUploaderSuite extends SparkFunSuite with
     val resourceOwner = OBJECT_MAPPER.readValue(resourceOwnerString, classOf[StagedResourcesOwner])
     assert(resourceOwner.ownerLabels === LABELS)
     assert(resourceOwner.ownerNamespace === NAMESPACE)
-    val expectedCredentials = StagedResourcesOwnerMonitoringCredentials(
-      oauthTokenBase64 = Some(BASE_64.encode(OAUTH_TOKEN.getBytes(Charsets.UTF_8))),
-      clientKeyDataBase64 = Some(BASE_64.encode(Files.toByteArray(new File(CLIENT_KEY_FILE)))),
-      clientCertDataBase64 = Some(BASE_64.encode(Files.toByteArray(new File(CLIENT_CERT_FILE)))))
-    assert(resourceOwner.ownerMonitoringCredentials === expectedCredentials)
     val unpackedFilesDir = Utils.createTempDir(namePrefix = "test-unpacked-files")
     val compressedBytesInput = new ByteArrayInputStream(
         requestBodyBytes(resourcesDataCaptor.getValue()))

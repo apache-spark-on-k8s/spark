@@ -21,6 +21,7 @@ import java.io.File
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import io.fabric8.kubernetes.client.Config
 import org.eclipse.jetty.http.HttpVersion
 import org.eclipse.jetty.server.{HttpConfiguration, HttpConnectionFactory, Server, ServerConnector, SslConnectionFactory}
 import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
@@ -30,6 +31,7 @@ import org.glassfish.jersey.server.ResourceConfig
 import org.glassfish.jersey.servlet.ServletContainer
 
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.kubernetes.SparkKubernetesClientFactory
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{SystemClock, ThreadUtils, Utils}
@@ -99,18 +101,27 @@ object ResourceStagingServer {
       new SparkConf(true)
     }
     val apiServerUri = sparkConf.get(RESOURCE_STAGING_SERVER_API_SERVER_URL)
-    val caCertFile = sparkConf.get(RESOURCE_STAGING_SERVER_API_SERVER_CA_CERT_FILE)
-        .map(new File(_))
     val initialAccessExpirationMs = sparkConf.get(
         RESOURCE_STAGING_SERVER_INITIAL_ACCESS_EXPIRATION_TIMEOUT)
     val resourceCleanupIntervalMs = sparkConf.get(RESOURCE_STAGING_SERVER_CLEANUP_INTERVAL)
     val dependenciesRootDir = Utils.createTempDir(namePrefix = "local-application-dependencies")
-    val kubernetesClientProvider = new ResourceStagingServiceKubernetesClientProviderImpl(
-        apiServerUri, caCertFile)
+    val useServiceAccountCredentials = sparkConf.get(
+        RESOURCE_STAGING_SERVER_USE_SERVICE_ACCOUNT_CREDENTIALS)
+    // Namespace doesn't matter because we list resources from various namespaces
+    val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
+        apiServerUri,
+        "default",
+        APISERVER_AUTH_RESOURCE_STAGING_SERVER_CONF_PREFIX,
+        sparkConf,
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH))
+            .filter( _ => useServiceAccountCredentials),
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH))
+            .filter( _ => useServiceAccountCredentials))
+
     val stagedResourcesStore = new StagedResourcesStoreImpl(dependenciesRootDir)
     val stagedResourcesCleaner = new StagedResourcesCleanerImpl(
-      kubernetesClientProvider = kubernetesClientProvider,
       stagedResourcesStore = stagedResourcesStore,
+      kubernetesClient = kubernetesClient,
       cleanupExecutorService = ThreadUtils
           .newDaemonSingleThreadScheduledExecutor("resource-expiration"),
       clock = new SystemClock(),

@@ -18,12 +18,13 @@ package org.apache.spark.deploy.rest.kubernetes
 
 import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 
+import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
-import org.apache.spark.util.{Clock, Utils}
+import org.apache.spark.util.Clock
 
 private[spark] trait StagedResourcesCleaner {
 
@@ -37,7 +38,7 @@ private[spark] trait StagedResourcesCleaner {
 
 private class StagedResourcesCleanerImpl(
       stagedResourcesStore: StagedResourcesStore,
-      kubernetesClientProvider: ResourceStagingServiceKubernetesClientProvider,
+      kubernetesClient: KubernetesClient,
       cleanupExecutorService: ScheduledExecutorService,
       clock: Clock,
       initialAccessExpirationMs: Long,
@@ -81,41 +82,36 @@ private class StagedResourcesCleanerImpl(
         Map.apply(activeResources.toSeq: _*)
       }
       for ((resourceId, resource) <- activeResourcesCopy) {
-        Utils.tryWithResource(
-            kubernetesClientProvider.getKubernetesClient(
-                resource.stagedResourceOwner.ownerNamespace,
-                resource.stagedResourceOwner.ownerMonitoringCredentials)) { kubernetesClient =>
-          val namespace = kubernetesClient.namespaces()
-              .withName(resource.stagedResourceOwner.ownerNamespace)
-              .get()
-          if (namespace == null) {
-            logInfo(s"Resource files with id $resourceId is being removed. The owner's namespace" +
-              s" ${resource.stagedResourceOwner.ownerNamespace} was not found.")
+        val namespace = kubernetesClient.namespaces()
+            .withName(resource.stagedResourceOwner.ownerNamespace)
+            .get()
+        if (namespace == null) {
+          logInfo(s"Resource files with id $resourceId is being removed. The owner's namespace" +
+            s" ${resource.stagedResourceOwner.ownerNamespace} was not found.")
+          stagedResourcesStore.removeResources(resourceId)
+          RESOURCE_LOCK.synchronized {
+            activeResources.remove(resourceId)
+          }
+        } else {
+          val metadataOperation = resource.stagedResourceOwner.ownerType match {
+            case StagedResourcesOwnerType.Pod =>
+              kubernetesClient.pods().inNamespace(resource.stagedResourceOwner.ownerNamespace)
+            case _ =>
+              throw new SparkException(s"Unsupported resource owner type for cleanup:" +
+                s" ${resource.stagedResourceOwner.ownerType}")
+          }
+          if (metadataOperation
+            .withLabels(resource.stagedResourceOwner.ownerLabels.asJava)
+            .list()
+            .getItems
+            .isEmpty) {
+            logInfo(s"Resource files with id $resourceId is being removed. Owners of the" +
+              s" resource with namespace: ${resource.stagedResourceOwner.ownerNamespace}," +
+              s" type: ${resource.stagedResourceOwner.ownerType}, and labels:" +
+              s" ${resource.stagedResourceOwner.ownerLabels} was not found on the API server.")
             stagedResourcesStore.removeResources(resourceId)
             RESOURCE_LOCK.synchronized {
               activeResources.remove(resourceId)
-            }
-          } else {
-            val metadataOperation = resource.stagedResourceOwner.ownerType match {
-              case StagedResourcesOwnerType.Pod =>
-                kubernetesClient.pods()
-              case _ =>
-                throw new SparkException(s"Unsupported resource owner type for cleanup:" +
-                  s" ${resource.stagedResourceOwner.ownerType}")
-            }
-            if (metadataOperation
-              .withLabels(resource.stagedResourceOwner.ownerLabels.asJava)
-              .list()
-              .getItems
-              .isEmpty) {
-              logInfo(s"Resource files with id $resourceId is being removed. Owners of the" +
-                s" resource with namespace: ${resource.stagedResourceOwner.ownerNamespace}," +
-                s" type: ${resource.stagedResourceOwner.ownerType}, and labels:" +
-                s" ${resource.stagedResourceOwner.ownerLabels} was not found on the API server.")
-              stagedResourcesStore.removeResources(resourceId)
-              RESOURCE_LOCK.synchronized {
-                activeResources.remove(resourceId)
-              }
             }
           }
         }

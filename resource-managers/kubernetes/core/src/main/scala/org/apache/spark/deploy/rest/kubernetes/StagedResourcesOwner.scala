@@ -30,6 +30,5 @@ class StagedResourcesOwnerTypeReference extends TypeReference[StagedResourcesOwn
 case class StagedResourcesOwner(
     ownerNamespace: String,
     ownerLabels: Map[String, String],
-    ownerMonitoringCredentials: StagedResourcesOwnerMonitoringCredentials,
     @JsonScalaEnumeration(classOf[StagedResourcesOwnerTypeReference])
         ownerType: StagedResourcesOwnerType.OwnerType)

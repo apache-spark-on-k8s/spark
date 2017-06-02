@@ -127,8 +127,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   @Mock
   private var initContainerComponentsProvider: DriverInitContainerComponentsProvider = _
   @Mock
-  private var kubernetesClientProvider: SubmissionKubernetesClientProvider = _
-  @Mock
   private var kubernetesClient: KubernetesClient = _
   @Mock
   private var podOps: MixedOperation[Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]] = _
@@ -170,7 +168,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       .thenReturn(INIT_CONTAINER_SECRET)
     when(initContainerConfigMapBuilder.build())
       .thenReturn(INIT_CONTAINER_CONFIG_MAP)
-    when(kubernetesClientProvider.get).thenReturn(kubernetesClient)
     when(kubernetesClient.pods()).thenReturn(podOps)
     when(podOps.create(any())).thenAnswer(new Answer[Pod] {
       override def answer(invocation: InvocationOnMock): Pod = {
@@ -298,7 +295,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       SPARK_JARS,
       SPARK_FILES,
       true,
-      kubernetesClientProvider,
+      kubernetesClient,
       initContainerComponentsProvider,
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
@@ -381,7 +378,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       SPARK_JARS,
       SPARK_FILES,
       false,
-      kubernetesClientProvider,
+      kubernetesClient,
       initContainerComponentsProvider,
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
