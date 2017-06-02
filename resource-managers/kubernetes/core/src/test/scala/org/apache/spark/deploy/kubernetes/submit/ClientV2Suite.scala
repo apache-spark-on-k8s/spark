@@ -31,10 +31,13 @@ import org.scalatest.BeforeAndAfter
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.kubernetes.SparkPodInitContainerBootstrap
+import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
+import org.apache.spark.deploy.kubernetes.{KubernetesExternalShuffleService, KubernetesShuffleBlockHandler, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.network.netty.SparkTransportConf
+import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
+import org.apache.spark.scheduler.cluster.kubernetes.DriverPodKubernetesClientProvider
 
 class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val JARS_RESOURCE = SubmittedResourceIdAndSecret("jarsId", "jarsSecret")
@@ -304,6 +307,30 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
     verify(loggingPodStatusWatcher).awaitCompletion()
+  }
+
+  test("Run kubernetes shuffle service.") {
+    expectationsForNoMountedCredentials()
+    expectationsForNoDependencyUploader()
+
+    val shuffleService = new KubernetesExternalShuffleService(
+      SPARK_CONF,
+      new SecurityManager(SPARK_CONF),
+      new DriverPodKubernetesClientProvider(SPARK_CONF))
+
+    val shuffleClient = new KubernetesExternalShuffleClient(
+      SparkTransportConf.fromSparkConf(SPARK_CONF, "shuffle"),
+      new SecurityManager(SPARK_CONF),
+      false,
+      false)
+
+    shuffleService.start()
+    shuffleClient.init("newapp")
+
+    // verifies that we can connect to the shuffle service and send
+    // it a message.
+    shuffleClient.registerDriverWithShuffleService("localhost", 7337)
+    shuffleService.stop()
   }
 
   private def expectationsForNoDependencyUploader(): Unit = {

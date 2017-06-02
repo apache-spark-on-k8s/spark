@@ -15,43 +15,62 @@
  * limitations under the License.
  */
 
-package org.apache.spark.network.shuffle.protocol.kubernetes;
+package org.apache.spark.network.shuffle.protocol;
 
+import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
+
 import org.apache.spark.network.protocol.Encoders;
-import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
 // Needed by ScalaDoc. See SPARK-7726
 import static org.apache.spark.network.shuffle.protocol.BlockTransferMessage.Type;
 
-
 /**
- * A message sent from the driver to register with the KubernetesExternalShuffleService.
+ * A message sent from the driver to register with an ExternalShuffleService.
  */
-public class RegisterKubernetesApp extends BlockTransferMessage {
+public class RegisterDriver extends BlockTransferMessage {
   private final String appId;
+  private final long heartbeatTimeoutMs;
 
-  public RegisterKubernetesApp(String appId) {
+  public RegisterDriver(String appId, long heartbeatTimeoutMs) {
     this.appId = appId;
+    this.heartbeatTimeoutMs = heartbeatTimeoutMs;
   }
 
   public String getAppId() { return appId; }
 
+  public long getHeartbeatTimeoutMs() { return heartbeatTimeoutMs; }
+
   @Override
-  protected Type type() { return Type.REGISTER_KUBERNETES_APP; }
+  protected Type type() { return Type.REGISTER_DRIVER; }
 
   @Override
   public int encodedLength() {
-    return Encoders.Strings.encodedLength(appId);
+    return Encoders.Strings.encodedLength(appId) + Long.SIZE / Byte.SIZE;
   }
 
   @Override
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, appId);
+    buf.writeLong(heartbeatTimeoutMs);
   }
 
-  public static RegisterKubernetesApp decode(ByteBuf buf) {
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(appId, heartbeatTimeoutMs);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof RegisterDriver)) {
+      return false;
+    }
+    return Objects.equal(appId, ((RegisterDriver) o).appId);
+  }
+
+  public static RegisterDriver decode(ByteBuf buf) {
     String appId = Encoders.Strings.decode(buf);
-    return new RegisterKubernetesApp(appId);
+    long heartbeatTimeout = buf.readLong();
+    return new RegisterDriver(appId, heartbeatTimeout);
   }
 }

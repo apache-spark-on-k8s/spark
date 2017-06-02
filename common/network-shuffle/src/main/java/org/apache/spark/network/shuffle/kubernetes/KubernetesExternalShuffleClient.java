@@ -21,7 +21,7 @@ import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.sasl.SecretKeyHolder;
 import org.apache.spark.network.shuffle.ExternalShuffleClient;
-import org.apache.spark.network.shuffle.protocol.kubernetes.RegisterKubernetesApp;
+import org.apache.spark.network.shuffle.protocol.RegisterDriver;
 import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +54,7 @@ public class KubernetesExternalShuffleClient extends ExternalShuffleClient {
 
   public void registerDriverWithShuffleService(String host, int port) throws IOException {
     checkInit();
-    ByteBuffer registerDriver = new RegisterKubernetesApp(appId).toByteBuffer();
+    ByteBuffer registerDriver = new RegisterDriver(appId, 0).toByteBuffer();
     TransportClient client = clientFactory.createClient(host, port);
     client.sendRpc(registerDriver, new RegisterDriverCallback());
   }

@@ -32,8 +32,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient}
 import org.apache.spark.network.shuffle.ExternalShuffleBlockHandler
-import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
-import org.apache.spark.network.shuffle.protocol.kubernetes.RegisterKubernetesApp
+import org.apache.spark.network.shuffle.protocol.{BlockTransferMessage, RegisterDriver}
 import org.apache.spark.network.util.TransportConf
 import org.apache.spark.scheduler.cluster.kubernetes.DriverPodKubernetesClientProvider
 
@@ -124,9 +123,9 @@ private[spark] class KubernetesShuffleBlockHandler (
     }
   }
 
-  /** An extractor object for matching [[RegisterKubernetesApp]] message. */
+  /** An extractor object for matching [[RegisterDriver]] message. */
   private object RegisterDriverParam {
-    def unapply(r: RegisterKubernetesApp): Option[(String)] =
+    def unapply(r: RegisterDriver): Option[(String)] =
       Some(r.getAppId)
   }
 }
@@ -142,17 +141,23 @@ private[spark] class KubernetesExternalShuffleService(
     kubernetesClientProvider: DriverPodKubernetesClientProvider)
   extends ExternalShuffleService(conf, securityManager) {
 
-  private var shuffleBlockHandlers = mutable.Buffer.empty[KubernetesShuffleBlockHandler]
-
+  private var shuffleBlockHandlers: mutable.Buffer[KubernetesShuffleBlockHandler] = _
   protected override def newShuffleBlockHandler(
       tConf: TransportConf): ExternalShuffleBlockHandler = {
     val newBlockHandler = new KubernetesShuffleBlockHandler(tConf, kubernetesClientProvider)
     newBlockHandler.start()
+
+    // TODO: figure out a better way of doing this.
+    // This is necessary because the constructor is not called
+    // when this class is initialized through ExternalShuffleService.
+    if (shuffleBlockHandlers == null) {
+        shuffleBlockHandlers = mutable.Buffer.empty[KubernetesShuffleBlockHandler]
+    }
     shuffleBlockHandlers += newBlockHandler
     newBlockHandler
   }
 
-  protected override def stop(): Unit = {
+  override def stop(): Unit = {
     try {
       super.stop()
     } finally {
