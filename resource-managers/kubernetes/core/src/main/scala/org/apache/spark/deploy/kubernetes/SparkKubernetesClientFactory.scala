@@ -61,33 +61,32 @@ private[spark] object SparkKubernetesClientFactory {
         .getOption(s"$kubernetesAuthConfPrefix.$CLIENT_CERT_FILE_CONF_SUFFIX")
     val dispatcher = new Dispatcher(
         ThreadUtils.newDaemonCachedThreadPool("kubernetes-dispatcher"))
-    val baseConfigBuilder = new ConfigBuilder()
+    val config = new ConfigBuilder()
         .withApiVersion("v1")
         .withMasterUrl(master)
         .withWebsocketPingInterval(0)
-    val withOptionalConfigurations = new OptionConfigurableConfigBuilder(baseConfigBuilder)
-      .withOption(oauthTokenValue) {
-        (token, configBuilder) => configBuilder.withOauthToken(token)
-      }.withOption(oauthTokenFile) {
-        (file, configBuilder) =>
-            configBuilder.withOauthToken(Files.toString(file, Charsets.UTF_8))
-      }.withOption(caCertFile) {
-        (file, configBuilder) => configBuilder.withCaCertFile(file)
-      }.withOption(clientKeyFile) {
-        (file, configBuilder) => configBuilder.withClientKeyFile(file)
-      }.withOption(clientCertFile) {
-        (file, configBuilder) => configBuilder.withClientCertFile(file)
-      }.withOption(namespace) {
-        (ns, configBuilder) => configBuilder.withNamespace(ns)
-      }.build()
-    val baseHttpClient = HttpClientUtils.createHttpClient(withOptionalConfigurations)
+        .withOption(oauthTokenValue) {
+          (token, configBuilder) => configBuilder.withOauthToken(token)
+        }.withOption(oauthTokenFile) {
+          (file, configBuilder) =>
+              configBuilder.withOauthToken(Files.toString(file, Charsets.UTF_8))
+        }.withOption(caCertFile) {
+          (file, configBuilder) => configBuilder.withCaCertFile(file)
+        }.withOption(clientKeyFile) {
+          (file, configBuilder) => configBuilder.withClientKeyFile(file)
+        }.withOption(clientCertFile) {
+          (file, configBuilder) => configBuilder.withClientCertFile(file)
+        }.withOption(namespace) {
+          (ns, configBuilder) => configBuilder.withNamespace(ns)
+        }.build()
+    val baseHttpClient = HttpClientUtils.createHttpClient(config)
     val httpClientWithCustomDispatcher = baseHttpClient.newBuilder()
       .dispatcher(dispatcher)
       .build()
-    new DefaultKubernetesClient(httpClientWithCustomDispatcher, withOptionalConfigurations)
+    new DefaultKubernetesClient(httpClientWithCustomDispatcher, config)
   }
 
-  private class OptionConfigurableConfigBuilder(configBuilder: ConfigBuilder) {
+  private implicit class OptionConfigurableConfigBuilder(configBuilder: ConfigBuilder) {
 
     def withOption[T]
         (option: Option[T])
