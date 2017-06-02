@@ -35,6 +35,8 @@ import org.apache.spark.{SparkContext, SparkEnv, SparkException}
 import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.network.netty.SparkTransportConf
+import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
 import org.apache.spark.rpc.{RpcCallContext, RpcEndpointAddress, RpcEnv}
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RetrieveSparkAppConfig, SparkAppConfig}
@@ -58,6 +60,23 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorExtraClasspath = conf.get(
     org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
   private val executorJarsDownloadDir = conf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION)
+
+  private val executorLabels = ConfigurationUtils.parseKeyValuePairs(
+      conf.get(KUBERNETES_EXECUTOR_LABELS),
+      KUBERNETES_EXECUTOR_LABELS.key,
+      "executor labels")
+  require(
+      !executorLabels.contains(SPARK_APP_ID_LABEL),
+      s"Custom executor labels cannot contain $SPARK_APP_ID_LABEL as it is reserved for Spark.")
+  require(
+      !executorLabels.contains(SPARK_EXECUTOR_ID_LABEL),
+      s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for" +
+        s" Spark.")
+  private val executorAnnotations = ConfigurationUtils.parseKeyValuePairs(
+      conf.get(KUBERNETES_EXECUTOR_ANNOTATIONS),
+      KUBERNETES_EXECUTOR_ANNOTATIONS.key,
+      "executor annotations")
+
   private var shufflePodCache: Option[ShufflePodCache] = None
   private val executorDockerImage = conf.get(EXECUTOR_DOCKER_IMAGE)
   private val kubernetesNamespace = conf.get(KUBERNETES_NAMESPACE)
@@ -86,8 +105,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
 
-  private val kubernetesClient = new DriverPodKubernetesClientProvider(conf, kubernetesNamespace)
-    .get
+  private val kubernetesClient = new DriverPodKubernetesClientProvider(conf,
+    Some(kubernetesNamespace)).get
 
   private val driverPod = try {
     kubernetesClient.pods().inNamespace(kubernetesNamespace).
@@ -119,6 +138,15 @@ private[spark] class KubernetesClusterSchedulerBackend(
     } else {
       None
     }
+
+  // A client for talking to the external shuffle service
+  private val kubernetesExternalShuffleClient: Option[KubernetesExternalShuffleClient] = {
+    if (Utils.isDynamicAllocationEnabled(sc.conf)) {
+      Some(getShuffleClient())
+    } else {
+      None
+    }
+  }
 
   override val minRegisteredRatio =
     if (conf.getOption("spark.scheduler.minRegisteredResourcesRatio").isEmpty) {
@@ -186,6 +214,14 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
+  private def getShuffleClient(): KubernetesExternalShuffleClient = {
+    new KubernetesExternalShuffleClient(
+      SparkTransportConf.fromSparkConf(conf, "shuffle"),
+      sc.env.securityManager,
+      sc.env.securityManager.isAuthenticationEnabled(),
+      sc.env.securityManager.isSaslEncryptionEnabled())
+  }
+
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
     if (Utils.isDynamicAllocationEnabled(conf)) {
       val minNumExecutors = conf.getInt("spark.dynamicAllocation.minExecutors", 0)
@@ -223,6 +259,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
         .map { config => new ShufflePodCache(
           kubernetesClient, config.shuffleNamespace, config.shuffleLabels) }
       shufflePodCache.foreach(_.start())
+      kubernetesExternalShuffleClient.foreach(_.init(applicationId()))
     }
   }
 
@@ -230,6 +267,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     // stop allocation of new resources and caches.
     allocator.shutdown()
     shufflePodCache.foreach(_.stop())
+    kubernetesExternalShuffleClient.foreach(_.close())
 
     // send stop message to executors so they shut down cleanly
     super.stop()
@@ -275,9 +313,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
     // name as the hostname.  This preserves uniqueness since the end of name contains
     // executorId and applicationId
     val hostname = name.substring(Math.max(0, name.length - 63))
-
-    val selectors = Map(SPARK_EXECUTOR_ID_LABEL -> executorId,
-      SPARK_APP_ID_LABEL -> applicationId()).asJava
+    val resolvedExecutorLabels = Map(
+      SPARK_EXECUTOR_ID_LABEL -> executorId,
+      SPARK_APP_ID_LABEL -> applicationId(),
+      SPARK_ROLE_LABEL -> "executor") ++
+      executorLabels
     val executorMemoryQuantity = new QuantityBuilder(false)
       .withAmount(s"${executorMemoryMb}M")
       .build()
@@ -326,7 +366,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val basePodBuilder = new PodBuilder()
       .withNewMetadata()
         .withName(name)
-        .withLabels(selectors)
+        .withLabels(resolvedExecutorLabels.asJava)
+        .withAnnotations(executorAnnotations.asJava)
         .withOwnerReferences()
         .addNewOwnerReference()
           .withController(true)
@@ -476,6 +517,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     rpcEnv: RpcEnv,
     sparkProperties: Seq[(String, String)])
     extends DriverEndpoint(rpcEnv, sparkProperties) {
+    private val externalShufflePort = conf.getInt("spark.shuffle.service.port", 7337)
+
     override def receiveAndReply(
       context: RpcCallContext): PartialFunction[Any, Unit] = {
       new PartialFunction[Any, Unit]() {
@@ -498,6 +541,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
                   .get()
                 val nodeName = runningExecutorPod.getSpec.getNodeName
                 val shufflePodIp = shufflePodCache.get.getShufflePodForExecutor(nodeName)
+
+                // Inform the shuffle pod about this application so it can watch.
+                kubernetesExternalShuffleClient.foreach(
+                  _.registerDriverWithShuffleService(shufflePodIp, externalShufflePort))
+
                 resolvedProperties = resolvedProperties ++ Seq(
                   (SPARK_SHUFFLE_SERVICE_HOST.key, shufflePodIp))
 
