@@ -18,7 +18,10 @@ package org.apache.spark.deploy.kubernetes.submit
 
 import java.io.File
 
-import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, DoneablePod, HasMetadata, Pod, PodBuilder, PodList, Secret, SecretBuilder}
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+
+import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 import io.fabric8.kubernetes.client.dsl.{MixedOperation, NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable, PodResource}
 import org.hamcrest.{BaseMatcher, Description}
@@ -28,13 +31,12 @@ import org.mockito.Mockito.{times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.kubernetes.{KubernetesExternalShuffleService, KubernetesShuffleBlockHandler, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.kubernetes.{KubernetesExternalShuffleService, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.deploy.kubernetes.tpr.sparkJobResourceController
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
 import org.apache.spark.scheduler.cluster.kubernetes.DriverPodKubernetesClientProvider
@@ -150,6 +152,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private var namedPodResource: PodResource[Pod, DoneablePod] = _
   @Mock
   private var watch: Watch = _
+  @Mock
+  private var sparkJobResourceController: sparkJobResourceController = _
 
   before {
     MockitoAnnotations.initMocks(this)
@@ -305,7 +309,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       kubernetesClientProvider,
       initContainerComponentsProvider,
       credentialsMounterProvider,
-      loggingPodStatusWatcher).run()
+      loggingPodStatusWatcher,
+      sparkJobResourceController).run()
     verify(loggingPodStatusWatcher).awaitCompletion()
   }
 
@@ -412,7 +417,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       kubernetesClientProvider,
       initContainerComponentsProvider,
       credentialsMounterProvider,
-      loggingPodStatusWatcher).run()
+      loggingPodStatusWatcher,
+      sparkJobResourceController).run()
     val podMatcher = new BaseMatcher[Pod] {
       override def matches(o: scala.Any): Boolean = {
         o match {

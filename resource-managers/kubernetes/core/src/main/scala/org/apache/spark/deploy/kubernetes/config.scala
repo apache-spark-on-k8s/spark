@@ -271,6 +271,21 @@ package object config extends Logging {
       .longConf
       .createWithDefault(1)
 
+  private[spark] val KUBERNETES_JOB_RESOURCE_NAME =
+    ConfigBuilder("spark.kubernetes.statusReporting.resourceName")
+      .doc("Name of SparkJob Resource attached to the said spark job. ")
+      .internal()
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_JOB_RESOURCE_ENABLED =
+    ConfigBuilder("spark.kubernetes.statusReporting.enabled")
+    .doc("This is set to true when creation of SparkJob resource is successful" +
+      " which directly means we need to keep the resource updated")
+    .internal()
+    .booleanConf
+    .createWithDefault(false)
+
   private[spark] val WAIT_FOR_APP_COMPLETION =
     ConfigBuilder("spark.kubernetes.submission.waitAppCompletion")
       .doc("In cluster mode, whether to wait for the application to finish before exiting the" +

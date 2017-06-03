@@ -92,4 +92,14 @@ package object constants {
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
   private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
   private[spark] val MEMORY_OVERHEAD_MIN = 384L
+
+  // TPR
+  private[spark] val TPR_API_GROUP = "apache.org"
+  private[spark] val TPR_API_VERSION = "v1"
+  private[spark] val TPR_KIND = "SparkJob"
+
+  // SparkJob Status
+  private[spark] val STATUS_NOT_AVAILABLE = "N/A"
+  private[spark] val STATUS_PENDING = "Pending"
+
 }

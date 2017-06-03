@@ -210,6 +210,45 @@ the command may then look like the following:
       --conf spark.kubernetes.shuffle.labels="app=spark-shuffle-service,spark-version=2.1.0" \
       local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar 10 400000 2
 
+## ThirdPartyResources for visibility into state of deployed Spark job
+
+In order to expose the state of a deployed spark job to a kubernetes administrator or user, via the kubectl or the 
+kubernetes dashboard, we have added a kubernetes Resource (of kind: SparkJob) storing pertinent information 
+related to a specific spark job. 
+
+Using this, we can view current and all past (if not already cleaned up) deployed spark apps within the 
+current namespace using `kubectl` like so:
+    
+    kubectl get sparkjobs
+
+Or via the kubernetes dashboard using the link as provided by:
+
+    kubectl cluster-info
+
+
+### Prerequisites
+
+Note that this resource is dependent on extending the kubernetes API using a 
+[ThirdPartyResource (TPR)](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-third-party-resource/). 
+
+TPRs are available in K8s API as of v1.5
+
+See conf/kubernetes-custom-resource.yaml for the recommended yaml file. From the spark base directory, 
+we can create the recommended TPR like so:
+
+    kubectl create -f conf/kubernetes-custom-resource.yaml
+
+### Important Things to note
+
+TPRs are an alpha feature that might not be available in every cluster.
+TPRs need to be manually cleaned up because garbage collection support does not exist for them yet.
+
+### Future work
+
+Kube administrators or users would be able to stop a spark app running in their cluster by simply 
+deleting the attached resource. 
+
+
 ## Advanced
 
 ### Securing the Resource Staging Server with TLS
