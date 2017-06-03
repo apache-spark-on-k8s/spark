@@ -29,7 +29,9 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.util.ThreadUtils
 
 /**
- * Spark-opinionated builder for Kubernetes clients.
+ * Spark-opinionated builder for Kubernetes clients. It uses a prefix plus common suffixes to
+ * parse configuration keys, similar to the manner in which Spark's SecurityManager parses SSL
+ * options for different components.
  */
 private[spark] object SparkKubernetesClientFactory {
 

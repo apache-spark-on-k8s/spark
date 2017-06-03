@@ -79,8 +79,7 @@ private[spark] class StagedResourcesCleanerSuite extends SparkFunSuite with Befo
         kubernetesClient,
         cleanerExecutorService,
         clock,
-        INITIAL_ACCESS_EXPIRATION_MS,
-        CLEANUP_INTERVAL_MS)
+        INITIAL_ACCESS_EXPIRATION_MS)
     when(kubernetesClient.pods()).thenReturn(podOperations)
     when(podOperations.withLabels(POD_LABELS.asJava)).thenReturn(podsWithLabelsOperations)
     when(kubernetesClient.namespaces()).thenReturn(namespaceOperations)

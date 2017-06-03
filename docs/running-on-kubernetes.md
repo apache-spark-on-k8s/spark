@@ -482,7 +482,8 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td>
     OAuth token value for authenticating against the Kubernetes API server from the resource staging server
     when it monitors objects in determining when to clean up resource bundles. The resource staging server must have
-    credentials that allow it to view API objects in any namespace.
+    credentials that allow it to view API objects in any namespace. Note that this cannot be set at the same time as
+    <code>spark.kubernetes.authenticate.resourceStagingServer.oauthTokenFile</code>.
   </td>
 </tr>
 <tr>
@@ -491,7 +492,8 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td>
     File containing the OAuth token to use when authenticating against the against the Kubernetes API server from the
     resource staging server, when it monitors objects in determining when to clean up resource bundles. The resource
-    staging server must have credentials that allow it to view API objects in any namespace.
+    staging server must have credentials that allow it to view API objects in any namespace. Note that this cannot be
+    set at the same time as <code>spark.kubernetes.authenticate.resourceStagingServer.oauthToken</code>.
   </td>
 </tr>
 <tr>
@@ -507,8 +509,8 @@ from the other deployment modes. See the [configuration page](configuration.html
     <code>spark.kubernetes.authenticate.resourceStagingServer.caCertFile</code> is set, it takes precedence over using
     the service account's CA certificate file. This generally should be set to true (the default value) when the
     resource staging server is deployed as a Kubernetes pod, but should be set to false if the resource staging server
-    is deployed by other means (i.e. when running the staging server process on bare metal). The resource staging server
-    must have credentials that allow it to view API objects in any namespace.
+    is deployed by other means (i.e. when running the staging server process outside of Kubernetes). The resource
+    staging server must have credentials that allow it to view API objects in any namespace.
   </td>
 </tr>
 <tr>

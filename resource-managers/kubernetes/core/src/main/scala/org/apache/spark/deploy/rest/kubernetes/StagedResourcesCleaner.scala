@@ -41,10 +41,10 @@ private class StagedResourcesCleanerImpl(
       kubernetesClient: KubernetesClient,
       cleanupExecutorService: ScheduledExecutorService,
       clock: Clock,
-      initialAccessExpirationMs: Long,
-      resourceCleanupIntervalMs: Long)
+      initialAccessExpirationMs: Long)
     extends StagedResourcesCleaner {
 
+  private val CLEANUP_INTERVAL_MS = 30000
   private val RESOURCE_LOCK = new Object()
   private val activeResources = mutable.Map.empty[String, MonitoredResource]
   private val unusedResources = mutable.Map.empty[String, UnusedMonitoredResource]
@@ -52,8 +52,8 @@ private class StagedResourcesCleanerImpl(
   override def start(): Unit = {
     cleanupExecutorService.scheduleAtFixedRate(
         new CleanupRunnable(),
-        resourceCleanupIntervalMs,
-        resourceCleanupIntervalMs,
+        CLEANUP_INTERVAL_MS,
+        CLEANUP_INTERVAL_MS,
         TimeUnit.MILLISECONDS)
   }
 
@@ -130,7 +130,7 @@ private class StagedResourcesCleanerImpl(
             // as active in-between, and likely shouldn't remove the resources in such a case.
             unusedResources.remove(resourceId).foreach { _ =>
               logInfo(s"Resources with id $resourceId was not accessed after being added to" +
-                s" the staging server at least $resourceCleanupIntervalMs ms ago. The resource" +
+                s" the staging server at least $initialAccessExpirationMs ms ago. The resource" +
                 s" will be deleted.")
               stagedResourcesStore.removeResources(resourceId)
             }

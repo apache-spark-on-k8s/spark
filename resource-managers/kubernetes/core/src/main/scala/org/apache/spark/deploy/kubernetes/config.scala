@@ -240,12 +240,6 @@ package object config extends Logging {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("30m")
 
-  private[spark] val RESOURCE_STAGING_SERVER_CLEANUP_INTERVAL =
-    ConfigBuilder("spark.kubernetes.resourceStagingServer.resourceCleanupInterval")
-      .doc("Time between inspections for resources that can be cleaned up.")
-      .timeConf(TimeUnit.MILLISECONDS)
-      .createWithDefaultString("5m")
-
   private[spark] val RESOURCE_STAGING_SERVER_KEY_PEM =
     ConfigBuilder("spark.ssl.kubernetes.resourceStagingServer.keyPem")
       .doc("Key PEM file to use when having the Kubernetes dependency server listen on TLS.")

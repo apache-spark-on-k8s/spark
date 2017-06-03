@@ -162,6 +162,7 @@ private[spark] class KubernetesExternalShuffleService(
       newBlockHandler
     } catch {
       case e: Throwable =>
+        logError("Failed to create Kubernetes shuffle block handler.", e)
         newBlockHandler.close()
         throw e
     }
