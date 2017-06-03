@@ -41,7 +41,6 @@ private[spark] class StagedResourcesCleanerSuite extends SparkFunSuite with Befo
       Namespace, NamespaceList, DoneableNamespace, Resource[Namespace, DoneableNamespace]]
   private type NAMESPACEWITHNAME = Resource[Namespace, DoneableNamespace]
 
-  private val CLEANUP_INTERVAL_MS = 1000L
   private val INITIAL_ACCESS_EXPIRATION_MS = 5000L
   private val CURRENT_TIME = 10000L
   private val RESOURCE_ID = "resource-id"
@@ -142,8 +141,8 @@ private[spark] class StagedResourcesCleanerSuite extends SparkFunSuite with Befo
     cleanerUnderTest.start()
     verify(cleanerExecutorService).scheduleAtFixedRate(
         captor.capture(),
-        mockitoEq(CLEANUP_INTERVAL_MS),
-        mockitoEq(CLEANUP_INTERVAL_MS),
+        mockitoEq(30000L),
+        mockitoEq(30000L),
         mockitoEq(TimeUnit.MILLISECONDS))
     captor.getValue
   }
