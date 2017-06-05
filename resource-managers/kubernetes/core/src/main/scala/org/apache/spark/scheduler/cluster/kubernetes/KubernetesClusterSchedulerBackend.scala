@@ -179,31 +179,18 @@ private[spark] class KubernetesClusterSchedulerBackend(
     .newDaemonSingleThreadScheduledExecutor("kubernetes-pod-allocator")
 
   private val allocatorRunnable: Runnable = new Runnable {
+
     override def run(): Unit = {
       if (totalRegisteredExecutors.get() < runningExecutorPods.size) {
         logDebug("Waiting for pending executors before scaling")
       } else if (totalExpectedExecutors.get() <= runningExecutorPods.size) {
         logDebug("Maximum allowed executor limit reached. Not scaling up further.")
       } else {
-        val executorPodsWithIPs = EXECUTOR_PODS_BY_IPS_LOCK.synchronized {
-            executorPodsByIPs.values.toList
-          }
-        val nodeToLocalTaskCount = mutable.Map[String, Int]() ++
-          KubernetesClusterSchedulerBackend.this.synchronized {
-            hostToLocalTaskCount
-          }
-        for (pod <- executorPodsWithIPs) {
-          // Remove cluster nodes that are running our executors already.
-          nodeToLocalTaskCount.remove(pod.getSpec.getNodeName).nonEmpty ||
-            nodeToLocalTaskCount.remove(pod.getStatus.getHostIP).nonEmpty ||
-            nodeToLocalTaskCount.remove(
-              InetAddress.getByName(pod.getStatus.getHostIP).getCanonicalHostName).nonEmpty
-        }
-        val preferredNodes = nodeToLocalTaskCount.toMap[String, Int]
+        val nodeToTaskCount = getCurrentNodesWithTaskCounts
         RUNNING_EXECUTOR_PODS_LOCK.synchronized {
           for (i <- 0 until math.min(
             totalExpectedExecutors.get - runningExecutorPods.size, podAllocationSize)) {
-            runningExecutorPods += allocateNewExecutorPod(preferredNodes)
+            runningExecutorPods += allocateNewExecutorPod(nodeToTaskCount)
             logInfo(
               s"Requesting a new executor, total executors is now ${runningExecutorPods.size}")
           }
@@ -299,9 +286,59 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
+  private def getCurrentNodesWithTaskCounts() : Map[String, Int] = {
+    val executorPodsWithIPs = EXECUTOR_PODS_BY_IPS_LOCK.synchronized {
+      executorPodsByIPs.values.toList  // toList makes a defensive copy.
+    }
+    val nodeToLocalTaskCount = mutable.Map[String, Int]() ++
+      KubernetesClusterSchedulerBackend.this.synchronized {
+        hostToLocalTaskCount
+      }
+    for (pod <- executorPodsWithIPs) {
+      // Remove cluster nodes that are running our executors already.
+      nodeToLocalTaskCount.remove(pod.getSpec.getNodeName).nonEmpty ||
+        nodeToLocalTaskCount.remove(pod.getStatus.getHostIP).nonEmpty ||
+        nodeToLocalTaskCount.remove(
+          InetAddress.getByName(pod.getStatus.getHostIP).getCanonicalHostName).nonEmpty
+    }
+    nodeToLocalTaskCount.toMap[String, Int]
+  }
+
+  def addNodeAffinityAnnotationIfUseful(basePodBuilder: PodBuilder,
+                                        nodeToTaskCount: Map[String, Int]): PodBuilder = {
+    def scaleToRange(value: Int, baseMin: Double, baseMax: Double,
+                     rangeMin: Double, rangeMax: Double): Int =
+      (((rangeMax - rangeMin) * (value - baseMin) / (baseMax - baseMin)) + rangeMin).toInt
+
+    if (nodeToTaskCount.nonEmpty) {
+      val taskTotal = nodeToTaskCount.foldLeft(0)(_ + _._2)
+      // Normalize to node affinity weights in 1 to 100 range.
+      val nodeToWeight = nodeToTaskCount.map{
+        case (node, taskCount) =>
+          (node, scaleToRange(taskCount, 1, taskTotal, rangeMin = 1, rangeMax = 100))}
+      val weightToNodes = nodeToWeight.groupBy(_._2).mapValues(_.keys)
+      // @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node
+      val nodeAffinity = NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution =
+        for ((weight, nodes) <- weightToNodes) yield
+          WeightedPreference(weight,
+            Preference(Array(MatchExpression("kubernetes.io/hostname", "In", nodes))))
+      )
+      val nodeAffinityJson =
+        s"""{"nodeAffinity": ${objectMapper.writeValueAsString(nodeAffinity)}}"""
+      // TODO: Use non-annotation syntax when we switch to K8s version 1.6.
+      logDebug(s"Adding nodeAffinity as annotation $nodeAffinityJson")
+      basePodBuilder.editMetadata()
+        .addToAnnotations(ANNOTATION_EXECUTOR_NODE_AFFINITY, nodeAffinityJson)
+        .endMetadata()
+    } else {
+      basePodBuilder
+    }
+  }
+
   /**
    * Allocates a new executor pod
-   * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
+    *
+    * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
    *                        from data locality if an executor launches on the cluster node.
    * @return A tuple of the new executor name and the Pod data structure.
    */
@@ -415,6 +452,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
             .endSpec()
         }
       }.getOrElse(basePodBuilder)
+
     val executorInitContainerPodBuilder = executorInitContainerBootstrap.map {
         bootstrap =>
           bootstrap.bootstrapInitContainerAndVolumes(
@@ -422,30 +460,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
             withMaybeShuffleConfigPodBuilder)
       }.getOrElse(withMaybeShuffleConfigPodBuilder)
 
-    val resolvedExecutorPodBuilder = if (nodeToTaskCount.nonEmpty) {
-      val taskTotal = nodeToTaskCount.foldLeft(0)(_ + _._2)
-      // Normalize to node affinity weights in 1 to 100 range.
-      val nodeToWeight = nodeToTaskCount.map{
-        case (node, taskCount) =>
-          (node, math.min(100, math.max(1, math.round(taskCount * 100.0 / taskTotal).toInt)))}
-      val weightToNodes = nodeToWeight.values.map(
-        weight => (weight, nodeToWeight.keys.filter(nodeToWeight(_) == weight))).toMap
-      val nodeAffinity = NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution =
-          for ((weight, nodes) <- weightToNodes) yield
-            WeightedPreference(weight,
-              Preference(Array(MatchExpression("kubernetes.io/hostname", "In", nodes))))
-        )
-      val nodeAffinityJson =
-        s"""{"nodeAffinity": ${objectMapper.writeValueAsString(nodeAffinity)}}"""
-
-      // TODO: Use non-annotation syntax when we switch to K8s version 1.6.
-      logDebug(s"Adding nodeAffinity as annotation $nodeAffinityJson")
-      executorInitContainerPodBuilder.editMetadata()
-          .addToAnnotations(ANNOTATION_EXECUTOR_NODE_AFFINITY, nodeAffinityJson)
-        .endMetadata()
-    } else {
-      executorInitContainerPodBuilder
-    }
+    val resolvedExecutorPodBuilder = addNodeAffinityAnnotationIfUseful(
+      executorInitContainerPodBuilder, nodeToTaskCount)
 
     try {
       (executorId, kubernetesClient.pods.create(resolvedExecutorPodBuilder.build()))
@@ -570,6 +586,9 @@ private object KubernetesClusterSchedulerBackend {
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 }
 
+// These case classes model K8s node affinity syntax for
+// preferredDuringSchedulingIgnoredDuringExecution.
+// @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
 case class NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution:
                         Iterable[WeightedPreference])
 case class WeightedPreference(weight: Int, preference: Preference)
