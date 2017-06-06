@@ -149,8 +149,6 @@ environment variable in your Dockerfiles.
 
 ### Accessing Kubernetes Clusters
 
-For details about running on public cloud environments, such as Google Container Engine (GKE), refer to [running Spark in the cloud with Kubernetes](running-on-kubernetes-cloud.md).
-
 Spark-submit also supports submission through the
 [local kubectl proxy](https://kubernetes.io/docs/user-guide/accessing-the-cluster/#using-kubectl-proxy). One can use the
 authenticating proxy to communicate with the api server directly without passing credentials to spark-submit.
