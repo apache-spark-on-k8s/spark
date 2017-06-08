@@ -588,7 +588,7 @@ private object KubernetesClusterSchedulerBackend {
 
 // These case classes model K8s node affinity syntax for
 // preferredDuringSchedulingIgnoredDuringExecution.
-// @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
+// @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node
 case class NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution:
                         Iterable[WeightedPreference])
 case class WeightedPreference(weight: Int, preference: Preference)
