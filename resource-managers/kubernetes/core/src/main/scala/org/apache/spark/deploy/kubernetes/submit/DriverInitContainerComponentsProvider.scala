@@ -16,6 +16,8 @@
  */
 package org.apache.spark.deploy.kubernetes.submit
 
+import java.io.File
+
 import org.apache.spark.{SparkConf, SSLOptions}
 import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, OptionRequirements, SparkPodInitContainerBootstrap, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.kubernetes.config._
@@ -46,6 +48,7 @@ private[spark] trait DriverInitContainerComponentsProvider {
 private[spark] class DriverInitContainerComponentsProviderImpl(
     sparkConf: SparkConf,
     kubernetesAppId: String,
+    namespace: String,
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     resourceStagingServerExternalSslOptions: SSLOptions)
@@ -98,10 +101,10 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
   private val maybeSecretName = maybeResourceStagingServerUri.map { _ =>
     s"$kubernetesAppId-init-secret"
   }
-  private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
   private val configMapName = s"$kubernetesAppId-init-config"
   private val configMapKey = s"$kubernetesAppId-init-config-key"
   private val initContainerImage = sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE)
+  private val dockerImagePullPolicy = sparkConf.get(DOCKER_IMAGE_PULL_POLICY)
   private val downloadTimeoutMinutes = sparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT)
 
   override def provideInitContainerConfigMapBuilder(
@@ -194,6 +197,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
     }
     new SparkPodInitContainerBootstrapImpl(
       initContainerImage,
+      dockerImagePullPolicy,
       jarsDownloadPath,
       filesDownloadPath,
       downloadTimeoutMinutes,
