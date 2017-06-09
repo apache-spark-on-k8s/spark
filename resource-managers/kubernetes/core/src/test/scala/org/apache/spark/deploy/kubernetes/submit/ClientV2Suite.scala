@@ -37,7 +37,6 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
-import org.apache.spark.scheduler.cluster.kubernetes.DriverPodKubernetesClientProvider
 
 class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val JARS_RESOURCE = SubmittedResourceIdAndSecret("jarsId", "jarsSecret")
@@ -46,14 +45,14 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val BOOTSTRAPPED_POD_ANNOTATION = "bootstrapped"
   private val TRUE = "true"
   private val APP_NAME = "spark-test"
-  private val APP_ID = "spark-app-id"
+  private val APP_RESOURCE_PREFIX = "spark-prefix"
+  private val APP_ID = "spark-id"
   private val CUSTOM_LABEL_KEY = "customLabel"
   private val CUSTOM_LABEL_VALUE = "customLabelValue"
   private val ALL_EXPECTED_LABELS = Map(
       CUSTOM_LABEL_KEY -> CUSTOM_LABEL_VALUE,
       SPARK_APP_ID_LABEL -> APP_ID,
-      SPARK_APP_NAME_LABEL -> APP_NAME,
-      SPARK_ROLE_LABEL -> "driver")
+      SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
   private val CUSTOM_ANNOTATION_KEY = "customAnnotation"
   private val CUSTOM_ANNOTATION_VALUE = "customAnnotationValue"
   private val INIT_CONTAINER_SECRET_NAME = "init-container-secret"
@@ -131,8 +130,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   @Mock
   private var initContainerComponentsProvider: DriverInitContainerComponentsProvider = _
   @Mock
-  private var kubernetesClientProvider: SubmissionKubernetesClientProvider = _
-  @Mock
   private var kubernetesClient: KubernetesClient = _
   @Mock
   private var podOps: MixedOperation[Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]] = _
@@ -174,7 +171,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       .thenReturn(INIT_CONTAINER_SECRET)
     when(initContainerConfigMapBuilder.build())
       .thenReturn(INIT_CONTAINER_CONFIG_MAP)
-    when(kubernetesClientProvider.get).thenReturn(kubernetesClient)
     when(kubernetesClient.pods()).thenReturn(podOps)
     when(podOps.create(any())).thenAnswer(new Answer[Pod] {
       override def answer(invocation: InvocationOnMock): Pod = {
@@ -187,7 +183,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
           .build()
       }
     })
-    when(podOps.withName(APP_ID)).thenReturn(namedPodResource)
+    when(podOps.withName(s"$APP_RESOURCE_PREFIX-driver")).thenReturn(namedPodResource)
     when(namedPodResource.watch(loggingPodStatusWatcher)).thenReturn(watch)
     when(containerLocalizedFilesResolver.resolveSubmittedAndRemoteSparkJars())
         .thenReturn(RESOLVED_SPARK_REMOTE_AND_LOCAL_JARS)
@@ -295,6 +291,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     expectationsForNoDependencyUploader()
     new Client(
       APP_NAME,
+      APP_RESOURCE_PREFIX,
       APP_ID,
       MAIN_CLASS,
       SPARK_CONF,
@@ -302,35 +299,11 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       SPARK_JARS,
       SPARK_FILES,
       true,
-      kubernetesClientProvider,
+      kubernetesClient,
       initContainerComponentsProvider,
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
     verify(loggingPodStatusWatcher).awaitCompletion()
-  }
-
-  test("Run kubernetes shuffle service.") {
-    expectationsForNoMountedCredentials()
-    expectationsForNoDependencyUploader()
-
-    val shuffleService = new KubernetesExternalShuffleService(
-      SPARK_CONF,
-      new SecurityManager(SPARK_CONF),
-      new DriverPodKubernetesClientProvider(SPARK_CONF))
-
-    val shuffleClient = new KubernetesExternalShuffleClient(
-      SparkTransportConf.fromSparkConf(SPARK_CONF, "shuffle"),
-      new SecurityManager(SPARK_CONF),
-      false,
-      false)
-
-    shuffleService.start()
-    shuffleClient.init("newapp")
-
-    // verifies that we can connect to the shuffle service and send
-    // it a message.
-    shuffleClient.registerDriverWithShuffleService("localhost", 7337)
-    shuffleService.stop()
   }
 
   private def expectationsForNoDependencyUploader(): Unit = {
@@ -362,7 +335,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
         owners.head.getController &&
         owners.head.getKind == DRIVER_POD_KIND &&
         owners.head.getUid == DRIVER_POD_UID &&
-        owners.head.getName == APP_ID &&
+        owners.head.getName == s"$APP_RESOURCE_PREFIX-driver" &&
         owners.head.getApiVersion == DRIVER_POD_API_VERSION
     })
   }
@@ -382,14 +355,15 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       .toMap ++
       Map(
         "spark.app.id" -> APP_ID,
-        KUBERNETES_DRIVER_POD_NAME.key -> APP_ID,
+        KUBERNETES_DRIVER_POD_NAME.key -> s"$APP_RESOURCE_PREFIX-driver",
+        KUBERNETES_EXECUTOR_POD_NAME_PREFIX.key -> APP_RESOURCE_PREFIX,
         EXECUTOR_INIT_CONF_KEY -> TRUE,
         CUSTOM_JAVA_OPTION_KEY -> CUSTOM_JAVA_OPTION_VALUE,
         "spark.jars" -> RESOLVED_SPARK_JARS.mkString(","),
         "spark.files" -> RESOLVED_SPARK_FILES.mkString(","))
     runAndVerifyPodMatchesPredicate { p =>
       Option(p)
-        .filter(_.getMetadata.getName == APP_ID)
+        .filter(_.getMetadata.getName == s"$APP_RESOURCE_PREFIX-driver")
         .filter(podHasCorrectAnnotations)
         .filter(_.getMetadata.getLabels.asScala == ALL_EXPECTED_LABELS)
         .filter(containerHasCorrectBasicContainerConfiguration)
@@ -402,6 +376,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private def runAndVerifyPodMatchesPredicate(pred: (Pod => Boolean)): Unit = {
     new Client(
       APP_NAME,
+      APP_RESOURCE_PREFIX,
       APP_ID,
       MAIN_CLASS,
       SPARK_CONF,
@@ -409,7 +384,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       SPARK_JARS,
       SPARK_FILES,
       false,
-      kubernetesClientProvider,
+      kubernetesClient,
       initContainerComponentsProvider,
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
@@ -470,6 +445,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private def podHasCorrectAnnotations(pod: Pod): Boolean = {
     val expectedAnnotations = Map(
       CUSTOM_ANNOTATION_KEY -> CUSTOM_ANNOTATION_VALUE,
+      SPARK_APP_NAME_ANNOTATION -> APP_NAME,
       BOOTSTRAPPED_POD_ANNOTATION -> TRUE)
     pod.getMetadata.getAnnotations.asScala == expectedAnnotations
   }

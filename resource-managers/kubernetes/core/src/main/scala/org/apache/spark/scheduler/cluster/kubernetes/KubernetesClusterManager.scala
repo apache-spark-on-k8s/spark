@@ -16,9 +16,14 @@
  */
 package org.apache.spark.scheduler.cluster.kubernetes
 
+import java.io.File
+
+import io.fabric8.kubernetes.client.Config
+
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.kubernetes.config._
+import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.{ExternalClusterManager, SchedulerBackend, TaskScheduler, TaskSchedulerImpl}
 
@@ -41,7 +46,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val maybeExecutorInitContainerSecretName =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET)
     val maybeExecutorInitContainerSecretMount =
-        sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR)
+      sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR)
     val executorInitContainerSecretVolumePlugin = for {
       initContainerSecretName <- maybeExecutorInitContainerSecretName
       initContainerSecretMountPath <- maybeExecutorInitContainerSecretMount
@@ -60,6 +65,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     } yield {
       new SparkPodInitContainerBootstrapImpl(
         sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE),
+        sparkConf.get(DOCKER_IMAGE_PULL_POLICY),
         sparkConf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION),
         sparkConf.get(INIT_CONTAINER_FILES_DOWNLOAD_LOCATION),
         sparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT),
@@ -75,12 +81,18 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
       logWarning("The executor's init-container config map key was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
     }
+    val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
+        KUBERNETES_MASTER_INTERNAL_URL,
+        Some(sparkConf.get(KUBERNETES_NAMESPACE)),
+        APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX,
+        sparkConf,
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH)),
+        Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH)))
     new KubernetesClusterSchedulerBackend(
-      sc.taskScheduler.asInstanceOf[TaskSchedulerImpl], sc, bootStrap)
+      sc.taskScheduler.asInstanceOf[TaskSchedulerImpl], sc, bootStrap, kubernetesClient)
   }
 
   override def initialize(scheduler: TaskScheduler, backend: SchedulerBackend): Unit = {
     scheduler.asInstanceOf[TaskSchedulerImpl].initialize(backend)
   }
 }
-

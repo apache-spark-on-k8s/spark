@@ -169,11 +169,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     sparkConf.setJars(Seq(
         CONTAINER_LOCAL_MAIN_APP_RESOURCE,
         CONTAINER_LOCAL_HELPER_JAR_PATH))
-    sparkConf.set(KUBERNETES_DRIVER_CLIENT_KEY_FILE,
+    sparkConf.set(
+        s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$CLIENT_KEY_FILE_CONF_SUFFIX",
         kubernetesTestComponents.clientConfig.getClientKeyFile)
-    sparkConf.set(KUBERNETES_DRIVER_CLIENT_CERT_FILE,
+    sparkConf.set(
+        s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$CLIENT_CERT_FILE_CONF_SUFFIX",
         kubernetesTestComponents.clientConfig.getClientCertFile)
-    sparkConf.set(KUBERNETES_DRIVER_CA_CERT_FILE,
+    sparkConf.set(
+        s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX",
         kubernetesTestComponents.clientConfig.getCaCertFile)
     runSparkPiAndVerifyCompletion(SparkLauncher.NO_RESOURCE)
   }
@@ -190,6 +193,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         FILE_EXISTENCE_MAIN_CLASS,
         s"File found at /opt/spark/${testExistenceFile.getName} with correct contents.",
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS))
+  }
+
+  test("Use a very long application name.") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH)).setAppName("long" * 40)
+    runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
   }
 
   private def launchStagingServer(
