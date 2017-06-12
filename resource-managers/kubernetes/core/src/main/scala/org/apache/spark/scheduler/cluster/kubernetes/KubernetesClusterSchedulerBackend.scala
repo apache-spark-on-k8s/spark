@@ -291,9 +291,9 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   /**
-    * @return A map of K8s cluster nodes to the number of tasks that could benefit from data
-    *         locality if an executor launches on the cluster node.
-    */
+   * @return A map of K8s cluster nodes to the number of tasks that could benefit from data
+   *         locality if an executor launches on the cluster node.
+   */
   private def getNodesWithLocalTaskCounts() : Map[String, Int] = {
     val executorPodsWithIPs = EXECUTOR_PODS_BY_IPS_LOCK.synchronized {
       executorPodsByIPs.values.toList  // toList makes a defensive copy.
