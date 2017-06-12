@@ -186,11 +186,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
       } else if (totalExpectedExecutors.get() <= runningExecutorPods.size) {
         logDebug("Maximum allowed executor limit reached. Not scaling up further.")
       } else {
-        val nodeToTaskCount = getCurrentNodesWithTaskCounts
+        val nodeToLocalTaskCount = getNodesWithLocalTaskCounts
         RUNNING_EXECUTOR_PODS_LOCK.synchronized {
           for (i <- 0 until math.min(
             totalExpectedExecutors.get - runningExecutorPods.size, podAllocationSize)) {
-            runningExecutorPods += allocateNewExecutorPod(nodeToTaskCount)
+            runningExecutorPods += allocateNewExecutorPod(nodeToLocalTaskCount)
             logInfo(
               s"Requesting a new executor, total executors is now ${runningExecutorPods.size}")
           }
@@ -286,7 +286,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  private def getCurrentNodesWithTaskCounts() : Map[String, Int] = {
+  /**
+    * @return A map of K8s cluster nodes to the number of tasks that could benefit from data
+    *         locality if an executor launches on the cluster node.
+    */
+  private def getNodesWithLocalTaskCounts() : Map[String, Int] = {
     val executorPodsWithIPs = EXECUTOR_PODS_BY_IPS_LOCK.synchronized {
       executorPodsByIPs.values.toList  // toList makes a defensive copy.
     }
@@ -296,6 +300,9 @@ private[spark] class KubernetesClusterSchedulerBackend(
       }
     for (pod <- executorPodsWithIPs) {
       // Remove cluster nodes that are running our executors already.
+      // TODO: This prefers spreading out executors across nodes. In case users want
+      // consolidating executors on fewer nodes, introduce a flag. See the spark.deploy.spreadOut
+      // flag that Spark standalone has: https://spark.apache.org/docs/latest/spark-standalone.html
       nodeToLocalTaskCount.remove(pod.getSpec.getNodeName).nonEmpty ||
         nodeToLocalTaskCount.remove(pod.getStatus.getHostIP).nonEmpty ||
         nodeToLocalTaskCount.remove(
@@ -304,8 +311,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     nodeToLocalTaskCount.toMap[String, Int]
   }
 
-  def addNodeAffinityAnnotationIfUseful(basePodBuilder: PodBuilder,
-                                        nodeToTaskCount: Map[String, Int]): PodBuilder = {
+  private def addNodeAffinityAnnotationIfUseful(basePodBuilder: PodBuilder,
+                                                nodeToTaskCount: Map[String, Int]): PodBuilder = {
     def scaleToRange(value: Int, baseMin: Double, baseMax: Double,
                      rangeMin: Double, rangeMax: Double): Int =
       (((rangeMax - rangeMin) * (value - baseMin) / (baseMax - baseMin)) + rangeMin).toInt
@@ -337,12 +344,13 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   /**
    * Allocates a new executor pod
-    *
-    * @param nodeToTaskCount A map of K8s cluster nodes to the number of tasks that could benefit
-   *                        from data locality if an executor launches on the cluster node.
+   *
+   * @param nodeToLocalTaskCount  A map of K8s cluster nodes to the number of tasks that could
+   *                              benefit from data locality if an executor launches on the cluster
+   *                              node.
    * @return A tuple of the new executor name and the Pod data structure.
    */
-  private def allocateNewExecutorPod(nodeToTaskCount: Map[String, Int]): (String, Pod) = {
+  private def allocateNewExecutorPod(nodeToLocalTaskCount: Map[String, Int]): (String, Pod) = {
     val executorId = EXECUTOR_ID_COUNTER.incrementAndGet().toString
     val name = s"${applicationId()}-exec-$executorId"
 
@@ -461,7 +469,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       }.getOrElse(withMaybeShuffleConfigPodBuilder)
 
     val resolvedExecutorPodBuilder = addNodeAffinityAnnotationIfUseful(
-      executorInitContainerPodBuilder, nodeToTaskCount)
+      executorInitContainerPodBuilder, nodeToLocalTaskCount)
 
     try {
       (executorId, kubernetesClient.pods.create(resolvedExecutorPodBuilder.build()))
