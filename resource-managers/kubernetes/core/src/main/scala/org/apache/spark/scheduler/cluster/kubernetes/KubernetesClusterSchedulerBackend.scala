@@ -329,13 +329,12 @@ private[spark] class KubernetesClusterSchedulerBackend(
           (node, scaleToRange(taskCount, 1, taskTotal, rangeMin = 1, rangeMax = 100))}
       val weightToNodes = nodeToWeight.groupBy(_._2).mapValues(_.keys)
       // @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node
-      val nodeAffinity = NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution =
-        for ((weight, nodes) <- weightToNodes) yield
-          WeightedPreference(weight,
-            Preference(Array(MatchExpression("kubernetes.io/hostname", "In", nodes))))
-      )
-      val nodeAffinityJson =
-        s"""{"nodeAffinity": ${objectMapper.writeValueAsString(nodeAffinity)}}"""
+      val nodeAffinityJson = objectMapper.writeValueAsString(SchedulerAffinity(NodeAffinity(
+          preferredDuringSchedulingIgnoredDuringExecution =
+            for ((weight, nodes) <- weightToNodes) yield
+              WeightedPreference(weight,
+                Preference(Array(MatchExpression("kubernetes.io/hostname", "In", nodes))))
+        )))
       // TODO: Use non-annotation syntax when we switch to K8s version 1.6.
       logDebug(s"Adding nodeAffinity as annotation $nodeAffinityJson")
       basePodBuilder.editMetadata()
@@ -598,9 +597,12 @@ private object KubernetesClusterSchedulerBackend {
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 }
 
-// These case classes model K8s node affinity syntax for
-// preferredDuringSchedulingIgnoredDuringExecution.
-// @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node
+/**
+ * These case classes model K8s node affinity syntax for
+ * preferredDuringSchedulingIgnoredDuringExecution.
+ * @see https://kubernetes.io/docs/concepts/configuration/assign-pod-node
+ */
+case class SchedulerAffinity(nodeAffinity: NodeAffinity)
 case class NodeAffinity(preferredDuringSchedulingIgnoredDuringExecution:
                         Iterable[WeightedPreference])
 case class WeightedPreference(weight: Int, preference: Preference)
