@@ -84,24 +84,24 @@ private[spark] class Client(
     validateNoDuplicateFileNames(sparkJars)
     validateNoDuplicateFileNames(sparkFiles)
 
-    val allCustomLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+    val driverCustomLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
       sparkConf,
       KUBERNETES_DRIVER_LABEL_PREFIX,
       KUBERNETES_DRIVER_LABELS,
       "label")
-    require(!allCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
+    require(!driverCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
         s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping" +
         s" operations.")
 
-    val allCustomAnnotations = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+    val driverCustomAnnotations = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
       sparkConf,
       KUBERNETES_DRIVER_ANNOTATION_PREFIX,
       KUBERNETES_DRIVER_ANNOTATIONS,
       "annotation")
-    require(!allCustomAnnotations.contains(SPARK_APP_NAME_ANNOTATION),
+    require(!driverCustomAnnotations.contains(SPARK_APP_NAME_ANNOTATION),
         s"Annotation with key $SPARK_APP_NAME_ANNOTATION is not allowed as it is reserved for" +
         s" Spark bookkeeping operations.")
-    val allLabels = allCustomLabels ++ Map(
+    val allDriverLabels = driverCustomLabels ++ Map(
         SPARK_APP_ID_LABEL -> kubernetesAppId,
         SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
 
@@ -147,8 +147,8 @@ private[spark] class Client(
     val basePod = new PodBuilder()
       .withNewMetadata()
         .withName(kubernetesDriverPodName)
-        .addToLabels(allLabels.asJava)
-        .addToAnnotations(allCustomAnnotations.toMap.asJava)
+        .addToLabels(allDriverLabels.asJava)
+        .addToAnnotations(driverCustomAnnotations.toMap.asJava)
         .addToAnnotations(SPARK_APP_NAME_ANNOTATION, appName)
         .endMetadata()
       .withNewSpec()
@@ -157,7 +157,7 @@ private[spark] class Client(
         .endSpec()
 
     val maybeSubmittedDependencyUploader = initContainerComponentsProvider
-        .provideInitContainerSubmittedDependencyUploader(allLabels)
+        .provideInitContainerSubmittedDependencyUploader(allDriverLabels)
     val maybeSubmittedResourceIdentifiers = maybeSubmittedDependencyUploader.map { uploader =>
       SubmittedResources(uploader.uploadJars(), uploader.uploadFiles())
     }

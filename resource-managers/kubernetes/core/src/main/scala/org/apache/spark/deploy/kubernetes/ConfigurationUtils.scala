@@ -17,10 +17,11 @@
 
 package org.apache.spark.deploy.kubernetes
 
-import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
 import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
 
-object ConfigurationUtils {
+object ConfigurationUtils extends Logging {
   def parseKeyValuePairs(
     maybeKeyValues: Option[String],
     configKey: String,
@@ -45,6 +46,11 @@ object ConfigurationUtils {
       prefix: String,
       deprecatedConf: OptionalConfigEntry[String],
       configType: String): Map[String, String] = {
+    val deprecatedRawString = sparkConf.get(deprecatedConf)
+    deprecatedRawString.foreach { _ =>
+      logWarning(s"Configuration with key ${deprecatedConf.key} is deprecated. Use" +
+        s" configurations with prefix $prefix<key> instead.")
+    }
     val fromDeprecated = parseKeyValuePairs(
         sparkConf.get(deprecatedConf),
         deprecatedConf.key,
