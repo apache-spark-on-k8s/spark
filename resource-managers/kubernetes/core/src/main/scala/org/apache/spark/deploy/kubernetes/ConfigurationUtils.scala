@@ -19,7 +19,7 @@ package org.apache.spark.deploy.kubernetes
 
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
+import org.apache.spark.internal.config.OptionalConfigEntry
 
 object ConfigurationUtils extends Logging {
   def parseKeyValuePairs(
