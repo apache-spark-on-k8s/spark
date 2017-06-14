@@ -29,6 +29,7 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.rest.kubernetes.ResourceStagingServerSslOptionsProviderImpl
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config.ConfigEntry
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
@@ -83,35 +84,24 @@ private[spark] class Client(
     validateNoDuplicateFileNames(sparkJars)
     validateNoDuplicateFileNames(sparkFiles)
 
-    val parsedCustomLabelsDeprecated = ConfigurationUtils.parseKeyValuePairs(
-        customLabels, KUBERNETES_DRIVER_LABELS.key, "labels")
-    // Remark: getAllWithPrefix strips out the prefix in the returned array.
-    val customLabelsFromPrefixConf = sparkConf.getAllWithPrefix(KUBERNETES_DRIVER_LABEL_PREFIX)
-    val allCustomLabels = parsedCustomLabelsDeprecated.toSeq ++ customLabelsFromPrefixConf
-    allCustomLabels.groupBy(_._1).foreach {
-      case (key, values) =>
-        require(values.size == 1,
-            s"Cannot have multiple values for a label key, got key $key with values $values")
-    }
-    require(!allCustomLabels.map(_._1).contains(SPARK_APP_ID_LABEL), s"Label with key " +
+    val allCustomLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+      sparkConf,
+      KUBERNETES_DRIVER_LABEL_PREFIX,
+      KUBERNETES_DRIVER_LABELS,
+      "label")
+    require(!allCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
         s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping" +
         s" operations.")
 
-    val parsedCustomAnnotationsDeprecated = ConfigurationUtils.parseKeyValuePairs(
-      customAnnotations, KUBERNETES_DRIVER_ANNOTATIONS.key, "annotations").toSeq
-    val customAnnotationsFromPrefixConf =
-        sparkConf.getAllWithPrefix(KUBERNETES_DRIVER_ANNOTATION_PREFIX)
-    val allCustomAnnotations = parsedCustomAnnotationsDeprecated ++ customAnnotationsFromPrefixConf
-    allCustomAnnotations.groupBy(_._1).foreach {
-      case (key, values) =>
-        require(values.size == 1,
-            s"Cannot have multiple values for the same annotation key, got key $key" +
-            s"with values $values")
-    }
-    require(!allCustomAnnotations.map(_._1).contains(SPARK_APP_NAME_ANNOTATION),
+    val allCustomAnnotations = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+      sparkConf,
+      KUBERNETES_DRIVER_ANNOTATION_PREFIX,
+      KUBERNETES_DRIVER_ANNOTATIONS,
+      "annotation")
+    require(!allCustomAnnotations.contains(SPARK_APP_NAME_ANNOTATION),
         s"Annotation with key $SPARK_APP_NAME_ANNOTATION is not allowed as it is reserved for" +
         s" Spark bookkeeping operations.")
-    val allLabels = allCustomLabels.toMap ++ Map(
+    val allLabels = allCustomLabels ++ Map(
         SPARK_APP_ID_LABEL -> kubernetesAppId,
         SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
 

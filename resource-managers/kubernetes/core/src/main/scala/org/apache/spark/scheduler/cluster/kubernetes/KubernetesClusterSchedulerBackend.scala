@@ -59,33 +59,26 @@ private[spark] class KubernetesClusterSchedulerBackend(
     org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
   private val executorJarsDownloadDir = conf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION)
 
-  private val executorLabels = ConfigurationUtils.parseKeyValuePairs(
-      conf.get(KUBERNETES_EXECUTOR_LABELS),
-      KUBERNETES_EXECUTOR_LABELS.key,
-      "executor labels").toSeq ++ conf.getAllWithPrefix(KUBERNETES_EXECUTOR_LABEL_PREFIX)
+  private val executorLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+      conf,
+      KUBERNETES_EXECUTOR_LABEL_PREFIX,
+      KUBERNETES_EXECUTOR_LABELS,
+      "executor label")
   require(
-      !executorLabels.map(_._1).contains(SPARK_APP_ID_LABEL),
+      !executorLabels.contains(SPARK_APP_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_APP_ID_LABEL as it is" +
         s" reserved for Spark.")
   require(
-      !executorLabels.map(_._1).contains(SPARK_EXECUTOR_ID_LABEL),
+      !executorLabels.contains(SPARK_EXECUTOR_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for" +
         s" Spark.")
-  executorLabels.groupBy(_._1).foreach {
-    case (key, values) =>
-      require(values.size == 1,
-          s"Cannot have multiple values for a label key, got key $key with values $values")
-  }
-  private val executorAnnotations = ConfigurationUtils.parseKeyValuePairs(
-      conf.get(KUBERNETES_EXECUTOR_ANNOTATIONS),
-      KUBERNETES_EXECUTOR_ANNOTATIONS.key,
-      "executor annotations").toSeq ++ conf.getAllWithPrefix(KUBERNETES_EXECUTOR_ANNOTATION_PREFIX)
-  executorAnnotations.groupBy(_._1).foreach {
-    case (key, values) =>
-      require(values.size == 1,
-          s"Cannot have multiple values for an annotation key, got key $key with values $values")
-  }
 
+  private val executorAnnotations =
+      ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+          conf,
+          KUBERNETES_EXECUTOR_ANNOTATION_PREFIX,
+          KUBERNETES_EXECUTOR_ANNOTATIONS,
+          "executor annotation")
   private var shufflePodCache: Option[ShufflePodCache] = None
   private val executorDockerImage = conf.get(EXECUTOR_DOCKER_IMAGE)
   private val dockerImagePullPolicy = conf.get(DOCKER_IMAGE_PULL_POLICY)
@@ -354,8 +347,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val basePodBuilder = new PodBuilder()
       .withNewMetadata()
         .withName(name)
-        .withLabels(resolvedExecutorLabels.toMap.asJava)
-        .withAnnotations(executorAnnotations.toMap.asJava)
+        .withLabels(resolvedExecutorLabels.asJava)
+        .withAnnotations(executorAnnotations.asJava)
         .withOwnerReferences()
         .addNewOwnerReference()
           .withController(true)
