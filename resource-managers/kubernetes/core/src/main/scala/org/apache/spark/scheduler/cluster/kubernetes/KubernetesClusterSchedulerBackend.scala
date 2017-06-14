@@ -62,7 +62,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorLabels = ConfigurationUtils.parseKeyValuePairs(
       conf.get(KUBERNETES_EXECUTOR_LABELS),
       KUBERNETES_EXECUTOR_LABELS.key,
-      "executor labels")
+      "executor labels").toSeq ++ conf.getAllWithPrefix(KUBERNETES_EXECUTOR_LABEL_PREFIX)
   require(
       !executorLabels.contains(SPARK_APP_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_APP_ID_LABEL as it is" +
@@ -71,10 +71,20 @@ private[spark] class KubernetesClusterSchedulerBackend(
       !executorLabels.contains(SPARK_EXECUTOR_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for" +
         s" Spark.")
+  executorLabels.groupBy(_._1).foreach {
+    case (key, values) =>
+      require(values.size == 1,
+          s"Cannot have multiple values for a label key, got key $key with values $values")
+  }
   private val executorAnnotations = ConfigurationUtils.parseKeyValuePairs(
       conf.get(KUBERNETES_EXECUTOR_ANNOTATIONS),
       KUBERNETES_EXECUTOR_ANNOTATIONS.key,
-      "executor annotations")
+      "executor annotations").toSeq ++ conf.getAllWithPrefix(KUBERNETES_EXECUTOR_ANNOTATION_PREFIX)
+  executorAnnotations.groupBy(_._1).foreach {
+    case (key, values) =>
+      require(values.size == 1,
+          s"Cannot have multiple values for an annotation key, got key $key with values $values")
+  }
 
   private var shufflePodCache: Option[ShufflePodCache] = None
   private val executorDockerImage = conf.get(EXECUTOR_DOCKER_IMAGE)
@@ -344,8 +354,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val basePodBuilder = new PodBuilder()
       .withNewMetadata()
         .withName(name)
-        .withLabels(resolvedExecutorLabels.asJava)
-        .withAnnotations(executorAnnotations.asJava)
+        .withLabels(resolvedExecutorLabels.toMap.asJava)
+        .withAnnotations(executorAnnotations.toMap.asJava)
         .withOwnerReferences()
         .addNewOwnerReference()
           .withController(true)
