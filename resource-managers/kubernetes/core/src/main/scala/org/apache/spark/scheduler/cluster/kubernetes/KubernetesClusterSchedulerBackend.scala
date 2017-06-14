@@ -64,11 +64,11 @@ private[spark] class KubernetesClusterSchedulerBackend(
       KUBERNETES_EXECUTOR_LABELS.key,
       "executor labels").toSeq ++ conf.getAllWithPrefix(KUBERNETES_EXECUTOR_LABEL_PREFIX)
   require(
-      !executorLabels.contains(SPARK_APP_ID_LABEL),
+      !executorLabels.map(_._1).contains(SPARK_APP_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_APP_ID_LABEL as it is" +
         s" reserved for Spark.")
   require(
-      !executorLabels.contains(SPARK_EXECUTOR_ID_LABEL),
+      !executorLabels.map(_._1).contains(SPARK_EXECUTOR_ID_LABEL),
       s"Custom executor labels cannot contain $SPARK_EXECUTOR_ID_LABEL as it is reserved for" +
         s" Spark.")
   executorLabels.groupBy(_._1).foreach {
