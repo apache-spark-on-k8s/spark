@@ -46,13 +46,13 @@ object ConfigurationUtils extends Logging {
       prefix: String,
       deprecatedConf: OptionalConfigEntry[String],
       configType: String): Map[String, String] = {
-    val deprecatedRawString = sparkConf.get(deprecatedConf)
-    deprecatedRawString.foreach { _ =>
+    val deprecatedKeyValuePairsString = sparkConf.get(deprecatedConf)
+    deprecatedKeyValuePairsString.foreach { _ =>
       logWarning(s"Configuration with key ${deprecatedConf.key} is deprecated. Use" +
         s" configurations with prefix $prefix<key> instead.")
     }
     val fromDeprecated = parseKeyValuePairs(
-        sparkConf.get(deprecatedConf),
+        deprecatedKeyValuePairsString,
         deprecatedConf.key,
         configType)
     val fromPrefix = sparkConf.getAllWithPrefix(prefix)
