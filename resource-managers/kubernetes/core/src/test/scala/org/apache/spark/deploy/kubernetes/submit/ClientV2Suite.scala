@@ -124,8 +124,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val CREDENTIALS_SET_ANNOTATION = "credentials-set"
 
   @Mock
-  private var initContainerConfigMapBuilder: SparkInitContainerConfigMapBuilder = _
-  @Mock
   private var containerLocalizedFilesResolver: ContainerLocalizedFilesResolver = _
   @Mock
   private var executorInitContainerConfiguration: ExecutorInitContainerConfiguration = _
@@ -173,12 +171,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       })
     when(initContainerComponentsProvider.provideContainerLocalizedFilesResolver())
       .thenReturn(containerLocalizedFilesResolver)
-    when(initContainerComponentsProvider.provideExecutorInitContainerConfiguration())
-      .thenReturn(executorInitContainerConfiguration)
     when(submittedDependenciesSecretBuilder.build())
       .thenReturn(INIT_CONTAINER_SECRET)
-    when(initContainerConfigMapBuilder.build())
-      .thenReturn(INIT_CONTAINER_CONFIG_MAP)
     when(kubernetesClient.pods()).thenReturn(podOps)
     when(podOps.create(any())).thenAnswer(new Answer[Pod] {
       override def answer(invocation: InvocationOnMock): Pod = {
@@ -214,9 +208,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(initContainerComponentsProvider
         .provideSubmittedDependenciesSecretBuilder(Some(SUBMITTED_RESOURCES.secrets())))
         .thenReturn(Some(submittedDependenciesSecretBuilder))
-    when(initContainerComponentsProvider
-        .provideInitContainerConfigMapBuilder(Some(SUBMITTED_RESOURCES.ids())))
-        .thenReturn(initContainerConfigMapBuilder)
+    when(initContainerComponentsProvider.provideInitContainerBundle(Some(SUBMITTED_RESOURCES.ids()),
+      RESOLVED_SPARK_JARS ++ RESOLVED_SPARK_FILES))
+        .thenReturn(Some(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
+          initContainerBootstrap, executorInitContainerConfiguration)))
     runAndVerifyDriverPodHasCorrectProperties()
     val resourceListArgumentCaptor = ArgumentCaptor.forClass(classOf[HasMetadata])
     verify(kubernetesClient).resourceList(resourceListArgumentCaptor.capture())
@@ -233,8 +228,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     verify(submittedDependencyUploader).uploadJars()
     verify(submittedDependencyUploader).uploadFiles()
     verify(initContainerComponentsProvider)
-        .provideInitContainerConfigMapBuilder(Some(SUBMITTED_RESOURCES.ids()))
-    verify(initContainerComponentsProvider)
       .provideSubmittedDependenciesSecretBuilder(Some(SUBMITTED_RESOURCES.secrets()))
   }
 
@@ -250,8 +243,6 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     verifyConfigMapWasCreated(createdResources)
     verify(submittedDependencyUploader, times(0)).uploadJars()
     verify(submittedDependencyUploader, times(0)).uploadFiles()
-    verify(initContainerComponentsProvider)
-      .provideInitContainerConfigMapBuilder(None)
     verify(initContainerComponentsProvider)
       .provideSubmittedDependenciesSecretBuilder(None)
   }
@@ -321,9 +312,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(initContainerComponentsProvider
       .provideSubmittedDependenciesSecretBuilder(None))
       .thenReturn(None)
-    when(initContainerComponentsProvider
-      .provideInitContainerConfigMapBuilder(None))
-      .thenReturn(initContainerConfigMapBuilder)
+    when(initContainerComponentsProvider.provideInitContainerBundle(None, RESOLVED_SPARK_JARS ++
+        RESOLVED_SPARK_FILES))
+        .thenReturn(Some(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
+          initContainerBootstrap, executorInitContainerConfiguration)))
   }
 
   private def expectationsForNoMountedCredentials(): Unit = {

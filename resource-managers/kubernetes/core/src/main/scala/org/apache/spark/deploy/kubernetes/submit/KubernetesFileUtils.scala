@@ -33,6 +33,10 @@ private[spark] object KubernetesFileUtils {
     filterUriStringsByScheme(uris, _ == "local")
   }
 
+  def getNonContainerLocalFiles(uris: Iterable[String]): Iterable[String] = {
+    filterUriStringsByScheme(uris, _ != "local")
+  }
+
   def getOnlySubmitterLocalFiles(uris: Iterable[String]): Iterable[String] = {
     filterUriStringsByScheme(uris, _ == "file")
   }
