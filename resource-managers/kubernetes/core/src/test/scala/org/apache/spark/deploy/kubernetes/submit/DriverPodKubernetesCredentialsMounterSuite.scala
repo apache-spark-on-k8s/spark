@@ -32,16 +32,22 @@ class DriverPodKubernetesCredentialsMounterSuite
   private val CLIENT_CERT_DATA = "client-cert-data"
   private val OAUTH_TOKEN_DATA = "oauth-token"
   private val CA_CERT_DATA = "ca-cert-data"
+  private val TRUSTSTORE_DATA = "trustStore"
+  private val TRUSTSTORE_PASSWORD_DATA = "trustStorePassword"
   private val SUBMITTER_LOCAL_DRIVER_KUBERNETES_CREDENTIALS = KubernetesCredentials(
     caCertDataBase64 = Some(CA_CERT_DATA),
     clientKeyDataBase64 = Some(CLIENT_KEY_DATA),
     clientCertDataBase64 = Some(CLIENT_CERT_DATA),
-    oauthTokenBase64 = Some(OAUTH_TOKEN_DATA))
+    oauthTokenBase64 = Some(OAUTH_TOKEN_DATA),
+    trustStoreDataBase64 = Some(TRUSTSTORE_DATA),
+    trustStorePasswordBase64 = Some(TRUSTSTORE_PASSWORD_DATA))
   private val APP_ID = "app-id"
   private val USER_SPECIFIED_CLIENT_KEY_FILE = Some("/var/data/client-key.pem")
   private val USER_SPECIFIED_CLIENT_CERT_FILE = Some("/var/data/client-cert.pem")
   private val USER_SPECIFIED_OAUTH_TOKEN_FILE = Some("/var/data/token.txt")
   private val USER_SPECIFIED_CA_CERT_FILE = Some("/var/data/ca.pem")
+  private val USER_SPECIFIED_TRUSTSTORE_FILE = Some("/var/data/trustStore.jks")
+  private val USER_SPECIFIED_TRUSTSTORE_PASSWORD_FILE = Some("/var/data/trustStorePassword.txt")
 
   // Different configurations of credentials mounters
   private val credentialsMounterWithPreMountedFiles =
@@ -51,7 +57,9 @@ class DriverPodKubernetesCredentialsMounterSuite
       maybeUserSpecifiedMountedClientKeyFile = USER_SPECIFIED_CLIENT_KEY_FILE,
       maybeUserSpecifiedMountedClientCertFile = USER_SPECIFIED_CLIENT_CERT_FILE,
       maybeUserSpecifiedMountedOAuthTokenFile = USER_SPECIFIED_OAUTH_TOKEN_FILE,
-      maybeUserSpecifiedMountedCaCertFile = USER_SPECIFIED_CA_CERT_FILE)
+      maybeUserSpecifiedMountedCaCertFile = USER_SPECIFIED_CA_CERT_FILE,
+      maybeUserSpecifiedMountedTrustStoreFile = USER_SPECIFIED_TRUSTSTORE_FILE,
+      maybeUserSpecifiedMountedTrustStorePasswordFile = USER_SPECIFIED_TRUSTSTORE_PASSWORD_FILE)
   private val credentialsMounterWithoutPreMountedFiles =
     new DriverPodKubernetesCredentialsMounterImpl(
       kubernetesAppId = APP_ID,
@@ -59,10 +67,19 @@ class DriverPodKubernetesCredentialsMounterSuite
       maybeUserSpecifiedMountedClientKeyFile = None,
       maybeUserSpecifiedMountedClientCertFile = None,
       maybeUserSpecifiedMountedOAuthTokenFile = None,
-      maybeUserSpecifiedMountedCaCertFile = None)
+      maybeUserSpecifiedMountedCaCertFile = None,
+      maybeUserSpecifiedMountedTrustStoreFile = None,
+      maybeUserSpecifiedMountedTrustStorePasswordFile = None)
   private val credentialsMounterWithoutAnyDriverCredentials =
     new DriverPodKubernetesCredentialsMounterImpl(
-      APP_ID, KubernetesCredentials(None, None, None, None), None, None, None, None)
+        APP_ID,
+        KubernetesCredentials(None, None, None, None, None, None),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None)
 
   // Test matrices
   private val TEST_MATRIX_EXPECTED_SPARK_CONFS = Table(
@@ -70,8 +87,12 @@ class DriverPodKubernetesCredentialsMounterSuite
         "Expected client key file",
         "Expected client cert file",
         "Expected CA Cert file",
-        "Expected OAuth Token File"),
+        "Expected OAuth Token File",
+        "Expected TrustStore File",
+        "Expected TrustStore Password File"),
       (credentialsMounterWithoutAnyDriverCredentials,
+        None,
+        None,
         None,
         None,
         None,
@@ -80,12 +101,16 @@ class DriverPodKubernetesCredentialsMounterSuite
         Some(DRIVER_CREDENTIALS_CLIENT_KEY_PATH),
         Some(DRIVER_CREDENTIALS_CLIENT_CERT_PATH),
         Some(DRIVER_CREDENTIALS_CA_CERT_PATH),
-        Some(DRIVER_CREDENTIALS_OAUTH_TOKEN_PATH)),
+        Some(DRIVER_CREDENTIALS_OAUTH_TOKEN_PATH),
+        Some(DRIVER_CREDENTIALS_TRUSTSTORE_PATH),
+        Some(DRIVER_CREDENTIALS_TRUSTSTORE_PASSWORD_PATH)),
       (credentialsMounterWithPreMountedFiles,
         USER_SPECIFIED_CLIENT_KEY_FILE,
         USER_SPECIFIED_CLIENT_CERT_FILE,
         USER_SPECIFIED_CA_CERT_FILE,
-        USER_SPECIFIED_OAUTH_TOKEN_FILE))
+        USER_SPECIFIED_OAUTH_TOKEN_FILE,
+        USER_SPECIFIED_TRUSTSTORE_FILE,
+        USER_SPECIFIED_TRUSTSTORE_PASSWORD_FILE))
 
   private val TEST_MATRIX_EXPECTED_CREDENTIALS_SECRET = Table(
       ("Credentials Mounter Implementation", "Expected Credentials Secret Data"),
@@ -96,18 +121,21 @@ class DriverPodKubernetesCredentialsMounterSuite
             DRIVER_CREDENTIALS_CLIENT_KEY_SECRET_NAME -> CLIENT_KEY_DATA,
             DRIVER_CREDENTIALS_CLIENT_CERT_SECRET_NAME -> CLIENT_CERT_DATA,
             DRIVER_CREDENTIALS_CA_CERT_SECRET_NAME -> CA_CERT_DATA,
-            DRIVER_CREDENTIALS_OAUTH_TOKEN_SECRET_NAME -> OAUTH_TOKEN_DATA
-          ),
+            DRIVER_CREDENTIALS_OAUTH_TOKEN_SECRET_NAME -> OAUTH_TOKEN_DATA,
+            DRIVER_CREDENTIALS_TRUSTSTORE_SECRET_NAME -> TRUSTSTORE_DATA,
+            DRIVER_CREDENTIALS_TRUSTSTORE_PASSWORD_SECRET_NAME -> TRUSTSTORE_PASSWORD_DATA),
           name = s"$APP_ID-kubernetes-credentials"))),
       (credentialsMounterWithPreMountedFiles, None))
 
   test("Credentials mounter should set the driver's Kubernetes credentials locations") {
     forAll(TEST_MATRIX_EXPECTED_SPARK_CONFS) {
       case (credentialsMounter,
-           expectedClientKeyFile,
-           expectedClientCertFile,
-           expectedCaCertFile,
-           expectedOAuthTokenFile) =>
+          expectedClientKeyFile,
+          expectedClientCertFile,
+          expectedCaCertFile,
+          expectedOAuthTokenFile,
+          expectedTrustStoreFile,
+          expectedTrustStorePasswordFile) =>
         val baseSparkConf = new SparkConf()
         val resolvedSparkConf =
           credentialsMounter.setDriverPodKubernetesCredentialLocations(baseSparkConf)
@@ -123,6 +151,12 @@ class DriverPodKubernetesCredentialsMounterSuite
         assert(resolvedSparkConf.getOption(
             s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_FILE_CONF_SUFFIX") ===
             expectedOAuthTokenFile)
+        assert(resolvedSparkConf.getOption(
+          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_CONF_SUFFIX") ===
+          expectedTrustStoreFile)
+        assert(resolvedSparkConf.getOption(
+          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_PASSWORD_CONF_SUFFIX") ===
+          expectedTrustStorePasswordFile)
     }
   }
 

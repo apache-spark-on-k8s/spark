@@ -44,6 +44,10 @@ private[spark] class DriverPodKubernetesCredentialsMounterProviderImpl(
       sparkConf.getOption(
           s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_FILE_CONF_SUFFIX"),
       sparkConf.getOption(
-          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX"))
+          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX"),
+      sparkConf.getOption(
+        s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_CONF_SUFFIX"),
+      sparkConf.getOption(
+        s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_PASSWORD_FILE_CONF_SUFFIX"))
   }
 }

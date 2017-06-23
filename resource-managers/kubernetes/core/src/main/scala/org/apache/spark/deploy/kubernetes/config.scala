@@ -68,6 +68,9 @@ package object config extends Logging {
   private[spark] val CLIENT_KEY_FILE_CONF_SUFFIX = "clientKeyFile"
   private[spark] val CLIENT_CERT_FILE_CONF_SUFFIX = "clientCertFile"
   private[spark] val CA_CERT_FILE_CONF_SUFFIX = "caCertFile"
+  private[spark] val TRUSTSTORE_CONF_SUFFIX = "trustStore"
+  private[spark] val TRUSTSTORE_PASSWORD_CONF_SUFFIX = "trustStorePassword"
+  private[spark] val TRUSTSTORE_PASSWORD_FILE_CONF_SUFFIX = "trustStorePasswordFile"
 
   private[spark] val RESOURCE_STAGING_SERVER_USE_SERVICE_ACCOUNT_CREDENTIALS =
     ConfigBuilder(

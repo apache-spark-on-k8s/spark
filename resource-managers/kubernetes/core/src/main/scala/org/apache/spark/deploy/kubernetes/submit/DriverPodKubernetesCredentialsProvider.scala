@@ -34,6 +34,11 @@ private[spark] class DriverPodKubernetesCredentialsProvider(sparkConf: SparkConf
         .map { token =>
       BaseEncoding.base64().encode(token.getBytes(Charsets.UTF_8))
     }
+    val trustStorePasswordBase64 = sparkConf
+      .getOption(s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$TRUSTSTORE_PASSWORD_CONF_SUFFIX")
+      .map { token =>
+        BaseEncoding.base64().encode(token.getBytes(Charsets.UTF_8))
+      }
     val caCertDataBase64 = safeFileConfToBase64(
         s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX",
         s"Driver CA cert file provided at %s does not exist or is not a file.")
@@ -43,11 +48,16 @@ private[spark] class DriverPodKubernetesCredentialsProvider(sparkConf: SparkConf
     val clientCertDataBase64 = safeFileConfToBase64(
         s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$CLIENT_CERT_FILE_CONF_SUFFIX",
         s"Driver client cert file provided at %s does not exist or is not a file.")
+    val trustStoreDataBase64 = safeFileConfToBase64(
+        s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$TRUSTSTORE_CONF_SUFFIX",
+        s"Driver trustStore file provided at %s does not exist or is not a file.")
     KubernetesCredentials(
       oauthTokenBase64 = oauthTokenBase64,
       caCertDataBase64 = caCertDataBase64,
       clientKeyDataBase64 = clientKeyDataBase64,
-      clientCertDataBase64 = clientCertDataBase64)
+      clientCertDataBase64 = clientCertDataBase64,
+      trustStoreDataBase64 = trustStoreDataBase64,
+      trustStorePasswordBase64 = trustStorePasswordBase64)
   }
 
   private def safeFileConfToBase64(

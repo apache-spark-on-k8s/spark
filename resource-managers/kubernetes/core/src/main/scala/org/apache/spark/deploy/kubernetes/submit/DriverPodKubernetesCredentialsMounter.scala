@@ -58,7 +58,9 @@ private[spark] class DriverPodKubernetesCredentialsMounterImpl(
       maybeUserSpecifiedMountedClientKeyFile: Option[String],
       maybeUserSpecifiedMountedClientCertFile: Option[String],
       maybeUserSpecifiedMountedOAuthTokenFile: Option[String],
-      maybeUserSpecifiedMountedCaCertFile: Option[String])
+      maybeUserSpecifiedMountedCaCertFile: Option[String],
+      maybeUserSpecifiedMountedTrustStoreFile: Option[String],
+      maybeUserSpecifiedMountedTrustStorePasswordFile: Option[String])
     extends DriverPodKubernetesCredentialsMounter {
 
   override def setDriverPodKubernetesCredentialLocations(sparkConf: SparkConf): SparkConf = {
@@ -78,6 +80,14 @@ private[spark] class DriverPodKubernetesCredentialsMounterImpl(
         maybeUserSpecifiedMountedOAuthTokenFile,
         submitterLocalDriverPodKubernetesCredentials.oauthTokenBase64,
         DRIVER_CREDENTIALS_OAUTH_TOKEN_PATH)
+    val resolvedMountedTrustStoreFile = resolveSecretLocation(
+        maybeUserSpecifiedMountedTrustStoreFile,
+        submitterLocalDriverPodKubernetesCredentials.trustStoreDataBase64,
+        DRIVER_CREDENTIALS_TRUSTSTORE_PATH)
+    val resolvedMountedTrustStorePasswordFile = resolveSecretLocation(
+      maybeUserSpecifiedMountedTrustStorePasswordFile,
+      submitterLocalDriverPodKubernetesCredentials.trustStorePasswordBase64,
+      DRIVER_CREDENTIALS_TRUSTSTORE_PASSWORD_PATH)
     val sparkConfWithCredentialLocations = sparkConf.clone()
       .setOption(
           s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX",
@@ -91,6 +101,13 @@ private[spark] class DriverPodKubernetesCredentialsMounterImpl(
       .setOption(
           s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_FILE_CONF_SUFFIX",
           resolvedMountedOAuthTokenFile)
+      .setOption(
+          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_CONF_SUFFIX",
+          resolvedMountedTrustStoreFile)
+      .setOption(
+          s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$TRUSTSTORE_PASSWORD_CONF_SUFFIX",
+          resolvedMountedTrustStorePasswordFile)
+
     // Redact all OAuth token values
     sparkConfWithCredentialLocations
         .getAll
@@ -118,7 +135,15 @@ private[spark] class DriverPodKubernetesCredentialsMounterImpl(
       resolveSecretData(
         maybeUserSpecifiedMountedOAuthTokenFile,
         submitterLocalDriverPodKubernetesCredentials.oauthTokenBase64,
-        DRIVER_CREDENTIALS_OAUTH_TOKEN_SECRET_NAME)
+        DRIVER_CREDENTIALS_OAUTH_TOKEN_SECRET_NAME) ++
+      resolveSecretData(
+        maybeUserSpecifiedMountedTrustStoreFile,
+        submitterLocalDriverPodKubernetesCredentials.trustStoreDataBase64,
+        DRIVER_CREDENTIALS_TRUSTSTORE_SECRET_NAME) ++
+      resolveSecretData(
+        maybeUserSpecifiedMountedTrustStorePasswordFile,
+        submitterLocalDriverPodKubernetesCredentials.trustStorePasswordBase64,
+        DRIVER_CREDENTIALS_TRUSTSTORE_PASSWORD_SECRET_NAME)
     if (allSecretData.isEmpty) {
       None
     } else {

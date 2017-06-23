@@ -20,4 +20,6 @@ case class KubernetesCredentials(
   oauthTokenBase64: Option[String],
   caCertDataBase64: Option[String],
   clientKeyDataBase64: Option[String],
-  clientCertDataBase64: Option[String])
+  clientCertDataBase64: Option[String],
+  trustStoreDataBase64: Option[String],
+  trustStorePasswordBase64: Option[String])

@@ -377,6 +377,22 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.authenticate.submission.trustStore</code></td>
+  <td>(none)</td>
+  <td>
+    Path to the trustStore file for connecting to the Kubernetes API server over TLS when starting the driver. This file
+    must be located on the submitting machine's disk. Specify this as a path as opposed to a URI (i.e. do not provide
+    a scheme).
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.authenticate.submission.trustStorePassword</code></td>
+  <td>(none)</td>
+  <td>
+    Password for the trustStore specified in <code>spark.kubernetes.authenticate.submission.trustStore</code>.
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.authenticate.submission.clientKeyFile</code></td>
   <td>(none)</td>
   <td>
@@ -410,6 +426,22 @@ from the other deployment modes. See the [configuration page](configuration.html
     Path to the CA cert file for connecting to the Kubernetes API server over TLS from the driver pod when requesting
     executors. This file must be located on the submitting machine's disk, and will be uploaded to the driver pod.
     Specify this as a path as opposed to a URI (i.e. do not provide a scheme).
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.authenticate.driver.trustStore</code></td>
+  <td>(none)</td>
+  <td>
+    Path to the trustStore file for connecting to the Kubernetes API server over TLS from the driver pod when requesting
+    executors. This file must be located on the submitting machine's disk, and will be uploaded to the driver pod.
+    Specify this as a path as opposed to a URI (i.e. do not provide a scheme).
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.authenticate.driver.trustStorePassword</code></td>
+  <td>(none)</td>
+  <td>
+    Password for the trustStore specified in <code>spark.kubernetes.authenticate.driver.trustStore</code>.
   </td>
 </tr>
 <tr>

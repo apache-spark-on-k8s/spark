@@ -54,6 +54,20 @@ private[spark] object SparkKubernetesClientFactory {
         s"Cannot specify OAuth token through both a file $oauthTokenFileConf and a" +
             s" value $oauthTokenConf.")
 
+    val trustStorePasswordConf = s"$kubernetesAuthConfPrefix.$TRUSTSTORE_PASSWORD_CONF_SUFFIX"
+    val trustStorePasswordFileConf =
+        s"$kubernetesAuthConfPrefix.$TRUSTSTORE_PASSWORD_FILE_CONF_SUFFIX"
+    val trustStore = sparkConf
+        .getOption(s"$kubernetesAuthConfPrefix.$TRUSTSTORE_CONF_SUFFIX")
+    val trustStorePassword = sparkConf.getOption(trustStorePasswordConf)
+    val trustStorePasswordFile = sparkConf.getOption(trustStorePasswordFileConf)
+    OptionRequirements.requireNandDefined(
+        trustStorePassword,
+        trustStorePasswordFile,
+        s"Cannot specify trustStore Password through both a value $trustStorePasswordConf and a" +
+            s" file $trustStorePasswordFileConf")
+    val resolvedTrustStorePassword = trustStorePassword.orElse(
+        trustStorePasswordFile.map(f => Files.toString(new File(f), Charsets.UTF_8)))
     val caCertFile = sparkConf
         .getOption(s"$kubernetesAuthConfPrefix.$CA_CERT_FILE_CONF_SUFFIX")
         .orElse(maybeServiceAccountCaCert.map(_.getAbsolutePath))
@@ -80,6 +94,10 @@ private[spark] object SparkKubernetesClientFactory {
           (file, configBuilder) => configBuilder.withClientCertFile(file)
         }.withOption(namespace) {
           (ns, configBuilder) => configBuilder.withNamespace(ns)
+        }.withOption(trustStore) {
+          (trustStore, configBuilder) => configBuilder.withTrustStoreFile(trustStore)
+        }.withOption(resolvedTrustStorePassword) {
+          (pw, configBuilder) => configBuilder.withTrustStorePassphrase(pw)
         }.build()
     val baseHttpClient = HttpClientUtils.createHttpClient(config)
     val httpClientWithCustomDispatcher = baseHttpClient.newBuilder()
