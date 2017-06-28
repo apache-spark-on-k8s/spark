@@ -78,6 +78,14 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
       "Cannot provide both a certificate file and a trustStore file for init-containers to" +
         " use for contacting the resource staging server over TLS.")
 
+  OptionRequirements.requireSecondIfFirstIsDefined(
+      KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars ++ sparkFiles).nonEmpty match {
+        case true => Some(true)
+        case false => None
+      },
+      maybeResourceStagingServerUri,
+      "Local files were provided, however no resource staging server URI was found.")
+
   require(maybeResourceStagingServerInternalTrustStore.forall { trustStore =>
     Option(Utils.resolveURI(trustStore).getScheme).getOrElse("file") match {
       case "file" | "local" => true
