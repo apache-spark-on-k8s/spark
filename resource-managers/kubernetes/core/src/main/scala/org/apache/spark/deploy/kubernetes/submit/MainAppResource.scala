@@ -16,12 +16,8 @@
  */
 package org.apache.spark.deploy.kubernetes.submit
 
-import org.scalatest.BeforeAndAfter
+private[spark] sealed trait MainAppResource
 
-import org.apache.spark.SparkFunSuite
+private[spark] case class PythonMainAppResource(primaryPyFile: String) extends MainAppResource
 
-class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
-  // TODO
-}
-
-
+private[spark] case class JavaMainAppResource(primaryResource: String) extends MainAppResource

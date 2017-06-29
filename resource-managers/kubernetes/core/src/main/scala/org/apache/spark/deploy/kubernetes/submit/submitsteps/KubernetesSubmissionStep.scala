@@ -14,14 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.submit
+package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
-import org.scalatest.BeforeAndAfter
+/**
+ * Represents a step in preparing the Kubernetes driver.
+ */
+private[spark] trait KubernetesSubmissionStep {
 
-import org.apache.spark.SparkFunSuite
-
-class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
-  // TODO
+  /**
+   * Apply some transformation to the previous state of the driver to add a new feature to it.
+   */
+  def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec
 }
-
-
