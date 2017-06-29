@@ -107,7 +107,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       MEMORY_OVERHEAD_MIN))
   private val executorMemoryWithOverhead = executorMemoryMb + memoryOverheadMb
 
-  private val executorCores = conf.getOption("spark.executor.cores").getOrElse("1")
+  private val executorCores = conf.getDouble("spark.executor.cores", 1d)
   private val executorLimitCores = conf.getOption(KUBERNETES_EXECUTOR_LIMIT_CORES.key)
 
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
@@ -377,7 +377,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       .withAmount(s"${executorMemoryWithOverhead}M")
       .build()
     val executorCpuQuantity = new QuantityBuilder(false)
-      .withAmount(executorCores)
+      .withAmount(executorCores.toString)
       .build()
     val executorExtraClasspathEnv = executorExtraClasspath.map { cp =>
       new EnvVarBuilder()
@@ -388,7 +388,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val requiredEnv = Seq(
       (ENV_EXECUTOR_PORT, executorPort.toString),
       (ENV_DRIVER_URL, driverUrl),
-      (ENV_EXECUTOR_CORES, executorCores),
+      // Executor backend expects integral value for executor cores, so round it up to an int.
+      (ENV_EXECUTOR_CORES, math.ceil(executorCores).toInt.toString),
       (ENV_EXECUTOR_MEMORY, executorMemoryString),
       (ENV_APPLICATION_ID, applicationId()),
       (ENV_EXECUTOR_ID, executorId),
