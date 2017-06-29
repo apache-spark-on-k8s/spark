@@ -72,6 +72,34 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     kubernetesTestComponents.deleteNamespace()
   }
 
+  test("Run PySpark Job on file from SUBMITTER") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    launchStagingServer(SSLOptions(), None)
+    sparkConf
+      .set(DRIVER_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.driverImage", "spark-driver-py:latest"))
+      .set(EXECUTOR_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
+
+    runPySparkPiAndVerifyCompletion(
+      PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION)
+  }
+
+  test("Run PySpark Job on file from CONTAINER with spark.jar defined") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
+    sparkConf
+      .set(DRIVER_DOCKER_IMAGE,
+      System.getProperty("spark.docker.test.driverImage", "spark-driver-py:latest"))
+      .set(EXECUTOR_DOCKER_IMAGE,
+      System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
+
+    runPySparkPiAndVerifyCompletion(
+      PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION)
+  }
+
   test("Simple submission test with the resource staging server.") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
 
@@ -223,6 +251,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         appResource, SPARK_PI_MAIN_CLASS, "Pi is roughly 3", Array.empty[String])
   }
 
+  private def runPySparkPiAndVerifyCompletion(
+    appResource: String): Unit = {
+    runSparkApplicationAndVerifyCompletion(
+      appResource, PYSPARK_PI_MAIN_CLASS, "Pi is roughly 3",
+      Array(null, "5"))
+  }
+
   private def runSparkApplicationAndVerifyCompletion(
       appResource: String,
       mainClass: String,
@@ -305,11 +340,14 @@ private[spark] object KubernetesSuite {
     s"integration-tests-jars/${EXAMPLES_JAR_FILE.getName}"
   val CONTAINER_LOCAL_HELPER_JAR_PATH = s"local:///opt/spark/examples/" +
     s"integration-tests-jars/${HELPER_JAR_FILE.getName}"
-
   val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
   val SPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.SparkPiWithInfiniteWait"
+  val PYSPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.PythonRunner"
+  val PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION =
+    "local:///opt/spark/examples/src/main/python/pi.py"
+  val PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION = "src/test/python/pi.py"
   val FILE_EXISTENCE_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.FileExistenceTest"
   val GROUP_BY_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +

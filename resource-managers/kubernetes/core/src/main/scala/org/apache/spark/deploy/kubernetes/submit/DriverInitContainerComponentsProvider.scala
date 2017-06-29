@@ -32,13 +32,15 @@ import org.apache.spark.util.Utils
  */
 private[spark] trait DriverInitContainerComponentsProvider {
 
-  def provideContainerLocalizedFilesResolver(): ContainerLocalizedFilesResolver
+  def provideContainerLocalizedFilesResolver(
+      mainAppResource: String) : ContainerLocalizedFilesResolver
   def provideInitContainerSubmittedDependencyUploader(
       driverPodLabels: Map[String, String]): Option[SubmittedDependencyUploader]
   def provideSubmittedDependenciesSecretBuilder(
       maybeSubmittedResourceSecrets: Option[SubmittedResourceSecrets])
       : Option[SubmittedDependencySecretBuilder]
   def provideInitContainerBootstrap(): SparkPodInitContainerBootstrap
+  def provideDriverPodFileMounter(): DriverPodKubernetesFileMounter
   def provideInitContainerBundle(maybeSubmittedResourceIds: Option[SubmittedResourceIds],
       uris: Iterable[String]): Option[InitContainerBundle]
 }
@@ -49,6 +51,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
       namespace: String,
       sparkJars: Seq[String],
       sparkFiles: Seq[String],
+      pySparkFiles: Seq[String],
       resourceStagingServerExternalSslOptions: SSLOptions)
     extends DriverInitContainerComponentsProvider {
 
@@ -104,6 +107,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
   private val initContainerImage = sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE)
   private val dockerImagePullPolicy = sparkConf.get(DOCKER_IMAGE_PULL_POLICY)
   private val downloadTimeoutMinutes = sparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT)
+  private val pySparkSubmitted = KubernetesFileUtils.getOnlySubmitterLocalFiles(pySparkFiles)
 
   private def provideInitContainerConfigMap(
       maybeSubmittedResourceIds: Option[SubmittedResourceIds]): ConfigMap = {
@@ -130,7 +134,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
     }
     new SparkInitContainerConfigMapBuilderImpl(
         sparkJars,
-        sparkFiles,
+        sparkFiles ++ pySparkSubmitted,
         jarsDownloadPath,
         filesDownloadPath,
         configMapName,
@@ -138,9 +142,10 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
         submittedDependencyConfigPlugin).build()
   }
 
-  override def provideContainerLocalizedFilesResolver(): ContainerLocalizedFilesResolver = {
+  override def provideContainerLocalizedFilesResolver(mainAppResource: String)
+    : ContainerLocalizedFilesResolver = {
     new ContainerLocalizedFilesResolverImpl(
-        sparkJars, sparkFiles, jarsDownloadPath, filesDownloadPath)
+        sparkJars, sparkFiles, pySparkFiles, mainAppResource, jarsDownloadPath, filesDownloadPath)
   }
 
   private def provideExecutorInitContainerConfiguration(): ExecutorInitContainerConfiguration = {
@@ -159,7 +164,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
           namespace,
           stagingServerUri,
           sparkJars,
-          sparkFiles,
+          sparkFiles ++ pySparkSubmitted,
           resourceStagingServerExternalSslOptions,
           RetrofitClientFactoryImpl)
     }
@@ -201,13 +206,15 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
         configMapKey,
         resourceStagingServerSecretPlugin)
   }
-
+  override def provideDriverPodFileMounter(): DriverPodKubernetesFileMounter = {
+    new DriverPodKubernetesFileMounterImpl()
+  }
   override def provideInitContainerBundle(
       maybeSubmittedResourceIds: Option[SubmittedResourceIds],
       uris: Iterable[String]): Option[InitContainerBundle] = {
-    val containerLocalizedFilesResolver = provideContainerLocalizedFilesResolver()
-    // Bypass init-containers if `spark.jars` and `spark.files` is empty or only has `local://` URIs
-    if (KubernetesFileUtils.getNonContainerLocalFiles(uris).nonEmpty) {
+    // Bypass init-containers if `spark.jars` and `spark.files` and '--py-rilfes'
+    // is empty or only has `local://` URIs
+    if ((KubernetesFileUtils.getNonContainerLocalFiles(uris) ++ pySparkSubmitted).nonEmpty) {
       Some(InitContainerBundle(provideInitContainerConfigMap(maybeSubmittedResourceIds),
         provideInitContainerBootstrap(),
         provideExecutorInitContainerConfiguration()))
