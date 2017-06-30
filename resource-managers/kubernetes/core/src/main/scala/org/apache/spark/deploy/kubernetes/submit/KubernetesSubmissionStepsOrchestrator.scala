@@ -23,6 +23,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseSubmissionStep, DependencyResolutionStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, KubernetesSubmissionStep, PythonStep}
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer.InitContainerStepsOrchestrator
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.util.Utils
 
 /**
  * Constructs the complete list of submission steps to run to deploy the Spark application.
@@ -93,26 +94,32 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
-      case _ => Option.empty[PythonStep]
+      case _ => Option.empty[KubernetesSubmissionStep]
     }
-    val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
-      namespace,
-      kubernetesResourceNamePrefix,
-      sparkJars,
-      sparkFiles,
-      jarsDownloadPath,
-      filesDownloadPath,
-      dockerImagePullPolicy,
-      allDriverLabels,
-      initContainerConfigMapName,
-      INIT_CONTAINER_CONFIG_MAP_KEY,
-      submissionSparkConf)
-    val initContainerSteps = initContainerStepsOrchestrator.getInitContainerSteps()
-    val initContainerBootstrapStep = new InitContainerBootstrapStep(
-      submissionSparkConf,
-      initContainerSteps,
-      initContainerConfigMapName,
-      INIT_CONTAINER_CONFIG_MAP_KEY)
+    val initContainerBootstrapStep = if ((sparkJars ++ sparkFiles).exists { uri =>
+      Option(Utils.resolveURI(uri).getScheme).getOrElse("file") != "local"
+    }) {
+      val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
+        namespace,
+        kubernetesResourceNamePrefix,
+        sparkJars,
+        sparkFiles,
+        jarsDownloadPath,
+        filesDownloadPath,
+        dockerImagePullPolicy,
+        allDriverLabels,
+        initContainerConfigMapName,
+        INIT_CONTAINER_CONFIG_MAP_KEY,
+        submissionSparkConf)
+      val initContainerSteps = initContainerStepsOrchestrator.getInitContainerSteps()
+      Some(new InitContainerBootstrapStep(
+        submissionSparkConf,
+        initContainerSteps,
+        initContainerConfigMapName,
+        INIT_CONTAINER_CONFIG_MAP_KEY))
+    } else {
+      Option.empty[KubernetesSubmissionStep]
+    }
     val dependencyResolutionStep = new DependencyResolutionStep(
       sparkJars,
       sparkFiles,
@@ -121,7 +128,8 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     Seq(
       initialSubmissionStep,
       kubernetesCredentialsStep,
-      initContainerBootstrapStep,
-      dependencyResolutionStep) ++ pythonStep.toSeq
+      dependencyResolutionStep) ++
+      initContainerBootstrapStep.toSeq ++
+      pythonStep.toSeq
   }
 }
