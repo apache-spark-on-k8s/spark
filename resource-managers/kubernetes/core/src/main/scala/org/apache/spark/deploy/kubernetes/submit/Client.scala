@@ -43,7 +43,7 @@ private[spark] object ClientArguments {
     var mainClass: Option[String] = None
     val driverArgs = mutable.Buffer.empty[String]
     args.sliding(2).toList.collect {
-      case Array("--py-file", mainPyFile: String) =>
+      case Array("--primary-py-file", mainPyFile: String) =>
         mainAppResource = Some(PythonMainAppResource(mainPyFile))
       case Array("--primary-java-resource", primaryJavaResource: String) =>
         mainAppResource = Some(JavaMainAppResource(primaryJavaResource))
@@ -79,17 +79,25 @@ private[spark] class Client(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
 
   def run(): Unit = {
-    var currentDriverSpec = new KubernetesDriverSpec(
-      driverPod = new PodBuilder().build(),
+    // Set new metadata and a new spec so that submission steps can use PodBuilder#editMetadata()
+    // and/or PodBuilder#editSpec() safely.
+    val basePod = new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build()
+    var currentDriverSpec = KubernetesDriverSpec(
+      driverPod = basePod,
       driverContainer = new ContainerBuilder().build(),
       driverSparkConf = submissionSparkConf.clone(),
       otherKubernetesResources = Seq.empty[HasMetadata])
     for (nextStep <- submissionSteps) {
       currentDriverSpec = nextStep.prepareSubmission(currentDriverSpec)
     }
-    val resolvedDriverJavaOpts = currentDriverSpec.driverSparkConf.getAll.map {
-      case (confKey, confValue) => s"-D$confKey=$confValue"
-    }.mkString(" ") + driverJavaOptions.map(" " + _).getOrElse("")
+    val resolvedDriverJavaOpts = currentDriverSpec
+      .driverSparkConf
+      // We don't need this anymore since we just set the JVM options on the environment
+      .remove(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
+      .getAll
+      .map {
+        case (confKey, confValue) => s"-D$confKey=$confValue"
+      }.mkString(" ") + driverJavaOptions.map(" " + _).getOrElse("")
     val resolvedDriverContainer = new ContainerBuilder(currentDriverSpec.driverContainer)
       .addNewEnv()
         .withName(ENV_DRIVER_JAVA_OPTS)

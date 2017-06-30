@@ -433,7 +433,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
       .withPorts(requiredPorts.asJava)
       .build()
 
-
     val executorPod = new PodBuilder()
       .withNewMetadata()
         .withName(name)

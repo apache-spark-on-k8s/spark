@@ -101,7 +101,7 @@ private[spark] class BaseSubmissionStep(
         .endResources()
       .build()
     val baseDriverPod = new PodBuilder(driverSpec.driverPod)
-      .withNewMetadata()
+      .editOrNewMetadata()
         .withName(kubernetesDriverPodName)
         .addToLabels(driverLabels.asJava)
         .addToAnnotations(getAllDriverAnnotations(submissionSparkConf).asJava)
@@ -114,8 +114,6 @@ private[spark] class BaseSubmissionStep(
       .setIfMissing(KUBERNETES_DRIVER_POD_NAME, kubernetesDriverPodName)
       .set("spark.app.id", kubernetesAppId)
       .set(KUBERNETES_EXECUTOR_POD_NAME_PREFIX, kubernetesResourceNamePrefix)
-      // We don't need this anymore since we just set the JVM options on the environment
-      .remove(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
     driverSpec.copy(
       driverPod = baseDriverPod,
       driverSparkConf = resolvedSparkConf,

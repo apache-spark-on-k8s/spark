@@ -27,7 +27,7 @@ private[spark] class MinikubeTestBackend extends IntegrationTestBackend {
 
   override def initialize(): Unit = {
     Minikube.startMinikube()
-    new SparkDockerImageBuilder(Minikube.getDockerEnv).buildSparkDockerImages()
+//    new SparkDockerImageBuilder(Minikube.getDockerEnv).buildSparkDockerImages()
     defaultClient = Minikube.getKubernetesClient
   }
 
