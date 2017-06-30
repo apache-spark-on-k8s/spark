@@ -72,7 +72,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     kubernetesTestComponents.deleteNamespace()
   }
 
-  test("Run PySpark Job on file from SUBMITTER") {
+  test("Run PySpark Job on file from SUBMITTER with --py-files") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
 
     launchStagingServer(SSLOptions(), None)
@@ -82,7 +82,10 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .set(EXECUTOR_DOCKER_IMAGE,
         System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
 
-    runPySparkPiAndVerifyCompletion(PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION, Seq.empty[String])
+    runPySparkPiAndVerifyCompletion(
+      PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION,
+      Seq(PYSPARK_SORT_CONTAINER_LOCAL_FILE_LOCATION)
+    )
   }
 
   test("Run PySpark Job on file from CONTAINER with spark.jar defined") {
@@ -154,7 +157,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(SUBMITTER_LOCAL_MAIN_APP_RESOURCE),
         GROUP_BY_MAIN_CLASS,
-        "The Result is",
+        Seq("The Result is"),
         Array.empty[String],
         Seq.empty[String])
   }
@@ -218,7 +221,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(SUBMITTER_LOCAL_MAIN_APP_RESOURCE),
         FILE_EXISTENCE_MAIN_CLASS,
-        s"File found at /opt/spark/${testExistenceFile.getName} with correct contents.",
+        Seq(s"File found at /opt/spark/${testExistenceFile.getName} with correct contents."),
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
         Seq.empty[String])
   }
@@ -250,7 +253,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(appResource),
         SPARK_PI_MAIN_CLASS,
-        "Pi is roughly 3",
+        Seq("Pi is roughly 3"),
         Array.empty[String],
         Seq.empty[String])
   }
@@ -260,7 +263,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     runSparkApplicationAndVerifyCompletion(
       PythonMainAppResource(appResource),
       PYSPARK_PI_MAIN_CLASS,
-      "Pi is roughly 3",
+      Seq("Submitting 5 missing tasks from ResultStage", "Pi is roughly 3"),
       Array("5"),
       otherPyFiles)
   }
@@ -268,7 +271,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   private def runSparkApplicationAndVerifyCompletion(
       appResource: MainAppResource,
       mainClass: String,
-      expectedLogOnCompletion: String,
+      expectedLogOnCompletion: Seq[String],
       appArgs: Array[String],
       otherPyFiles: Seq[String]): Unit = {
     val clientArguments = ClientArguments(
@@ -284,11 +287,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       .getItems
       .get(0)
     Eventually.eventually(TIMEOUT, INTERVAL) {
-      assert(kubernetesTestComponents.kubernetesClient
-        .pods()
-        .withName(driverPod.getMetadata.getName)
-        .getLog
-        .contains(expectedLogOnCompletion), "The application did not complete.")
+      expectedLogOnCompletion.foreach { e =>
+        assert(kubernetesTestComponents.kubernetesClient
+          .pods()
+          .withName(driverPod.getMetadata.getName)
+          .getLog
+          .contains(e), "The application did not complete.")
+      }
     }
   }
 
@@ -356,6 +361,8 @@ private[spark] object KubernetesSuite {
   val PYSPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.PythonRunner"
   val PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION =
     "local:///opt/spark/examples/src/main/python/pi.py"
+  val PYSPARK_SORT_CONTAINER_LOCAL_FILE_LOCATION =
+    "local:///opt/spark/examples/src/main/python/sort.py"
   val PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION = "src/test/python/pi.py"
   val FILE_EXISTENCE_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.FileExistenceTest"

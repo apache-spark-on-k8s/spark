@@ -78,6 +78,13 @@ private[spark] class Client(
   private val driverJavaOptions = submissionSparkConf.get(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
 
+  /**
+    * Run command that initalizes a DriverSpec that will be updated
+    * after each KubernetesSubmissionStep in the sequence that is passed in.
+    * The final driver-spec will be used to build the Driver Container,
+    * Driver Pod, and Kubernetes Resources
+    *
+    */
   def run(): Unit = {
     // Set new metadata and a new spec so that submission steps can use PodBuilder#editMetadata()
     // and/or PodBuilder#editSpec() safely.
@@ -87,6 +94,8 @@ private[spark] class Client(
       driverContainer = new ContainerBuilder().build(),
       driverSparkConf = submissionSparkConf.clone(),
       otherKubernetesResources = Seq.empty[HasMetadata])
+    // This orchestrator determines which steps are necessary to take to resolve varying
+    // client arguments that are passed in
     for (nextStep <- submissionSteps) {
       currentDriverSpec = nextStep.prepareSubmission(currentDriverSpec)
     }
@@ -186,6 +195,13 @@ private[spark] object Client {
     }
   }
 
+  /**
+    * Entry point from SparkSubmit in spark-core
+    *
+    *
+    * @param args Array of strings that have interchanging values that will be
+    *             parsed by ClientArguments with the identifiers that preceed the values
+    */
   def main(args: Array[String]): Unit = {
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     val sparkConf = new SparkConf()

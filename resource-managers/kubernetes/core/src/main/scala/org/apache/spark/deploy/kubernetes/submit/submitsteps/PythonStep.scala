@@ -28,7 +28,7 @@ private[spark] class PythonStep(
 
   override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val resolvedOtherPyFilesString = if (otherPyFiles.isEmpty) {
-      "no-py-files"
+      "null"
     } else {
       otherPyFiles.mkString(",")
     }
