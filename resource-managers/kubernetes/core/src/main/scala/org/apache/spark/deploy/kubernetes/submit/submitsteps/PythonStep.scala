@@ -27,6 +27,11 @@ private[spark] class PythonStep(
     filesDownloadPath: String) extends KubernetesSubmissionStep {
 
   override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+    val resolvedOtherPyFilesString = if (otherPyFiles.isEmpty) {
+      "no-py-files"
+    } else {
+      otherPyFiles.mkString(",")
+    }
     val withPythonPrimaryFileContainer = new ContainerBuilder(driverSpec.driverContainer)
       .addNewEnv()
         .withName(ENV_PYSPARK_PRIMARY)
@@ -34,8 +39,7 @@ private[spark] class PythonStep(
         .endEnv()
       .addNewEnv()
         .withName(ENV_PYSPARK_FILES)
-        .withValue(
-            KubernetesFileUtils.resolveFilePaths(otherPyFiles, filesDownloadPath).mkString(","))
+        .withValue(resolvedOtherPyFilesString)
         .endEnv()
     driverSpec.copy(driverContainer = withPythonPrimaryFileContainer.build())
   }
