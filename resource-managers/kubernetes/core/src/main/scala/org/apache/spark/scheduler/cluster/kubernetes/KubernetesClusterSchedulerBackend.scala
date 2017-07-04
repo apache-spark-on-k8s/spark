@@ -432,6 +432,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       .endMetadata()
       .withNewSpec()
         .withHostname(hostname)
+        .withRestartPolicy("Never")
         .addNewContainer()
           .withName(s"executor")
           .withImage(executorDockerImage)
