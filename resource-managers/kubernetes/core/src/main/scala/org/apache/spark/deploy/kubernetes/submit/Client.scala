@@ -90,12 +90,10 @@ private[spark] class Client(
     // and/or PodBuilder#editSpec() safely.
     val basePod = new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build()
     var currentDriverSpec = KubernetesDriverSpec(
-      driverPod = basePod,
-      driverContainer = new ContainerBuilder().build(),
-      driverSparkConf = submissionSparkConf.clone(),
-      otherKubernetesResources = Seq.empty[HasMetadata])
-    // This orchestrator determines which steps are necessary to take to resolve varying
-    // client arguments that are passed in
+        driverPod = basePod,
+        driverContainer = new ContainerBuilder().build(),
+        driverSparkConf = submissionSparkConf.clone(),
+        otherKubernetesResources = Seq.empty[HasMetadata])
     for (nextStep <- submissionSteps) {
       currentDriverSpec = nextStep.prepareSubmission(currentDriverSpec)
     }
@@ -119,10 +117,10 @@ private[spark] class Client(
         .endSpec()
       .build()
     Utils.tryWithResource(
-      kubernetesClient
-        .pods()
-        .withName(resolvedDriverPod.getMetadata.getName)
-        .watch(loggingPodStatusWatcher)) { _ =>
+        kubernetesClient
+            .pods()
+            .withName(resolvedDriverPod.getMetadata.getName)
+            .watch(loggingPodStatusWatcher)) { _ =>
       val createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
       try {
         if (currentDriverSpec.otherKubernetesResources.nonEmpty) {
