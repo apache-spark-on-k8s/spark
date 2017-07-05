@@ -90,7 +90,7 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
         appArgs,
         submissionSparkConf)
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
-        submissionSparkConf, kubernetesAppId)
+        submissionSparkConf, kubernetesResourceNamePrefix)
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
