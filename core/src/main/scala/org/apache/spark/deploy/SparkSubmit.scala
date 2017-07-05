@@ -621,14 +621,17 @@ object SparkSubmit {
     if (isKubernetesCluster) {
       childMainClass = "org.apache.spark.deploy.kubernetes.submit.Client"
       if (args.isPython) {
-        childArgs += args.primaryResource
-        childArgs += "org.apache.spark.deploy.PythonRunner"
-        childArgs += args.pyFiles
+        childArgs ++= Array("--primary-py-file", args.primaryResource)
+        childArgs ++= Array("--main-class", "org.apache.spark.deploy.PythonRunner")
+        childArgs ++= Array("--other-py-files", args.pyFiles)
       } else {
-        childArgs += args.primaryResource
-        childArgs += args.mainClass
+        childArgs ++= Array("--primary-java-resource", args.primaryResource)
+        childArgs ++= Array("--main-class", args.mainClass)
       }
-      childArgs ++= args.childArgs
+      args.childArgs.foreach { arg =>
+        childArgs += "--arg"
+        childArgs += arg
+      }
     }
 
     // Load any properties specified through --conf and the default properties file
