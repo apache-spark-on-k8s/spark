@@ -30,10 +30,10 @@ class PythonStepSuite extends SparkFunSuite with BeforeAndAfter {
     "local:///app/files/file3.py",
     "http://app/files/file4.py")
   private val RESOLVED_PYSPARK_FILES = Seq(
-    "hdfs://localhost:9000/app/files/file1.py",
+    FILE_DOWNLOAD_PATH + "/file1.py",
     FILE_DOWNLOAD_PATH + "/file2.py",
     "/app/files/file3.py",
-    "http://app/files/file4.py").mkString(",")
+    FILE_DOWNLOAD_PATH + "/file4.py").mkString(",")
   private val PYSPARK_PRIMARY_FILE = "file:///app/files/file5.py"
   private val RESOLVED_PYSPARK_PRIMARY_FILE = FILE_DOWNLOAD_PATH + "/file5.py"
 

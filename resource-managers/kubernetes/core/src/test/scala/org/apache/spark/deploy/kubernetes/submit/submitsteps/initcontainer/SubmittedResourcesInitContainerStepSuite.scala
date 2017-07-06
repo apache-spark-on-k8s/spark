@@ -55,12 +55,12 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
     INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY ->
       BaseEncoding.base64().encode(FILES_SECRET.getBytes(Charsets.UTF_8))
   ).asJava
-  private val TRUSTSTORE_FILE = createTempFile(".jks")
-  private val TRUSTSTORE_URI = Some(TRUSTSTORE_FILE)
+  private var TRUSTSTORE_FILE: String = ""
+  private var TRUSTSTORE_URI: Option[String] = None
   private val TRUSTSTORE_PASS = "trustStorePassword"
   private val TRUSTSTORE_TYPE = "jks"
-  private val CERT_FILE = createTempFile("pem")
-  private val CERT_URI = Some(CERT_FILE)
+  private var CERT_FILE: String = ""
+  private var CERT_URI: Option[String] = None
 
   @Mock
   private var submittedDependencyUploader: SubmittedDependencyUploader = _
@@ -69,6 +69,10 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
 
   before {
     MockitoAnnotations.initMocks(this)
+    TRUSTSTORE_FILE = createTempFile(".jks")
+    TRUSTSTORE_URI = Some(TRUSTSTORE_FILE)
+    CERT_FILE = createTempFile("pem")
+    CERT_URI = Some(CERT_FILE)
     when(submittedDependencyUploader.uploadJars()).thenReturn(
       SubmittedResourceIdAndSecret(JARS_RESOURCE_ID, JARS_SECRET)
     )
@@ -86,6 +90,10 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
         .endMetadata()
         .withNewSpec().endSpec()
         .build())
+  }
+  after {
+    new File(TRUSTSTORE_FILE).delete()
+    new File(CERT_FILE).delete()
   }
   test ("testing vanilla prepareInitContainer on resources and properties") {
     val submittedResourceStep = new SubmittedResourcesInitContainerStep(
@@ -164,10 +172,57 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
     Map(
       RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
       RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
-      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key -> (SECRET_MOUNT_PATH + "/trustStore"),
-      RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key -> (SECRET_MOUNT_PATH + "/ssl-certificate")
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_STAGING_SERVER_TRUSTSTORE_SECRET_KEY",
+      RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_STAGING_SERVER_CLIENT_CERT_SECRET_KEY"
     )
     assert(returnedInitContainer.initContainerProperties === expectedinitContainerProperties)
 
   }
+
+  test ("testing prepareInitContainer w/ local CERT and TrustStore Files w/o SSL") {
+    val LOCAL_TRUST_FILE = "local:///tmp/trust.jsk"
+    val LOCAL_CERT_FILE = "local:///tmp/cert.pem"
+    val submittedResourceStep = new SubmittedResourcesInitContainerStep(
+      RESOURCE_SECRET_NAME,
+      STAGING_SERVER_URI,
+      SECRET_MOUNT_PATH,
+      false,
+      Some(LOCAL_TRUST_FILE),
+      Some(LOCAL_CERT_FILE),
+      Some(TRUSTSTORE_PASS),
+      Some(TRUSTSTORE_TYPE),
+      submittedDependencyUploader,
+      submittedResourcesSecretPlugin
+    )
+    val returnedInitContainer =
+      submittedResourceStep.prepareInitContainer(InitContainerSpec(
+        Map.empty[String, String],
+        Map.empty[String, String],
+        new Container(),
+        new Container(),
+        new Pod(),
+        Seq.empty[HasMetadata]))
+    val expectedinitContainerProperties = Map(
+      RESOURCE_STAGING_SERVER_URI.key -> STAGING_SERVER_URI,
+      INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key -> JARS_RESOURCE_ID,
+      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY",
+      INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> FILES_RESOURCE_ID,
+      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY",
+      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString) ++
+      Map(
+        RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
+        RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
+        RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key ->
+          "/tmp/trust.jsk",
+        RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key ->
+          "/tmp/cert.pem"
+      )
+    assert(returnedInitContainer.initContainerProperties === expectedinitContainerProperties)
+
+  }
+
 }

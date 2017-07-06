@@ -86,7 +86,7 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
       INIT_CONTAINER_CONFIG_MAP_KEY,
       sparkConf)
     val initSteps : Seq[InitContainerStep] = initContainerStepsOrchestrator.getInitContainerSteps()
-    assert(initSteps.length == 1)
+    assert(initSteps.length === 1)
     assert(initSteps.head.isInstanceOf[BaseInitContainerStep])
   }
 }

@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer
 
 import io.fabric8.kubernetes.api.model._
+
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
@@ -25,6 +26,8 @@ import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
 import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Matchers.any
 import org.mockito.Mockito.when
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
 
 class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
@@ -46,18 +49,24 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
   before {
     MockitoAnnotations.initMocks(this)
     when(podAndInitContainerBootstrap.bootstrapInitContainerAndVolumes(
-      any[PodWithDetachedInitContainer])).thenReturn(
-      PodWithDetachedInitContainer(
-        new PodBuilder()
-          .withNewMetadata()
-            .addToLabels("bootstrap", "true")
-            .endMetadata()
-          .withNewSpec().endSpec()
-        .build(),
-        new ContainerBuilder()
-          .withName(INIT_CONTAINER_NAME).build(),
-        new ContainerBuilder()
-          .withName(DRIVER_CONTAINER_NAME).build()))
+      any[PodWithDetachedInitContainer])).thenAnswer(new Answer[PodWithDetachedInitContainer] {
+        override def answer(invocation: InvocationOnMock) : PodWithDetachedInitContainer = {
+          val pod = invocation.getArgumentAt(0, classOf[PodWithDetachedInitContainer])
+          pod.copy(
+            pod =
+              new PodBuilder()
+                .withNewMetadata()
+                  .addToLabels("bootstrap", "true")
+                  .endMetadata()
+                .withNewSpec().endSpec()
+                .build(),
+            initContainer =
+              new ContainerBuilder()
+                .withName(INIT_CONTAINER_NAME).build(),
+            mainContainer =
+              new ContainerBuilder()
+                .withName(DRIVER_CONTAINER_NAME).build()
+          )}})
   }
 
   test("Test of additionalDriverSparkConf with mix of remote files and jars") {
@@ -76,8 +85,12 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
       INIT_CONTAINER_REMOTE_FILES.key -> "hdfs://localhost:9000/app/files/file1.txt"
     )
     val initContainerSpec = InitContainerSpec(
-      Map.empty[String, String], Map.empty[String, String],
-      new Container(), new Container(), new Pod, Seq.empty[HasMetadata]
+      Map.empty[String, String],
+      Map.empty[String, String],
+      new Container(),
+      new Container(),
+      new Pod,
+      Seq.empty[HasMetadata]
     )
     val returnContainerSpec = baseInitStep.prepareInitContainer(initContainerSpec)
     assert(expectedDriverSparkConf === returnContainerSpec.initContainerProperties)
