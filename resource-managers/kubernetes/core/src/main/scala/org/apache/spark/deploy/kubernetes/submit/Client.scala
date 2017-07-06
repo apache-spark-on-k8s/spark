@@ -90,10 +90,12 @@ private[spark] class Client(
     // and/or PodBuilder#editSpec() safely.
     val basePod = new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build()
     var currentDriverSpec = KubernetesDriverSpec(
-        driverPod = basePod,
-        driverContainer = new ContainerBuilder().build(),
-        driverSparkConf = submissionSparkConf.clone(),
-        otherKubernetesResources = Seq.empty[HasMetadata])
+      driverPod = basePod,
+      driverContainer = new ContainerBuilder().build(),
+      driverSparkConf = submissionSparkConf.clone(),
+      otherKubernetesResources = Seq.empty[HasMetadata])
+    // submissionSteps contain steps necessary to take, to resolve varying
+    // client arguments that are passed in, created by orchestrator
     for (nextStep <- submissionSteps) {
       currentDriverSpec = nextStep.prepareSubmission(currentDriverSpec)
     }

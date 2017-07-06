@@ -16,17 +16,16 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer
 
-import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
+import io.fabric8.kubernetes.api.model._
+import scala.collection.JavaConverters._
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
 import org.mockito.{Mock, MockitoAnnotations}
-import org.mockito.Matchers.{any, eq => mockitoEq}
+import org.mockito.Matchers.any
 import org.mockito.Mockito.when
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
-import org.scalatest.{BeforeAndAfter}
+import org.scalatest.BeforeAndAfter
 
 class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
   private val SPARK_JARS = Seq(
@@ -37,16 +36,28 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
   private val FILES_DOWNLOAD_PATH = "/var/data/files"
   private val CONFIG_MAP_NAME = "config-map"
   private val CONFIG_MAP_KEY = "config-map-key"
+  private val POD_LABEL = Map("bootstrap" -> "true")
+  private val INIT_CONTAINER_NAME = "init-container"
+  private val DRIVER_CONTAINER_NAME = "driver-container"
 
   @Mock
   private var podAndInitContainerBootstrap : SparkPodInitContainerBootstrap = _
-  @Mock
-  private var podWithDetachedInitContainer : PodWithDetachedInitContainer = _
 
   before {
     MockitoAnnotations.initMocks(this)
     when(podAndInitContainerBootstrap.bootstrapInitContainerAndVolumes(
-      any[PodWithDetachedInitContainer])).thenReturn(podWithDetachedInitContainer)
+      any[PodWithDetachedInitContainer])).thenReturn(
+      PodWithDetachedInitContainer(
+        new PodBuilder()
+          .withNewMetadata()
+            .addToLabels("bootstrap", "true")
+            .endMetadata()
+          .withNewSpec().endSpec()
+        .build(),
+        new ContainerBuilder()
+          .withName(INIT_CONTAINER_NAME).build(),
+        new ContainerBuilder()
+          .withName(DRIVER_CONTAINER_NAME).build()))
   }
 
   test("Test of additionalDriverSparkConf with mix of remote files and jars") {
@@ -58,11 +69,7 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
       CONFIG_MAP_NAME,
       CONFIG_MAP_KEY,
       podAndInitContainerBootstrap)
-    val remoteJarsToDownload = KubernetesFileUtils.getOnlyRemoteFiles(SPARK_JARS)
-    val remoteFilesToDownload = KubernetesFileUtils.getOnlyRemoteFiles(SPARK_FILES)
-    assert(remoteJarsToDownload === List("hdfs://localhost:9000/app/jars/jar1.jar"))
-    assert(remoteFilesToDownload === List("hdfs://localhost:9000/app/files/file1.txt"))
-    val expectedTest = Map(
+    val expectedDriverSparkConf = Map(
       INIT_CONTAINER_JARS_DOWNLOAD_LOCATION.key -> JARS_DOWNLOAD_PATH,
       INIT_CONTAINER_FILES_DOWNLOAD_LOCATION.key -> FILES_DOWNLOAD_PATH,
       INIT_CONTAINER_REMOTE_JARS.key -> "hdfs://localhost:9000/app/jars/jar1.jar",
@@ -73,6 +80,9 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
       new Container(), new Container(), new Pod, Seq.empty[HasMetadata]
     )
     val returnContainerSpec = baseInitStep.prepareInitContainer(initContainerSpec)
-    assert(expectedTest.toSet.subsetOf(returnContainerSpec.initContainerProperties.toSet))
+    assert(expectedDriverSparkConf.toSet === returnContainerSpec.initContainerProperties.toSet)
+    assert(returnContainerSpec.initContainer.getName == INIT_CONTAINER_NAME)
+    assert(returnContainerSpec.driverContainer.getName == DRIVER_CONTAINER_NAME)
+    assert(returnContainerSpec.podToInitialize.getMetadata.getLabels.asScala === POD_LABEL)
   }
 }

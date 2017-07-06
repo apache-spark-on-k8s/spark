@@ -44,39 +44,49 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
   private val INIT_CONTAINER_CONFIG_MAP_KEY = "spark-init-config-map-key"
   private val STAGING_SERVER_URI = "http://localhost:8000"
 
-  test ("Contact resource staging server w/o TLS") {
-    val SPARK_CONF = new SparkConf(true)
+  test ("including step to contact resource staging server") {
+    val sparkConf = new SparkConf(true)
       .set(KUBERNETES_DRIVER_LABELS, s"$DEPRECATED_CUSTOM_LABEL_KEY=$DEPRECATED_CUSTOM_LABEL_VALUE")
       .set(s"$KUBERNETES_DRIVER_LABEL_PREFIX$CUSTOM_LABEL_KEY", CUSTOM_LABEL_VALUE)
       .set(RESOURCE_STAGING_SERVER_URI, STAGING_SERVER_URI)
 
     val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
-      NAMESPACE, APP_RESOURCE_PREFIX, SPARK_JARS, SPARK_FILES, JARS_DOWNLOAD_PATH,
-      FILES_DOWNLOAD_PATH, DOCKER_IMAGE_PULL_POLICY, DRIVER_LABELS,
-      INIT_CONTAINER_CONFIG_MAP_NAME, INIT_CONTAINER_CONFIG_MAP_KEY, SPARK_CONF)
-
+      NAMESPACE,
+      APP_RESOURCE_PREFIX,
+      SPARK_JARS,
+      SPARK_FILES,
+      JARS_DOWNLOAD_PATH,
+      FILES_DOWNLOAD_PATH,
+      DOCKER_IMAGE_PULL_POLICY,
+      DRIVER_LABELS,
+      INIT_CONTAINER_CONFIG_MAP_NAME,
+      INIT_CONTAINER_CONFIG_MAP_KEY,
+      sparkConf)
     val initSteps : Seq[InitContainerStep] = initContainerStepsOrchestrator.getInitContainerSteps()
     assert(initSteps.length == 2)
-    assert( initSteps.map({
-      case step: BaseInitContainerStep => true
-      case step: SubmittedResourcesInitContainerStep => true
-      case _ => false
-    }).groupBy(identity).mapValues(_.size).toSeq  == Seq((true, 2)))
+    assert(initSteps.head.isInstanceOf[BaseInitContainerStep])
+    assert(initSteps(1).isInstanceOf[SubmittedResourcesInitContainerStep])
   }
 
-  test ("no need to contact resource staging server") {
-    val SPARK_CONF = new SparkConf(true)
+  test ("not including steps because no contact to resource staging server") {
+    val sparkConf = new SparkConf(true)
       .set(KUBERNETES_DRIVER_LABELS, s"$DEPRECATED_CUSTOM_LABEL_KEY=$DEPRECATED_CUSTOM_LABEL_VALUE")
       .set(s"$KUBERNETES_DRIVER_LABEL_PREFIX$CUSTOM_LABEL_KEY", CUSTOM_LABEL_VALUE)
 
     val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
-      NAMESPACE, APP_RESOURCE_PREFIX, SPARK_JARS, SPARK_FILES, JARS_DOWNLOAD_PATH,
-      FILES_DOWNLOAD_PATH, DOCKER_IMAGE_PULL_POLICY, DRIVER_LABELS,
-      INIT_CONTAINER_CONFIG_MAP_NAME, INIT_CONTAINER_CONFIG_MAP_KEY, SPARK_CONF)
+      NAMESPACE,
+      APP_RESOURCE_PREFIX,
+      SPARK_JARS,
+      SPARK_FILES,
+      JARS_DOWNLOAD_PATH,
+      FILES_DOWNLOAD_PATH,
+      DOCKER_IMAGE_PULL_POLICY,
+      DRIVER_LABELS,
+      INIT_CONTAINER_CONFIG_MAP_NAME,
+      INIT_CONTAINER_CONFIG_MAP_KEY,
+      sparkConf)
     val initSteps : Seq[InitContainerStep] = initContainerStepsOrchestrator.getInitContainerSteps()
     assert(initSteps.length == 1)
-    assert(initSteps.headOption.exists({
-    case step: BaseInitContainerStep => true
-    case _ => false}))
+    assert(initSteps.head.isInstanceOf[BaseInitContainerStep])
   }
 }
