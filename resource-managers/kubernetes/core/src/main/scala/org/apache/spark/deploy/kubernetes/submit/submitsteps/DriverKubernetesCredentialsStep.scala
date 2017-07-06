@@ -103,7 +103,7 @@ private[spark] class DriverKubernetesCredentialsStep(
       driverClientKeyDataBase64: Option[String],
       driverClientCertDataBase64: Option[String]): Option[Secret] = {
     val allSecretData =
-      resolveSecretData(
+        resolveSecretData(
           maybeMountedClientKeyFile,
           driverClientKeyDataBase64,
           DRIVER_CREDENTIALS_CLIENT_KEY_SECRET_NAME) ++

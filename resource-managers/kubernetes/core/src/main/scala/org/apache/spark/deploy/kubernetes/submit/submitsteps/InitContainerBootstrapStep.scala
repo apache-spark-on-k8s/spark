@@ -23,22 +23,23 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.submit.{InitContainerUtil, PropertiesConfigMapFromScalaMapBuilder}
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer.{InitContainerSpec, InitContainerStep}
 
+/**
+ * Configures the init-container that bootstraps dependencies into the driver pod.
+ */
 private[spark] class InitContainerBootstrapStep(
-    submissionSparkConf: SparkConf,
     initContainerSteps: Seq[InitContainerStep],
     initContainerConfigMapName: String,
     initContainerConfigMapKey: String)
   extends KubernetesSubmissionStep {
 
   override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
-    val baseInitContainerSpec = InitContainerSpec(
+    var currentInitContainerSpec = InitContainerSpec(
         initContainerProperties = Map.empty[String, String],
         additionalDriverSparkConf = Map.empty[String, String],
         initContainer = new ContainerBuilder().build(),
         driverContainer = driverSpec.driverContainer,
         podToInitialize = driverSpec.driverPod,
         initContainerDependentResources = Seq.empty[HasMetadata])
-    var currentInitContainerSpec = baseInitContainerSpec
     for (nextStep <- initContainerSteps) {
       currentInitContainerSpec = nextStep.prepareInitContainer(currentInitContainerSpec)
     }

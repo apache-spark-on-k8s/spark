@@ -25,7 +25,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 
 private[spark] object InitContainerUtil {
 
-  private val OBJECT_MAPPER = new ObjectMapper().registerModule(new DefaultScalaModule)
+  private val OBJECT_MAPPER = new ObjectMapper().registerModule(DefaultScalaModule)
 
   def appendInitContainer(originalPodSpec: Pod, initContainer: Container): Pod = {
     val resolvedInitContainers = originalPodSpec
