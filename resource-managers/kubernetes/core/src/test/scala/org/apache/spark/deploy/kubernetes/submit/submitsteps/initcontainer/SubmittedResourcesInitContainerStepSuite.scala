@@ -36,21 +36,31 @@ import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfter
 
 class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter {
+  private def createTempFile(extension: String): String = {
+    val dir = Utils.createTempDir()
+    val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")
+    Files.write(UUID.randomUUID().toString, file, Charsets.UTF_8)
+    file.getAbsolutePath
+  }
   private val RESOURCE_SECRET_NAME = "secret"
   private val JARS_RESOURCE_ID = "jarsID"
   private val JARS_SECRET = "jarsSecret"
   private val FILES_RESOURCE_ID = "filesID"
   private val FILES_SECRET = "filesSecret"
-  private def createRSecret = {
-    val jarsSecretBase64 = BaseEncoding.base64().encode(JARS_SECRET.getBytes(Charsets.UTF_8))
-    val filesSecretBase64 = BaseEncoding.base64().encode(FILES_SECRET.getBytes(Charsets.UTF_8))
-    Map(
-      INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY -> jarsSecretBase64,
-      INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY -> filesSecretBase64).asJava
-  }
   private val STAGING_SERVER_URI = "http://localhost:8000"
   private val SECRET_MOUNT_PATH = "/tmp"
-  private val RSS_SECRET = createRSecret
+  private val RSS_SECRET = Map(
+    INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY ->
+      BaseEncoding.base64().encode(JARS_SECRET.getBytes(Charsets.UTF_8)),
+    INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY ->
+      BaseEncoding.base64().encode(FILES_SECRET.getBytes(Charsets.UTF_8))
+  ).asJava
+  private val TRUSTSTORE_FILE = createTempFile(".jks")
+  private val TRUSTSTORE_URI = Some(TRUSTSTORE_FILE)
+  private val TRUSTSTORE_PASS = "trustStorePassword"
+  private val TRUSTSTORE_TYPE = "jks"
+  private val CERT_FILE = createTempFile("pem")
+  private val CERT_URI = Some(CERT_FILE)
 
   @Mock
   private var submittedDependencyUploader: SubmittedDependencyUploader = _
@@ -66,10 +76,10 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       SubmittedResourceIdAndSecret(FILES_RESOURCE_ID, FILES_SECRET)
     )
     when(submittedResourcesSecretPlugin.mountResourceStagingServerSecretIntoInitContainer(
-      mockitoEq(new Container()))).thenReturn(
+      any[Container])).thenReturn(
         new ContainerBuilder().withName("mountedSecret").build())
     when(submittedResourcesSecretPlugin.addResourceStagingServerSecretVolumeToPod(
-      mockitoEq(new Pod()))).thenReturn(
+      any[Pod])).thenReturn(
       new PodBuilder()
         .withNewMetadata()
         .addToLabels("mountedSecret", "true")
@@ -77,7 +87,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
         .withNewSpec().endSpec()
         .build())
   }
-  test ("testing prepareInitContainer on resources and properties") {
+  test ("testing vanilla prepareInitContainer on resources and properties") {
     val submittedResourceStep = new SubmittedResourcesInitContainerStep(
       RESOURCE_SECRET_NAME,
       STAGING_SERVER_URI,
@@ -119,5 +129,45 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       Map(
         EXECUTOR_INIT_CONTAINER_SECRET.key -> RESOURCE_SECRET_NAME,
         EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR.key -> SECRET_MOUNT_PATH))
+  }
+
+  test ("testing prepareInitContainer w/ CERT and TrustStore Files w/o SSL") {
+    val submittedResourceStep = new SubmittedResourcesInitContainerStep(
+      RESOURCE_SECRET_NAME,
+      STAGING_SERVER_URI,
+      SECRET_MOUNT_PATH,
+      false,
+      TRUSTSTORE_URI,
+      CERT_URI,
+      Some(TRUSTSTORE_PASS),
+      Some(TRUSTSTORE_TYPE),
+      submittedDependencyUploader,
+      submittedResourcesSecretPlugin
+    )
+    val returnedInitContainer =
+      submittedResourceStep.prepareInitContainer(InitContainerSpec(
+        Map.empty[String, String],
+        Map.empty[String, String],
+        new Container(),
+        new Container(),
+        new Pod(),
+        Seq.empty[HasMetadata]))
+    val expectedinitContainerProperties = Map(
+      RESOURCE_STAGING_SERVER_URI.key -> STAGING_SERVER_URI,
+      INIT_CONTAINER_DOWNLOAD_JARS_RESOURCE_IDENTIFIER.key -> JARS_RESOURCE_ID,
+      INIT_CONTAINER_DOWNLOAD_JARS_SECRET_LOCATION.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY",
+      INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> FILES_RESOURCE_ID,
+      INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
+        s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY",
+      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString) ++
+    Map(
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key -> (SECRET_MOUNT_PATH + "/trustStore"),
+      RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key -> (SECRET_MOUNT_PATH + "/ssl-certificate")
+    )
+    assert(returnedInitContainer.initContainerProperties === expectedinitContainerProperties)
+
   }
 }

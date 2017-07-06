@@ -123,7 +123,9 @@ private[spark] class DriverKubernetesCredentialsStep(
       None
     } else {
       Some(new SecretBuilder()
-        .withNewMetadata().withName(s"$kubernetesResourceNamePrefix-kubernetes-credentials").endMetadata()
+        .withNewMetadata()
+          .withName(s"$kubernetesResourceNamePrefix-kubernetes-credentials")
+          .endMetadata()
         .withData(allSecretData.asJava)
         .build())
     }

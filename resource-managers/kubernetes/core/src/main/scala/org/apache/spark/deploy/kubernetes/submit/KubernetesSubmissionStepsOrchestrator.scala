@@ -112,7 +112,9 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
         INIT_CONTAINER_CONFIG_MAP_KEY,
         submissionSparkConf)
       val initContainerSteps = initContainerStepsOrchestrator.getInitContainerSteps()
-      Some(new InitContainerBootstrapStep(initContainerSteps, initContainerConfigMapName, INIT_CONTAINER_CONFIG_MAP_KEY))
+      Some(new InitContainerBootstrapStep(initContainerSteps,
+        initContainerConfigMapName,
+        INIT_CONTAINER_CONFIG_MAP_KEY))
     } else {
       Option.empty[KubernetesSubmissionStep]
     }
