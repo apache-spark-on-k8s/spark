@@ -52,15 +52,15 @@ private[spark] class DependencyResolutionStep(
     val driverContainerWithResolvedClasspath = if (resolvedClasspath.nonEmpty) {
       new ContainerBuilder(driverSpec.driverContainer)
         .addNewEnv()
-        .withName(ENV_MOUNTED_CLASSPATH)
-        .withValue(resolvedClasspath.mkString(File.pathSeparator))
-        .endEnv()
+          .withName(ENV_MOUNTED_CLASSPATH)
+          .withValue(resolvedClasspath.mkString(File.pathSeparator))
+          .endEnv()
         .build()
     } else {
       driverSpec.driverContainer
     }
     driverSpec.copy(
-      driverContainer = driverContainerWithResolvedClasspath,
-      driverSparkConf = sparkConfResolvedSparkDependencies)
+        driverContainer = driverContainerWithResolvedClasspath,
+        driverSparkConf = sparkConfResolvedSparkDependencies)
   }
 }
