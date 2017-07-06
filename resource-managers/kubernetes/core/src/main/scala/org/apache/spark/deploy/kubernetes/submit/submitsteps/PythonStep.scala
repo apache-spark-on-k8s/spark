@@ -30,7 +30,7 @@ private[spark] class PythonStep(
     val resolvedOtherPyFilesString = if (otherPyFiles.isEmpty) {
       "null"
     } else {
-      otherPyFiles.mkString(",")
+      KubernetesFileUtils.resolveSubmittedUris(otherPyFiles, filesDownloadPath).mkString(",")
     }
     val withPythonPrimaryFileContainer = new ContainerBuilder(driverSpec.driverContainer)
       .addNewEnv()
