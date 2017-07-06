@@ -65,10 +65,13 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     }
     val sparkJars = submissionSparkConf.getOption("spark.jars")
         .map(_.split(","))
-        .getOrElse(Array.empty[String]) ++ additionalMainAppJar.toSeq
+        .getOrElse(Array.empty[String]) ++
+        additionalMainAppJar.toSeq
     val sparkFiles = submissionSparkConf.getOption("spark.files")
         .map(_.split(","))
-        .getOrElse(Array.empty[String]) ++ additionalMainAppPythonFile.toSeq
+        .getOrElse(Array.empty[String]) ++
+        additionalMainAppPythonFile.toSeq ++
+        additionalPythonFiles
     val driverCustomLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
         submissionSparkConf,
         KUBERNETES_DRIVER_LABEL_PREFIX,
