@@ -24,6 +24,7 @@ We've been asked by an Apache Spark Committer to work outside of the Apache infr
 
 This is a collaborative effort by several folks from different companies who are interested in seeing this feature be successful.  Companies active in this project include (alphabetically):
 
+- Bloomberg
 - Google
 - Haiwen
 - Hyperpilot

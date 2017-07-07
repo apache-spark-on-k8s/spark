@@ -18,7 +18,7 @@ package org.apache.spark.deploy.kubernetes.submit
 
 import java.io.File
 
-import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, DoneablePod, HasMetadata, Pod, PodBuilder, PodList, Secret, SecretBuilder}
+import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 import io.fabric8.kubernetes.client.dsl.{MixedOperation, NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable, PodResource}
 import org.hamcrest.{BaseMatcher, Description}
@@ -27,10 +27,10 @@ import org.mockito.Matchers.{any, anyVararg, argThat, eq => mockitoEq}
 import org.mockito.Mockito.{times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-import org.scalatest.BeforeAndAfter
+import org.scalatest.{BeforeAndAfter, Matchers}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-
 import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.{KubernetesExternalShuffleService, KubernetesShuffleBlockHandler, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
@@ -63,6 +63,7 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   private val INIT_CONTAINER_SECRET_NAME = "init-container-secret"
   private val INIT_CONTAINER_SECRET_DATA = Map("secret-key" -> "secret-data")
   private val MAIN_CLASS = "org.apache.spark.examples.SparkPi"
+  private val PYSPARK_APP_ARGS = Array(null, "500")
   private val APP_ARGS = Array("3", "20")
   private val SPARK_JARS = Seq(
       "hdfs://localhost:9000/app/jars/jar1.jar", "file:///app/jars/jar2.jar")
@@ -72,6 +73,20 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       "/var/data/spark-jars/jar1.jar", "/var/data/spark-jars/jar2.jar")
   private val SPARK_FILES = Seq(
       "hdfs://localhost:9000/app/files/file1.txt", "file:///app/files/file2.txt")
+  private val PYSPARK_FILES = Seq(
+    "hdfs://localhost:9000/app/files/file1.py",
+    "file:///app/files/file2.py",
+    "local:///app/files/file3.py",
+    "http://app/files/file4.py",
+    "file:///app/files/file5.py")
+  private val RESOLVED_PYSPARK_FILES = Seq(
+    "hdfs://localhost:9000/app/files/file1.py",
+    "/var/spark-data/spark-files/file2.py",
+    "local:///app/files/file3.py",
+    "http://app/files/file4.py")
+  private val PYSPARK_PRIMARY_FILE = "file:///app/files/file5.py"
+  private val RESOLVED_PYSPARK_PRIMARY_FILE = "/var/spark-data/spark-file/file5.py"
+
   private val RESOLVED_SPARK_FILES = Seq(
       "hdfs://localhost:9000/app/files/file1.txt", "file:///var/data/spark-files/file2.txt")
   private val INIT_CONTAINER_SECRET = new SecretBuilder()
@@ -138,13 +153,16 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
   @Mock
   private var kubernetesClient: KubernetesClient = _
   @Mock
-  private var podOps: MixedOperation[Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]] = _
+  private var podOps: MixedOperation[
+    Pod, PodList, DoneablePod, PodResource[Pod, DoneablePod]] = _
   private type ResourceListOps = NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable[
       HasMetadata, java.lang.Boolean]
   @Mock
   private var resourceListOps: ResourceListOps = _
   @Mock
   private var credentialsMounterProvider: DriverPodKubernetesCredentialsMounterProvider = _
+  @Mock
+  private var fileMounter: DriverPodKubernetesFileMounter = _
   @Mock
   private var credentialsMounter: DriverPodKubernetesCredentialsMounter = _
   @Mock
@@ -169,8 +187,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
             .endMetadata()
         }
       })
-    when(initContainerComponentsProvider.provideContainerLocalizedFilesResolver())
-      .thenReturn(containerLocalizedFilesResolver)
+    when(initContainerComponentsProvider.provideContainerLocalizedFilesResolver(
+      any[String])).thenReturn(containerLocalizedFilesResolver)
+    when(initContainerComponentsProvider.provideDriverPodFileMounter())
+        .thenReturn(fileMounter)
     when(submittedDependenciesSecretBuilder.build())
       .thenReturn(INIT_CONTAINER_SECRET)
     when(kubernetesClient.pods()).thenReturn(podOps)
@@ -178,14 +198,30 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       override def answer(invocation: InvocationOnMock): Pod = {
         new PodBuilder(invocation.getArgumentAt(0, classOf[Pod]))
           .editMetadata()
-          .withUid(DRIVER_POD_UID)
+            .withUid(DRIVER_POD_UID)
           .endMetadata()
-          .withKind(DRIVER_POD_KIND)
+            .withKind(DRIVER_POD_KIND)
           .withApiVersion(DRIVER_POD_API_VERSION)
           .build()
       }
     })
     when(podOps.withName(s"$APP_RESOURCE_PREFIX-driver")).thenReturn(namedPodResource)
+    when(fileMounter.addPySparkFiles(
+      mockitoEq(RESOLVED_PYSPARK_PRIMARY_FILE),
+      mockitoEq(RESOLVED_PYSPARK_FILES.mkString(",")),
+      any[String],
+      any())).thenAnswer( new Answer[PodBuilder] {
+        override def answer(invocation: InvocationOnMock) : PodBuilder = {
+          invocation.getArgumentAt(3, classOf[PodBuilder])
+          .editMetadata()
+            .withUid(DRIVER_POD_UID)
+            .withName(s"$APP_RESOURCE_PREFIX-driver")
+            .addToLabels("pyspark-test", "true")
+          .endMetadata()
+          .withKind(DRIVER_POD_KIND)
+          .withApiVersion(DRIVER_POD_API_VERSION)
+        }
+      })
     when(namedPodResource.watch(loggingPodStatusWatcher)).thenReturn(watch)
     when(containerLocalizedFilesResolver.resolveSubmittedAndRemoteSparkJars())
         .thenReturn(RESOLVED_SPARK_REMOTE_AND_LOCAL_JARS)
@@ -193,6 +229,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
         .thenReturn(RESOLVED_SPARK_JARS)
     when(containerLocalizedFilesResolver.resolveSubmittedSparkFiles())
         .thenReturn(RESOLVED_SPARK_FILES)
+    when(containerLocalizedFilesResolver.resolvePrimaryResourceFile())
+      .thenReturn(RESOLVED_PYSPARK_PRIMARY_FILE)
+    when(containerLocalizedFilesResolver.resolveSubmittedPySparkFiles())
+      .thenReturn(RESOLVED_PYSPARK_FILES)
     when(executorInitContainerConfiguration.configureSparkConfForExecutorInitContainer(SPARK_CONF))
         .thenReturn(SPARK_CONF_WITH_EXECUTOR_INIT_CONF)
     when(kubernetesClient.resourceList(anyVararg[HasMetadata]())).thenReturn(resourceListOps)
@@ -208,9 +248,10 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(initContainerComponentsProvider
         .provideSubmittedDependenciesSecretBuilder(Some(SUBMITTED_RESOURCES.secrets())))
         .thenReturn(Some(submittedDependenciesSecretBuilder))
-    when(initContainerComponentsProvider.provideInitContainerBundle(Some(SUBMITTED_RESOURCES.ids()),
-      RESOLVED_SPARK_JARS ++ RESOLVED_SPARK_FILES))
-        .thenReturn(Some(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
+    when(initContainerComponentsProvider.provideInitContainerBundle(mockitoEq(
+      Option(SUBMITTED_RESOURCES.ids())),
+      mockitoEq(RESOLVED_SPARK_JARS ++ RESOLVED_SPARK_FILES)))
+        .thenReturn(Option(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
           initContainerBootstrap, executorInitContainerConfiguration)))
     runAndVerifyDriverPodHasCorrectProperties()
     val resourceListArgumentCaptor = ArgumentCaptor.forClass(classOf[HasMetadata])
@@ -292,17 +333,31 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       APP_NAME,
       APP_RESOURCE_PREFIX,
       APP_ID,
+      "",
+      None,
       MAIN_CLASS,
       SPARK_CONF,
       APP_ARGS,
-      SPARK_JARS,
-      SPARK_FILES,
       true,
       kubernetesClient,
       initContainerComponentsProvider,
       credentialsMounterProvider,
       loggingPodStatusWatcher).run()
     verify(loggingPodStatusWatcher).awaitCompletion()
+  }
+
+  test("Mounting environmental variables correctly onto Driver Pod for PySpark Jobs") {
+    expectationsForNoMountedCredentials()
+    expectationsForNoDependencyUploader()
+    expectationsForNoSparkJarsOrFiles()
+    runAndVerifyDriverPodHasCorrectPySparkProperties()
+  }
+
+  private def expectationsForNoSparkJarsOrFiles(): Unit = {
+    when(containerLocalizedFilesResolver.resolveSubmittedSparkFiles())
+        .thenReturn(Nil)
+    when(containerLocalizedFilesResolver.resolveSubmittedSparkJars())
+      .thenReturn(Nil)
   }
 
   private def expectationsForNoDependencyUploader(): Unit = {
@@ -312,8 +367,8 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     when(initContainerComponentsProvider
       .provideSubmittedDependenciesSecretBuilder(None))
       .thenReturn(None)
-    when(initContainerComponentsProvider.provideInitContainerBundle(None, RESOLVED_SPARK_JARS ++
-        RESOLVED_SPARK_FILES))
+    when(initContainerComponentsProvider.provideInitContainerBundle(mockitoEq(None),
+      mockitoEq(RESOLVED_SPARK_JARS ++ RESOLVED_SPARK_FILES)))
         .thenReturn(Some(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
           initContainerBootstrap, executorInitContainerConfiguration)))
   }
@@ -373,16 +428,28 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     }
   }
 
+  private def runAndVerifyDriverPodHasCorrectPySparkProperties(): Unit = {
+    when(initContainerComponentsProvider.provideContainerLocalizedFilesResolver(
+      mockitoEq(PYSPARK_PRIMARY_FILE))).thenReturn(containerLocalizedFilesResolver)
+    when(initContainerComponentsProvider.provideInitContainerBundle(
+      any[Option[SubmittedResourceIds]], any[Iterable[String]]))
+      .thenReturn(Some(InitContainerBundle(INIT_CONTAINER_CONFIG_MAP,
+        initContainerBootstrap, executorInitContainerConfiguration)))
+    runAndVerifyPySparkPodMatchesPredicate { p =>
+      Option(p).exists(pod => containerHasCorrectPySparkEnvs(pod))
+    }
+  }
+
   private def runAndVerifyPodMatchesPredicate(pred: (Pod => Boolean)): Unit = {
     new Client(
       APP_NAME,
       APP_RESOURCE_PREFIX,
       APP_ID,
+      "",
+      None,
       MAIN_CLASS,
       SPARK_CONF,
       APP_ARGS,
-      SPARK_JARS,
-      SPARK_FILES,
       false,
       kubernetesClient,
       initContainerComponentsProvider,
@@ -434,6 +501,15 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
     expectedBasicEnvs.toSet.subsetOf(envs.toSet)
   }
 
+  private def containerHasCorrectPySparkEnvs(pod: Pod): Boolean = {
+    val driverPodLabels =
+      pod.getMetadata.getLabels.asScala.map(env => (env._1.toString, env._2.toString))
+    val expectedBasicLabels = Map(
+      "pyspark-test" -> "true",
+      "spark-role" -> "driver")
+    expectedBasicLabels.toSet.subsetOf(driverPodLabels.toSet)
+  }
+
   private def containerHasCorrectBasicContainerConfiguration(pod: Pod): Boolean = {
     val containers = pod.getSpec.getContainers.asScala
     containers.size == 1 &&
@@ -450,4 +526,33 @@ class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
       BOOTSTRAPPED_POD_ANNOTATION -> TRUE)
     pod.getMetadata.getAnnotations.asScala == expectedAnnotations
   }
+
+  private def runAndVerifyPySparkPodMatchesPredicate(pred: (Pod => Boolean)): Unit = {
+    new Client(
+      APP_NAME,
+      APP_RESOURCE_PREFIX,
+      APP_ID,
+      PYSPARK_PRIMARY_FILE,
+      Option(new PythonSubmissionResourcesImpl(PYSPARK_PRIMARY_FILE, PYSPARK_APP_ARGS)),
+      MAIN_CLASS,
+      SPARK_CONF,
+      PYSPARK_APP_ARGS,
+      false,
+      kubernetesClient,
+      initContainerComponentsProvider,
+      credentialsMounterProvider,
+      loggingPodStatusWatcher).run()
+    val podMatcher = new BaseMatcher[Pod] {
+      override def matches(o: scala.Any): Boolean = {
+        o match {
+          case p: Pod => pred(p)
+          case _ => false
+        }
+      }
+      override def describeTo(description: Description): Unit = {}
+    }
+    verify(podOps).create(argThat(podMatcher))
+  }
 }
+
+
