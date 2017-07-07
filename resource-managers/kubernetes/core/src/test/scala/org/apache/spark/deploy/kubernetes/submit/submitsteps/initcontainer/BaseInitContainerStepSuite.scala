@@ -54,7 +54,7 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
           val pod = invocation.getArgumentAt(0, classOf[PodWithDetachedInitContainer])
           pod.copy(
             pod =
-              new PodBuilder()
+              new PodBuilder(pod.pod)
                 .withNewMetadata()
                   .addToLabels("bootstrap", "true")
                   .endMetadata()
