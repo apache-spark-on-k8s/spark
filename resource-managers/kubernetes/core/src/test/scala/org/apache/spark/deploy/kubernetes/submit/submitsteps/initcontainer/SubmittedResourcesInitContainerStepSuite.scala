@@ -38,12 +38,6 @@ import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
 
 class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter {
-  private def createTempFile(extension: String): String = {
-    val dir = Utils.createTempDir()
-    val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")
-    Files.write(UUID.randomUUID().toString, file, Charsets.UTF_8)
-    file.getAbsolutePath
-  }
   private val RESOURCE_SECRET_NAME = "secret"
   private val JARS_RESOURCE_ID = "jarsID"
   private val JARS_SECRET = "jarsSecret"
@@ -102,12 +96,14 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
           .addToLabels("mountedSecret", "true")
           .endMetadata()
           .withNewSpec().endSpec()
-          .build()}})
+          .build()
+      }})
     when(submittedResourcesSecretPlugin.mountResourceStagingServerSecretIntoInitContainer(
       any[Container])).thenAnswer(new Answer[Container] {
       override def answer(invocation: InvocationOnMock) : Container = {
         val con = invocation.getArgumentAt(0, classOf[Container])
-        new ContainerBuilder(con).withName("mountedSecret").build()}})
+        new ContainerBuilder(con).withName("mountedSecret").build()
+      }})
   }
   after {
     TRUSTSTORE_FILE.delete()
@@ -247,5 +243,10 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
     assert(secret.getData === RSS_SECRET)
     assert(secret.getMetadata.getName == RESOURCE_SECRET_NAME)
   }
-
+  private def createTempFile(extension: String): String = {
+    val dir = Utils.createTempDir()
+    val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")
+    Files.write(UUID.randomUUID().toString, file, Charsets.UTF_8)
+    file.getAbsolutePath
+  }
 }

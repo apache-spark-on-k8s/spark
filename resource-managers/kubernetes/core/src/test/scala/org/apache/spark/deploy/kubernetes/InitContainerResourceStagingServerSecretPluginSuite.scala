@@ -29,18 +29,15 @@ class InitContainerResourceStagingServerSecretPluginSuite extends SparkFunSuite 
 
   private val initContainerRSSP = new InitContainerResourceStagingServerSecretPluginImpl(
     INIT_CONTAINER_SECRET_NAME,
-    INIT_CONTAINER_SECRET_MOUNT
-  )
+    INIT_CONTAINER_SECRET_MOUNT)
 
   test("Volume Mount into InitContainer") {
     val returnedCont = initContainerRSSP.mountResourceStagingServerSecretIntoInitContainer(
-      new ContainerBuilder().withName("init-container").build()
-    )
+      new ContainerBuilder().withName("init-container").build())
     assert(returnedCont.getName === "init-container")
     assert(returnedCont.getVolumeMounts.asScala.map(
       vm => (vm.getName, vm.getMountPath)) ===
-        List((INIT_CONTAINER_SECRET_VOLUME_NAME, INIT_CONTAINER_SECRET_MOUNT))
-    )
+        List((INIT_CONTAINER_SECRET_VOLUME_NAME, INIT_CONTAINER_SECRET_MOUNT)))
   }
 
   test("Add Volume with Secret to Pod") {

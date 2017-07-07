@@ -40,22 +40,20 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     FILES_DOWNLOAD_PATH,
     DOWNLOAD_TIMEOUT_MINUTES,
     INIT_CONTAINER_CONFIG_MAP_NAME,
-    INIT_CONTAINER_CONFIG_MAP_KEY
-  )
-  private val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
-    PodWithDetachedInitContainer(
-      pod = basePod().build(),
-      initContainer = new Container(),
-      mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build())
-  )
-  private val expectedSharedMap = Map(
+    INIT_CONTAINER_CONFIG_MAP_KEY)
+  private val expectedSharedVolumeMap = Map(
     JARS_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_JARS_VOLUME_NAME,
-    FILES_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_FILES_VOLUME_NAME
-  )
+    FILES_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_FILES_VOLUME_NAME)
+
   test("InitContainer: Volume mounts, args, and builder specs") {
-    val initContainer = returnedPodWithCont.initContainer
+    val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
+      PodWithDetachedInitContainer(
+        pod = basePod().build(),
+        initContainer = new Container(),
+        mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build()))
+    val initContainer: Container = returnedPodWithCont.initContainer
     val volumes = initContainer.getVolumeMounts.asScala
-    assert(volumes.map(vm => (vm.getMountPath, vm.getName)).toMap === expectedSharedMap
+    assert(volumes.map(vm => (vm.getMountPath, vm.getName)).toMap === expectedSharedVolumeMap
       ++ Map("/etc/spark-init" -> "spark-init-properties"))
     assert(initContainer.getName === "spark-init")
     assert(initContainer.getImage === INIT_CONTAINER_IMAGE)
@@ -63,14 +61,24 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     assert(initContainer.getArgs.asScala.head === INIT_CONTAINER_PROPERTIES_FILE_PATH)
   }
   test("Main: Volume mounts and env") {
-    val mainContainer = returnedPodWithCont.mainContainer
+    val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
+      PodWithDetachedInitContainer(
+        pod = basePod().build(),
+        initContainer = new Container(),
+        mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build()))
+    val mainContainer: Container = returnedPodWithCont.mainContainer
     assert(mainContainer.getName === MAIN_CONTAINER_NAME)
     val volumeMounts = mainContainer.getVolumeMounts.asScala
-    assert(volumeMounts.map(vm => (vm.getMountPath, vm.getName)).toMap === expectedSharedMap)
+    assert(volumeMounts.map(vm => (vm.getMountPath, vm.getName)).toMap === expectedSharedVolumeMap)
     assert(mainContainer.getEnv.asScala.map(e => (e.getName, e.getValue)).toMap ===
       Map(ENV_MOUNTED_FILES_DIR -> FILES_DOWNLOAD_PATH))
   }
   test("Pod: Volume Mounts") {
+    val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
+      PodWithDetachedInitContainer(
+        pod = basePod().build(),
+        initContainer = new Container(),
+        mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build()))
     val returnedPod = returnedPodWithCont.pod
     assert(returnedPod.getMetadata.getName === "spark-pod")
     val volumes = returnedPod.getSpec.getVolumes.asScala.toList
