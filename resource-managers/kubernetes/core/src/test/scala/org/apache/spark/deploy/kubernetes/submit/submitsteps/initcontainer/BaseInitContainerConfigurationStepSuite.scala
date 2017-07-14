@@ -29,7 +29,7 @@ import org.apache.spark.SparkFunSuite
 import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.kubernetes.config._
 
-class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
+class BaseInitContainerConfigurationStepSuite extends SparkFunSuite with BeforeAndAfter{
   private val SPARK_JARS = Seq(
     "hdfs://localhost:9000/app/jars/jar1.jar", "file:///app/jars/jar2.jar")
   private val SPARK_FILES = Seq(
