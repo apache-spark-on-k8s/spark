@@ -25,6 +25,8 @@ import io.fabric8.kubernetes.api.model._
 import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Matchers.any
 import org.mockito.Mockito.when
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
 import scala.collection.JavaConverters._
 
@@ -36,12 +38,6 @@ import org.apache.spark.deploy.kubernetes.submit.{SubmittedDependencyUploader, S
 import org.apache.spark.util.Utils
 
 class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter {
-  private def createTempFile(extension: String): String = {
-    val dir = Utils.createTempDir()
-    val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")
-    Files.write(UUID.randomUUID().toString, file, Charsets.UTF_8)
-    file.getAbsolutePath
-  }
   private val RESOURCE_SECRET_NAME = "secret"
   private val JARS_RESOURCE_ID = "jarsID"
   private val JARS_SECRET = "jarsSecret"
@@ -55,11 +51,14 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
     INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY ->
       BaseEncoding.base64().encode(FILES_SECRET.getBytes(Charsets.UTF_8))
   ).asJava
-  private var TRUSTSTORE_FILE: String = ""
+  private var RSS_WITH_SSL_SECRET: java.util.Map[String, String] = _
+  private var TRUSTSTORE_FILENAME: String = ""
+  private var TRUSTSTORE_FILE: File = _
   private var TRUSTSTORE_URI: Option[String] = None
   private val TRUSTSTORE_PASS = "trustStorePassword"
   private val TRUSTSTORE_TYPE = "jks"
-  private var CERT_FILE: String = ""
+  private var CERT_FILENAME: String = ""
+  private var CERT_FILE: File = _
   private var CERT_URI: Option[String] = None
 
   @Mock
@@ -69,31 +68,46 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
 
   before {
     MockitoAnnotations.initMocks(this)
-    TRUSTSTORE_FILE = createTempFile(".jks")
-    TRUSTSTORE_URI = Some(TRUSTSTORE_FILE)
-    CERT_FILE = createTempFile("pem")
-    CERT_URI = Some(CERT_FILE)
+    TRUSTSTORE_FILENAME = createTempFile(".jks")
+    TRUSTSTORE_FILE = new File(TRUSTSTORE_FILENAME)
+    TRUSTSTORE_URI = Some(TRUSTSTORE_FILENAME)
+    CERT_FILENAME = createTempFile("pem")
+    CERT_FILE = new File(CERT_FILENAME)
+    CERT_URI = Some(CERT_FILENAME)
+    RSS_WITH_SSL_SECRET =
+      (RSS_SECRET.asScala ++ Map(
+        INIT_CONTAINER_STAGING_SERVER_TRUSTSTORE_SECRET_KEY ->
+          BaseEncoding.base64().encode(Files.toByteArray(TRUSTSTORE_FILE)),
+        INIT_CONTAINER_STAGING_SERVER_CLIENT_CERT_SECRET_KEY ->
+          BaseEncoding.base64().encode(Files.toByteArray(CERT_FILE))
+      )).asJava
     when(submittedDependencyUploader.uploadJars()).thenReturn(
       SubmittedResourceIdAndSecret(JARS_RESOURCE_ID, JARS_SECRET)
     )
     when(submittedDependencyUploader.uploadFiles()).thenReturn(
       SubmittedResourceIdAndSecret(FILES_RESOURCE_ID, FILES_SECRET)
     )
-    when(submittedResourcesSecretPlugin.mountResourceStagingServerSecretIntoInitContainer(
-      any[Container])).thenReturn(
-        new ContainerBuilder().withName("mountedSecret").build())
     when(submittedResourcesSecretPlugin.addResourceStagingServerSecretVolumeToPod(
-      any[Pod])).thenReturn(
-      new PodBuilder()
-        .withNewMetadata()
-        .addToLabels("mountedSecret", "true")
-        .endMetadata()
-        .withNewSpec().endSpec()
-        .build())
+      any[Pod])).thenAnswer(new Answer[Pod] {
+      override def answer(invocation: InvocationOnMock) : Pod = {
+        val pod = invocation.getArgumentAt(0, classOf[Pod])
+        new PodBuilder(pod)
+          .withNewMetadata()
+          .addToLabels("mountedSecret", "true")
+          .endMetadata()
+          .withNewSpec().endSpec()
+          .build()
+      }})
+    when(submittedResourcesSecretPlugin.mountResourceStagingServerSecretIntoInitContainer(
+      any[Container])).thenAnswer(new Answer[Container] {
+      override def answer(invocation: InvocationOnMock) : Container = {
+        val con = invocation.getArgumentAt(0, classOf[Container])
+        new ContainerBuilder(con).withName("mountedSecret").build()
+      }})
   }
   after {
-    new File(TRUSTSTORE_FILE).delete()
-    new File(CERT_FILE).delete()
+    TRUSTSTORE_FILE.delete()
+    CERT_FILE.delete()
   }
   test ("testing vanilla prepareInitContainer on resources and properties") {
     val submittedResourceStep = new SubmittedResourcesInitContainerConfigurationStep(
@@ -168,8 +182,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> FILES_RESOURCE_ID,
       INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
         s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY",
-      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString) ++
-    Map(
+      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString,
       RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
       RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
       RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key ->
@@ -178,6 +191,10 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
         s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_STAGING_SERVER_CLIENT_CERT_SECRET_KEY"
     )
     assert(returnedInitContainer.initContainerProperties === expectedinitContainerProperties)
+    assert(returnedInitContainer.initContainerDependentResources.length == 1)
+    val secret = returnedInitContainer.initContainerDependentResources.head.asInstanceOf[Secret]
+    assert(secret.getData === RSS_WITH_SSL_SECRET)
+    assert(secret.getMetadata.getName == RESOURCE_SECRET_NAME)
 
   }
 
@@ -212,17 +229,24 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       INIT_CONTAINER_DOWNLOAD_FILES_RESOURCE_IDENTIFIER.key -> FILES_RESOURCE_ID,
       INIT_CONTAINER_DOWNLOAD_FILES_SECRET_LOCATION.key ->
         s"$SECRET_MOUNT_PATH/$INIT_CONTAINER_SUBMITTED_FILES_SECRET_KEY",
-      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString) ++
-      Map(
-        RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
-        RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
-        RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key ->
-          "/tmp/trust.jsk",
-        RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key ->
-          "/tmp/cert.pem"
-      )
+      RESOURCE_STAGING_SERVER_SSL_ENABLED.key -> false.toString,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_PASSWORD.key -> TRUSTSTORE_PASS,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_TYPE.key -> TRUSTSTORE_TYPE,
+      RESOURCE_STAGING_SERVER_TRUSTSTORE_FILE.key ->
+        "/tmp/trust.jsk",
+      RESOURCE_STAGING_SERVER_CLIENT_CERT_PEM.key ->
+        "/tmp/cert.pem"
+    )
     assert(returnedInitContainer.initContainerProperties === expectedinitContainerProperties)
-
+    assert(returnedInitContainer.initContainerDependentResources.length == 1)
+    val secret = returnedInitContainer.initContainerDependentResources.head.asInstanceOf[Secret]
+    assert(secret.getData === RSS_SECRET)
+    assert(secret.getMetadata.getName == RESOURCE_SECRET_NAME)
   }
-
+  private def createTempFile(extension: String): String = {
+    val dir = Utils.createTempDir()
+    val file = new File(dir, s"${UUID.randomUUID().toString}.$extension")
+    Files.write(UUID.randomUUID().toString, file, Charsets.UTF_8)
+    file.getAbsolutePath
+  }
 }
