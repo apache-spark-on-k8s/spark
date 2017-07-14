@@ -55,15 +55,15 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
       .set("spark.jars", "hdfs://localhost:9000/var/apps/jars/jar1.jar")
     val mainAppResource = JavaMainAppResource("local:///var/apps/jars/main.jar")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
-      NAMESPACE,
-      APP_ID,
-      LAUNCH_TIME,
-      mainAppResource,
-      APP_NAME,
-      MAIN_CLASS,
-      APP_ARGS,
-      ADDITIONAL_PYTHON_FILES,
-      sparkConf)
+        NAMESPACE,
+        APP_ID,
+        LAUNCH_TIME,
+        mainAppResource,
+        APP_NAME,
+        MAIN_CLASS,
+        APP_ARGS,
+        ADDITIONAL_PYTHON_FILES,
+        sparkConf)
     val steps = orchestrator.getAllConfigurationSteps()
     assert(steps.size === 4)
     assert(steps(0).isInstanceOf[BaseDriverConfigurationStep])
@@ -76,15 +76,15 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     val sparkConf = new SparkConf(false)
     val mainAppResource = PythonMainAppResource("local:///var/apps/python/main.py")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
-      NAMESPACE,
-      APP_ID,
-      LAUNCH_TIME,
-      mainAppResource,
-      APP_NAME,
-      MAIN_CLASS,
-      APP_ARGS,
-      ADDITIONAL_PYTHON_FILES,
-      sparkConf)
+        NAMESPACE,
+        APP_ID,
+        LAUNCH_TIME,
+        mainAppResource,
+        APP_NAME,
+        MAIN_CLASS,
+        APP_ARGS,
+        ADDITIONAL_PYTHON_FILES,
+        sparkConf)
     val steps = orchestrator.getAllConfigurationSteps()
     assert(steps.size === 4)
     assert(steps(0).isInstanceOf[BaseDriverConfigurationStep])

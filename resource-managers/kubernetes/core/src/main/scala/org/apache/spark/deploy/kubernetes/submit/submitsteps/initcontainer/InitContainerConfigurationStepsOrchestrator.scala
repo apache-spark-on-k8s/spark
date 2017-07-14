@@ -94,37 +94,37 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
         initContainerConfigMapName,
         initContainerConfigMapKey)
     val baseInitContainerStep = new BaseInitContainerConfigurationStep(
-      sparkJars,
-      sparkFiles,
-      jarsDownloadPath,
-      filesDownloadPath,
-      initContainerConfigMapName,
-      initContainerConfigMapKey,
-      initContainerBootstrap)
+        sparkJars,
+        sparkFiles,
+        jarsDownloadPath,
+        filesDownloadPath,
+        initContainerConfigMapName,
+        initContainerConfigMapKey,
+        initContainerBootstrap)
     val submittedResourcesInitContainerStep = resourceStagingServerUri.map {
         stagingServerUri =>
       val mountSecretPlugin = new InitContainerResourceStagingServerSecretPluginImpl(
-        submittedResourcesSecretName,
-        INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH)
+          submittedResourcesSecretName,
+          INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH)
       val submittedDependencyUploader = new SubmittedDependencyUploaderImpl(
-        driverLabels,
-        namespace,
-        stagingServerUri,
-        sparkJars,
-        sparkFiles,
-        new ResourceStagingServerSslOptionsProviderImpl(submissionSparkConf).getSslOptions,
-        RetrofitClientFactoryImpl)
+          driverLabels,
+          namespace,
+          stagingServerUri,
+          sparkJars,
+          sparkFiles,
+          new ResourceStagingServerSslOptionsProviderImpl(submissionSparkConf).getSslOptions,
+          RetrofitClientFactoryImpl)
       new SubmittedResourcesInitContainerConfigurationStep(
-        submittedResourcesSecretName,
-        resourceStagingServerInternalUri.getOrElse(stagingServerUri),
-        INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,
-        resourceStagingServerInternalSslEnabled,
-        maybeResourceStagingServerInternalTrustStore,
-        maybeResourceStagingServerInternalClientCert,
-        maybeResourceStagingServerInternalTrustStorePassword,
-        maybeResourceStagingServerInternalTrustStoreType,
-        submittedDependencyUploader,
-        mountSecretPlugin)
+          submittedResourcesSecretName,
+          resourceStagingServerInternalUri.getOrElse(stagingServerUri),
+          INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,
+          resourceStagingServerInternalSslEnabled,
+          maybeResourceStagingServerInternalTrustStore,
+          maybeResourceStagingServerInternalClientCert,
+          maybeResourceStagingServerInternalTrustStorePassword,
+          maybeResourceStagingServerInternalTrustStoreType,
+          submittedDependencyUploader,
+          mountSecretPlugin)
     }
     Seq(baseInitContainerStep) ++ submittedResourcesInitContainerStep.toSeq
   }

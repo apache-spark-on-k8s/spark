@@ -70,27 +70,25 @@ class BaseInitContainerConfigurationStepSuite extends SparkFunSuite with BeforeA
 
   test("Test of additionalDriverSparkConf with mix of remote files and jars") {
     val baseInitStep = new BaseInitContainerConfigurationStep(
-      SPARK_JARS,
-      SPARK_FILES,
-      JARS_DOWNLOAD_PATH,
-      FILES_DOWNLOAD_PATH,
-      CONFIG_MAP_NAME,
-      CONFIG_MAP_KEY,
-      podAndInitContainerBootstrap)
+        SPARK_JARS,
+        SPARK_FILES,
+        JARS_DOWNLOAD_PATH,
+        FILES_DOWNLOAD_PATH,
+        CONFIG_MAP_NAME,
+        CONFIG_MAP_KEY,
+        podAndInitContainerBootstrap)
     val expectedDriverSparkConf = Map(
-      INIT_CONTAINER_JARS_DOWNLOAD_LOCATION.key -> JARS_DOWNLOAD_PATH,
-      INIT_CONTAINER_FILES_DOWNLOAD_LOCATION.key -> FILES_DOWNLOAD_PATH,
-      INIT_CONTAINER_REMOTE_JARS.key -> "hdfs://localhost:9000/app/jars/jar1.jar",
-      INIT_CONTAINER_REMOTE_FILES.key -> "hdfs://localhost:9000/app/files/file1.txt"
-    )
+        INIT_CONTAINER_JARS_DOWNLOAD_LOCATION.key -> JARS_DOWNLOAD_PATH,
+        INIT_CONTAINER_FILES_DOWNLOAD_LOCATION.key -> FILES_DOWNLOAD_PATH,
+        INIT_CONTAINER_REMOTE_JARS.key -> "hdfs://localhost:9000/app/jars/jar1.jar",
+        INIT_CONTAINER_REMOTE_FILES.key -> "hdfs://localhost:9000/app/files/file1.txt")
     val initContainerSpec = InitContainerSpec(
-      Map.empty[String, String],
-      Map.empty[String, String],
-      new Container(),
-      new Container(),
-      new Pod,
-      Seq.empty[HasMetadata]
-    )
+        Map.empty[String, String],
+        Map.empty[String, String],
+        new Container(),
+        new Container(),
+        new Pod,
+        Seq.empty[HasMetadata])
     val returnContainerSpec = baseInitStep.configureInitContainer(initContainerSpec)
     assert(expectedDriverSparkConf === returnContainerSpec.initContainerProperties)
     assert(returnContainerSpec.initContainer.getName == INIT_CONTAINER_NAME)
