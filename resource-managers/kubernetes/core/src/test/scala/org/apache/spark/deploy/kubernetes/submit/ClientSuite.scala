@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{KubernetesDriverSpec, KubernetesSubmissionStep}
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.{DriverConfigurationStep, KubernetesDriverSpec}
 
 class ClientSuite extends SparkFunSuite with BeforeAndAfter {
 
@@ -57,14 +57,14 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
   @Mock
   private var resourceList: ResourceList = _
 
-  private val submissionSteps = Seq(FirstTestSubmissionStep, SecondTestSubmissionStep)
+  private val submissionSteps = Seq(FirstTestConfigurationStep, SecondTestConfigurationStep)
   private var createdPodArgumentCaptor: ArgumentCaptor[Pod] = _
   private var createdResourcesArgumentCaptor: ArgumentCaptor[HasMetadata] = _
 
   before {
     MockitoAnnotations.initMocks(this)
     when(kubernetesClient.pods()).thenReturn(podOperations)
-    when(podOperations.withName(FirstTestSubmissionStep.podName)).thenReturn(namedPods)
+    when(podOperations.withName(FirstTestConfigurationStep.podName)).thenReturn(namedPods)
 
     createdPodArgumentCaptor = ArgumentCaptor.forClass(classOf[Pod])
     createdResourcesArgumentCaptor = ArgumentCaptor.forClass(classOf[HasMetadata])
@@ -79,7 +79,7 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
           .build()
       }
     })
-    when(podOperations.withName(FirstTestSubmissionStep.podName)).thenReturn(namedPods)
+    when(podOperations.withName(FirstTestConfigurationStep.podName)).thenReturn(namedPods)
     when(namedPods.watch(loggingPodStatusWatcher)).thenReturn(mock[Watch])
     doReturn(resourceList)
         .when(kubernetesClient)
@@ -96,14 +96,15 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
         loggingPodStatusWatcher)
     submissionClient.run()
     val createdPod = createdPodArgumentCaptor.getValue
-    assert(createdPod.getMetadata.getName === FirstTestSubmissionStep.podName)
+    assert(createdPod.getMetadata.getName === FirstTestConfigurationStep.podName)
     assert(createdPod.getMetadata.getLabels.asScala ===
-        Map(FirstTestSubmissionStep.labelKey -> FirstTestSubmissionStep.labelValue))
+        Map(FirstTestConfigurationStep.labelKey -> FirstTestConfigurationStep.labelValue))
     assert(createdPod.getMetadata.getAnnotations.asScala ===
-        Map(SecondTestSubmissionStep.annotationKey -> SecondTestSubmissionStep.annotationValue))
+        Map(SecondTestConfigurationStep.annotationKey ->
+            SecondTestConfigurationStep.annotationValue))
     assert(createdPod.getSpec.getContainers.size() === 1)
     assert(createdPod.getSpec.getContainers.get(0).getName ===
-        SecondTestSubmissionStep.containerName)
+        SecondTestConfigurationStep.containerName)
   }
 
   test("The client should create the secondary Kubernetes resources.") {
@@ -119,9 +120,9 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
     val otherCreatedResources = createdResourcesArgumentCaptor.getAllValues
     assert(otherCreatedResources.size === 1)
     val createdResource = Iterables.getOnlyElement(otherCreatedResources).asInstanceOf[Secret]
-    assert(createdResource.getMetadata.getName === FirstTestSubmissionStep.secretName)
+    assert(createdResource.getMetadata.getName === FirstTestConfigurationStep.secretName)
     assert(createdResource.getData.asScala ===
-        Map(FirstTestSubmissionStep.secretKey -> FirstTestSubmissionStep.secretData))
+        Map(FirstTestConfigurationStep.secretKey -> FirstTestConfigurationStep.secretData))
     val ownerReference = Iterables.getOnlyElement(createdResource.getMetadata.getOwnerReferences)
     assert(ownerReference.getName === createdPod.getMetadata.getName)
     assert(ownerReference.getKind === DRIVER_POD_KIND)
@@ -145,13 +146,14 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
     submissionClient.run()
     val createdPod = createdPodArgumentCaptor.getValue
     val driverContainer = Iterables.getOnlyElement(createdPod.getSpec.getContainers)
-    assert(driverContainer.getName === SecondTestSubmissionStep.containerName)
+    assert(driverContainer.getName === SecondTestConfigurationStep.containerName)
     val driverJvmOptsEnv = Iterables.getOnlyElement(driverContainer.getEnv)
     assert(driverJvmOptsEnv.getName === ENV_DRIVER_JAVA_OPTS)
     val driverJvmOpts = driverJvmOptsEnv.getValue.split(" ").toSet
     assert(driverJvmOpts.contains("-Dspark.logConf=true"))
     assert(driverJvmOpts.contains(
-        s"-D${SecondTestSubmissionStep.sparkConfKey}=${SecondTestSubmissionStep.sparkConfValue}"))
+        s"-D${SecondTestConfigurationStep.sparkConfKey}=" +
+          SecondTestConfigurationStep.sparkConfValue))
     assert(driverJvmOpts.contains(
         "-XX:+|-HeapDumpOnOutOfMemoryError"))
   }
@@ -170,7 +172,7 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
 
 }
 
-private object FirstTestSubmissionStep extends KubernetesSubmissionStep {
+private object FirstTestConfigurationStep extends DriverConfigurationStep {
 
   val podName = "test-pod"
   val secretName = "test-secret"
@@ -179,7 +181,7 @@ private object FirstTestSubmissionStep extends KubernetesSubmissionStep {
   val secretKey = "secretKey"
   val secretData = "secretData"
 
-  override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val modifiedPod = new PodBuilder(driverSpec.driverPod)
       .editMetadata()
       .withName(podName)
@@ -198,7 +200,7 @@ private object FirstTestSubmissionStep extends KubernetesSubmissionStep {
   }
 }
 
-private object SecondTestSubmissionStep extends KubernetesSubmissionStep {
+private object SecondTestConfigurationStep extends DriverConfigurationStep {
 
   val annotationKey = "second-submit"
   val annotationValue = "submitted"
@@ -206,7 +208,7 @@ private object SecondTestSubmissionStep extends KubernetesSubmissionStep {
   val sparkConfValue = "custom-conf-value"
   val containerName = "driverContainer"
 
-  override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val modifiedPod = new PodBuilder(driverSpec.driverPod)
       .editMetadata()
       .addToAnnotations(annotationKey, annotationValue)

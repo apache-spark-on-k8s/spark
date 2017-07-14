@@ -16,7 +16,7 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
-import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
+import io.fabric8.kubernetes.api.model.{Container, ContainerBuilder, HasMetadata, Pod, PodBuilder}
 
 import org.apache.spark.SparkConf
 
@@ -33,3 +33,15 @@ private[spark] case class KubernetesDriverSpec(
     driverContainer: Container,
     otherKubernetesResources: Seq[HasMetadata],
     driverSparkConf: SparkConf)
+
+private[spark] object KubernetesDriverSpec {
+  def initialSpec(initialSparkConf: SparkConf): KubernetesDriverSpec = {
+    KubernetesDriverSpec(
+        // Set new metadata and a new spec so that submission steps can use
+        // PodBuilder#editMetadata() and/or PodBuilder#editSpec() safely.
+        new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build(),
+        new ContainerBuilder().build(),
+        Seq.empty[HasMetadata],
+        initialSparkConf.clone())
+  }
+}

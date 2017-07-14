@@ -27,7 +27,7 @@ import org.apache.spark.deploy.kubernetes.constants._
 /**
  * Represents the initial setup required for the driver.
  */
-private[spark] class BaseSubmissionStep(
+private[spark] class BaseDriverConfigurationStep(
     kubernetesAppId: String,
     kubernetesResourceNamePrefix: String,
     driverLabels: Map[String, String],
@@ -35,7 +35,7 @@ private[spark] class BaseSubmissionStep(
     appName: String,
     mainClass: String,
     appArgs: Array[String],
-    submissionSparkConf: SparkConf) extends KubernetesSubmissionStep {
+    submissionSparkConf: SparkConf) extends DriverConfigurationStep {
 
   private val kubernetesDriverPodName = submissionSparkConf.get(KUBERNETES_DRIVER_POD_NAME)
       .getOrElse(s"$kubernetesResourceNamePrefix-driver")
@@ -55,7 +55,7 @@ private[spark] class BaseSubmissionStep(
   private val driverContainerMemoryWithOverhead = driverMemoryMb + memoryOverheadMb
   private val driverDockerImage = submissionSparkConf.get(DRIVER_DOCKER_IMAGE)
 
-  override def prepareSubmission(
+  override def configureDriver(
       driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val driverExtraClasspathEnv = driverExtraClasspath.map { classPath =>
       new EnvVarBuilder()

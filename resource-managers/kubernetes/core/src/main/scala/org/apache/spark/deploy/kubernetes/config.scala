@@ -418,14 +418,6 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
-  private[spark] val INIT_CONTAINER_REMOTE_PYSPARK_FILES =
-    ConfigBuilder("spark.kubernetes.initcontainer.remotePyFiles")
-      .doc("Comma-separated list of Python file URIs to download in the init-container. This is" +
-        " calculated given the list of python files sent to spark-submit.")
-      .internal()
-      .stringConf
-      .createOptional
-
   private[spark] val INIT_CONTAINER_DOCKER_IMAGE =
     ConfigBuilder("spark.kubernetes.initcontainer.docker.image")
       .doc("Image for the driver and executor's init-container that downloads dependencies.")

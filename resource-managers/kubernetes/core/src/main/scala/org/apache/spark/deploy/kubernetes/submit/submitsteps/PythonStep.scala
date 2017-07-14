@@ -24,9 +24,9 @@ import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
 private[spark] class PythonStep(
     primaryPyFile: String,
     otherPyFiles: Seq[String],
-    filesDownloadPath: String) extends KubernetesSubmissionStep {
+    filesDownloadPath: String) extends DriverConfigurationStep {
 
-  override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val resolvedOtherPyFilesString = if (otherPyFiles.isEmpty) {
       "null"
     } else {

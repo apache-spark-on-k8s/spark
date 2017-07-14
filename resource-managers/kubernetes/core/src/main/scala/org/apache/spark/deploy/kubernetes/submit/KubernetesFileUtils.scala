@@ -53,7 +53,7 @@ private[spark] object KubernetesFileUtils {
 
   /**
    * For the collection of uris, resolves any files as follows:
-   * - Files with scheme file:// are resolved to the download path
+   * - Files with scheme file:// are resolved to the given download path
    * - Files with scheme local:// resolve to just the path of the URI
    * - Otherwise, the URI is returned as-is.
    */

@@ -51,7 +51,7 @@ private[spark] class DependencyResolutionStepSuite extends SparkFunSuite {
         driverContainer = new ContainerBuilder().build(),
         driverSparkConf = new SparkConf(false),
         otherKubernetesResources = Seq.empty[HasMetadata])
-    val preparedDriverSpec = dependencyResolutionStep.prepareSubmission(baseDriverSpec)
+    val preparedDriverSpec = dependencyResolutionStep.configureDriver(baseDriverSpec)
     assert(preparedDriverSpec.driverPod === driverPod)
     assert(preparedDriverSpec.otherKubernetesResources.isEmpty)
     val resolvedSparkJars = preparedDriverSpec.driverSparkConf.get("spark.jars").split(",").toSet

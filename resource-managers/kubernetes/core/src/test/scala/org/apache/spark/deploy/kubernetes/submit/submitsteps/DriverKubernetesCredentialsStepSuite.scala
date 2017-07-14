@@ -51,7 +51,7 @@ private[spark] class DriverKubernetesCredentialsStepSuite
   test("Don't set any credentials") {
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         new SparkConf(false), KUBERNETES_RESOURCE_NAME_PREFIX)
-    val preparedDriverSpec = kubernetesCredentialsStep.prepareSubmission(BASE_DRIVER_SPEC)
+    val preparedDriverSpec = kubernetesCredentialsStep.configureDriver(BASE_DRIVER_SPEC)
     assert(preparedDriverSpec.driverPod === BASE_DRIVER_SPEC.driverPod)
     assert(preparedDriverSpec.driverContainer === BASE_DRIVER_SPEC.driverContainer)
     assert(preparedDriverSpec.otherKubernetesResources.isEmpty)
@@ -75,7 +75,7 @@ private[spark] class DriverKubernetesCredentialsStepSuite
 
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
       submissionSparkConf, KUBERNETES_RESOURCE_NAME_PREFIX)
-    val preparedDriverSpec = kubernetesCredentialsStep.prepareSubmission(BASE_DRIVER_SPEC)
+    val preparedDriverSpec = kubernetesCredentialsStep.configureDriver(BASE_DRIVER_SPEC)
     assert(preparedDriverSpec.driverPod === BASE_DRIVER_SPEC.driverPod)
     assert(preparedDriverSpec.driverContainer === BASE_DRIVER_SPEC.driverContainer)
     assert(preparedDriverSpec.otherKubernetesResources.isEmpty)
@@ -101,7 +101,7 @@ private[spark] class DriverKubernetesCredentialsStepSuite
             caCertFile.getAbsolutePath)
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         submissionSparkConf, KUBERNETES_RESOURCE_NAME_PREFIX)
-    val preparedDriverSpec = kubernetesCredentialsStep.prepareSubmission(
+    val preparedDriverSpec = kubernetesCredentialsStep.configureDriver(
       BASE_DRIVER_SPEC.copy(driverSparkConf = submissionSparkConf))
     val expectedSparkConf = Map(
         s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$OAUTH_TOKEN_CONF_SUFFIX" -> "<present_but_redacted>",

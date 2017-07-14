@@ -33,7 +33,7 @@ import org.apache.spark.deploy.kubernetes.constants._
  */
 private[spark] class DriverKubernetesCredentialsStep(
     submissionSparkConf: SparkConf,
-    kubernetesResourceNamePrefix: String) extends KubernetesSubmissionStep {
+    kubernetesResourceNamePrefix: String) extends DriverConfigurationStep {
 
   private val maybeMountedOAuthTokenFile = submissionSparkConf.getOption(
       s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$OAUTH_TOKEN_FILE_CONF_SUFFIX")
@@ -44,7 +44,7 @@ private[spark] class DriverKubernetesCredentialsStep(
   private val maybeMountedCaCertFile = submissionSparkConf.getOption(
       s"$APISERVER_AUTH_DRIVER_MOUNTED_CONF_PREFIX.$CA_CERT_FILE_CONF_SUFFIX")
 
-  override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val driverSparkConf = driverSpec.driverSparkConf.clone()
     val oauthTokenBase64 = submissionSparkConf
         .getOption(s"$APISERVER_AUTH_DRIVER_CONF_PREFIX.$OAUTH_TOKEN_CONF_SUFFIX")

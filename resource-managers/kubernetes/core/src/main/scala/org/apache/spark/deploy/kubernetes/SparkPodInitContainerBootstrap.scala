@@ -51,8 +51,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
   extends SparkPodInitContainerBootstrap {
 
   override def bootstrapInitContainerAndVolumes(
-      originalPodWithUnattachedInitContainer: PodWithDetachedInitContainer)
-      : PodWithDetachedInitContainer = {
+      podWithDetachedInitContainer: PodWithDetachedInitContainer): PodWithDetachedInitContainer = {
     val sharedVolumeMounts = Seq[VolumeMount](
       new VolumeMountBuilder()
         .withName(INIT_CONTAINER_DOWNLOAD_JARS_VOLUME_NAME)
@@ -63,7 +62,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
         .withMountPath(filesDownloadPath)
         .build())
 
-    val initContainer = new ContainerBuilder(originalPodWithUnattachedInitContainer.initContainer)
+    val initContainer = new ContainerBuilder(podWithDetachedInitContainer.initContainer)
       .withName(s"spark-init")
       .withImage(initContainerImage)
       .withImagePullPolicy(dockerImagePullPolicy)
@@ -74,7 +73,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
       .addToVolumeMounts(sharedVolumeMounts: _*)
       .addToArgs(INIT_CONTAINER_PROPERTIES_FILE_PATH)
       .build()
-    val podWithBasicVolumes = new PodBuilder(originalPodWithUnattachedInitContainer.pod)
+    val podWithBasicVolumes = new PodBuilder(podWithDetachedInitContainer.pod)
       .editSpec()
         .addNewVolume()
           .withName(INIT_CONTAINER_PROPERTIES_FILE_VOLUME)
@@ -97,7 +96,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
         .endSpec()
       .build()
     val mainContainerWithMountedFiles = new ContainerBuilder(
-      originalPodWithUnattachedInitContainer.mainContainer)
+      podWithDetachedInitContainer.mainContainer)
         .addToVolumeMounts(sharedVolumeMounts: _*)
         .addNewEnv()
           .withName(ENV_MOUNTED_FILES_DIR)

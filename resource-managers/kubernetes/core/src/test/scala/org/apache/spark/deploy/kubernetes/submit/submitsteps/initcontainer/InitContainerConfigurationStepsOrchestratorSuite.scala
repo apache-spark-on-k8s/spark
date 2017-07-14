@@ -17,10 +17,10 @@
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.config._
+import org.apache.spark.deploy.kubernetes.constants._
 
-class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
+class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
   private val NAMESPACE = "namespace"
   private val APP_RESOURCE_PREFIX = "spark-prefix"
   private val SPARK_JARS = Seq(
@@ -50,7 +50,7 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
       .set(s"$KUBERNETES_DRIVER_LABEL_PREFIX$CUSTOM_LABEL_KEY", CUSTOM_LABEL_VALUE)
       .set(RESOURCE_STAGING_SERVER_URI, STAGING_SERVER_URI)
 
-    val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
+    val orchestrator = new InitContainerConfigurationStepsOrchestrator(
       NAMESPACE,
       APP_RESOURCE_PREFIX,
       SPARK_JARS,
@@ -62,10 +62,11 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
       INIT_CONTAINER_CONFIG_MAP_NAME,
       INIT_CONTAINER_CONFIG_MAP_KEY,
       sparkConf)
-    val initSteps : Seq[InitContainerStep] = initContainerStepsOrchestrator.getInitContainerSteps()
+    val initSteps : Seq[InitContainerConfigurationStep] =
+        orchestrator.getAllConfigurationSteps()
     assert(initSteps.length == 2)
-    assert(initSteps.head.isInstanceOf[BaseInitContainerStep])
-    assert(initSteps(1).isInstanceOf[SubmittedResourcesInitContainerStep])
+    assert(initSteps.head.isInstanceOf[BaseInitContainerConfigurationStep])
+    assert(initSteps(1).isInstanceOf[SubmittedResourcesInitContainerConfigurationStep])
   }
 
   test ("not including steps because no contact to resource staging server") {
@@ -73,7 +74,7 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
       .set(KUBERNETES_DRIVER_LABELS, s"$DEPRECATED_CUSTOM_LABEL_KEY=$DEPRECATED_CUSTOM_LABEL_VALUE")
       .set(s"$KUBERNETES_DRIVER_LABEL_PREFIX$CUSTOM_LABEL_KEY", CUSTOM_LABEL_VALUE)
 
-    val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
+    val orchestrator = new InitContainerConfigurationStepsOrchestrator(
       NAMESPACE,
       APP_RESOURCE_PREFIX,
       SPARK_JARS,
@@ -85,8 +86,9 @@ class InitContainerStepsOrchestratorSuite extends SparkFunSuite {
       INIT_CONTAINER_CONFIG_MAP_NAME,
       INIT_CONTAINER_CONFIG_MAP_KEY,
       sparkConf)
-    val initSteps : Seq[InitContainerStep] = initContainerStepsOrchestrator.getInitContainerSteps()
+    val initSteps : Seq[InitContainerConfigurationStep] =
+        orchestrator.getAllConfigurationSteps()
     assert(initSteps.length === 1)
-    assert(initSteps.head.isInstanceOf[BaseInitContainerStep])
+    assert(initSteps.head.isInstanceOf[BaseInitContainerConfigurationStep])
   }
 }

@@ -27,7 +27,7 @@ import org.apache.spark.util.Utils
 /**
  * Returns the complete ordered list of steps required to configure the init-container.
  */
-private[spark] class InitContainerStepsOrchestrator(
+private[spark] class InitContainerConfigurationStepsOrchestrator(
     namespace: String,
     kubernetesResourceNamePrefix: String,
     sparkJars: Seq[String],
@@ -84,7 +84,7 @@ private[spark] class InitContainerStepsOrchestrator(
   }, "Client cert file URI used for contacting the resource staging server from init containers" +
     " must have no scheme, or scheme file://, or scheme local://.")
 
-  def getInitContainerSteps(): Seq[InitContainerStep] = {
+  def getAllConfigurationSteps(): Seq[InitContainerConfigurationStep] = {
     val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
         initContainerImage,
         dockerImagePullPolicy,
@@ -93,7 +93,7 @@ private[spark] class InitContainerStepsOrchestrator(
         downloadTimeoutMinutes,
         initContainerConfigMapName,
         initContainerConfigMapKey)
-    val baseInitContainerStep = new BaseInitContainerStep(
+    val baseInitContainerStep = new BaseInitContainerConfigurationStep(
       sparkJars,
       sparkFiles,
       jarsDownloadPath,
@@ -114,7 +114,7 @@ private[spark] class InitContainerStepsOrchestrator(
         sparkFiles,
         new ResourceStagingServerSslOptionsProviderImpl(submissionSparkConf).getSslOptions,
         RetrofitClientFactoryImpl)
-      new SubmittedResourcesInitContainerStep(
+      new SubmittedResourcesInitContainerConfigurationStep(
         submittedResourcesSecretName,
         resourceStagingServerInternalUri.getOrElse(stagingServerUri),
         INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,

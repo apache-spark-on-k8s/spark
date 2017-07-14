@@ -31,7 +31,7 @@ import org.apache.spark.deploy.kubernetes.submit.SubmittedDependencyUploader
 import org.apache.spark.internal.config.OptionalConfigEntry
 import org.apache.spark.util.Utils
 
-private[spark] class SubmittedResourcesInitContainerStep(
+private[spark] class SubmittedResourcesInitContainerConfigurationStep(
     submittedResourcesSecretName: String,
     internalResourceStagingServerUri: String,
     initContainerSecretMountPath: String,
@@ -42,9 +42,9 @@ private[spark] class SubmittedResourcesInitContainerStep(
     maybeInternalTrustStoreType: Option[String],
     submittedDependencyUploader: SubmittedDependencyUploader,
     submittedResourcesSecretPlugin: InitContainerResourceStagingServerSecretPlugin)
-  extends InitContainerStep {
+  extends InitContainerConfigurationStep {
 
-  override def prepareInitContainer(initContainerSpec: InitContainerSpec): InitContainerSpec = {
+  override def configureInitContainer(initContainerSpec: InitContainerSpec): InitContainerSpec = {
     val jarsIdAndSecret = submittedDependencyUploader.uploadJars()
     val filesIdAndSecret = submittedDependencyUploader.uploadFiles()
 

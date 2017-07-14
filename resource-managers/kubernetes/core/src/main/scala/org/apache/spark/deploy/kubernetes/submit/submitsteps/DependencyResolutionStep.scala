@@ -36,9 +36,9 @@ private[spark] class DependencyResolutionStep(
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     jarsDownloadPath: String,
-    filesDownloadPath: String) extends KubernetesSubmissionStep {
+    filesDownloadPath: String) extends DriverConfigurationStep {
 
-  override def prepareSubmission(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val resolvedSparkJars = KubernetesFileUtils.resolveSubmittedUris(sparkJars, jarsDownloadPath)
     val resolvedSparkFiles = KubernetesFileUtils.resolveSubmittedUris(sparkFiles, filesDownloadPath)
     val sparkConfResolvedSparkDependencies = driverSpec.driverSparkConf.clone()

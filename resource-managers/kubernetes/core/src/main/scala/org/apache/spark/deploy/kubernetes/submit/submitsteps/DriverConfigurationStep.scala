@@ -14,12 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer
+package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
 /**
- * Represents a step in preparing the init-container for the driver and executors.
+ * Represents a step in preparing the Kubernetes driver.
  */
-private[spark] trait InitContainerStep {
+private[spark] trait DriverConfigurationStep {
 
-  def prepareInitContainer(initContainerSpec: InitContainerSpec): InitContainerSpec
+  /**
+   * Apply some transformation to the previous state of the driver to add a new feature to it.
+   */
+  def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec
 }

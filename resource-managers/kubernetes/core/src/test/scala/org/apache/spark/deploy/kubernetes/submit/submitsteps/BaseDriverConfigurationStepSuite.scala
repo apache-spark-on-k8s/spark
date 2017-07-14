@@ -23,7 +23,7 @@ import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 
-private[spark] class BaseSubmissionStepSuite extends SparkFunSuite {
+private[spark] class BaseDriverConfigurationStepSuite extends SparkFunSuite {
 
   private val APP_ID = "spark-app-id"
   private val RESOURCE_NAME_PREFIX = "spark"
@@ -49,7 +49,7 @@ private[spark] class BaseSubmissionStepSuite extends SparkFunSuite {
         .set(s"spark.kubernetes.driver.annotation.$CUSTOM_ANNOTATION_KEY", CUSTOM_ANNOTATION_VALUE)
         .set("spark.kubernetes.driver.annotations",
             s"$DEPRECATED_CUSTOM_ANNOTATION_KEY=$DEPRECATED_CUSTOM_ANNOTATION_VALUE")
-    val submissionStep = new BaseSubmissionStep(
+    val submissionStep = new BaseDriverConfigurationStep(
         APP_ID,
         RESOURCE_NAME_PREFIX,
         DRIVER_LABELS,
@@ -65,7 +65,7 @@ private[spark] class BaseSubmissionStepSuite extends SparkFunSuite {
         driverSparkConf = new SparkConf(false),
         otherKubernetesResources = Seq.empty[HasMetadata])
 
-    val preparedDriverSpec = submissionStep.prepareSubmission(baseDriverSpec)
+    val preparedDriverSpec = submissionStep.configureDriver(baseDriverSpec)
     assert(preparedDriverSpec.driverContainer.getName === DRIVER_CONTAINER_NAME)
     assert(preparedDriverSpec.driverContainer.getImage === "spark-driver:latest")
     assert(preparedDriverSpec.driverContainer.getImagePullPolicy === DOCKER_IMAGE_PULL_POLICY)

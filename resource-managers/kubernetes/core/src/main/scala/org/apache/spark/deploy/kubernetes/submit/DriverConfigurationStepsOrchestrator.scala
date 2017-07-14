@@ -20,15 +20,15 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.ConfigurationUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseSubmissionStep, DependencyResolutionStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, KubernetesSubmissionStep, PythonStep}
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer.InitContainerStepsOrchestrator
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, PythonStep}
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
 /**
- * Constructs the complete list of submission steps to run to deploy the Spark application.
+ * Constructs the complete list of driver configuration steps to run to deploy the Spark driver.
  */
-private[spark] class KubernetesSubmissionStepsOrchestrator(
+private[spark] class DriverConfigurationStepsOrchestrator(
     namespace: String,
     kubernetesAppId: String,
     launchTime: Long,
@@ -40,7 +40,7 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     submissionSparkConf: SparkConf) {
 
   // The resource name prefix is derived from the application name, making it easy to connect the
-  // names of the Kubernetes resources from e.g. Kubectl or the Kubernetes dashboard to the
+  // names of the Kubernetes resources from e.g. kubectl or the Kubernetes dashboard to the
   // application the user submitted. However, we can't use the application name in the label, as
   // label values are considerably restrictive, e.g. must be no longer than 63 characters in
   // length. So we generate a separate identifier for the app ID itself, and bookkeeping that
@@ -52,7 +52,7 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
   private val dockerImagePullPolicy = submissionSparkConf.get(DOCKER_IMAGE_PULL_POLICY)
   private val initContainerConfigMapName = s"$kubernetesResourceNamePrefix-init-config"
 
-  def getAllSubmissionSteps(): Seq[KubernetesSubmissionStep] = {
+  def getAllConfigurationSteps(): Seq[DriverConfigurationStep] = {
     val additionalMainAppJar = mainAppResource match {
       case JavaMainAppResource(resource) if resource != SparkLauncher.NO_RESOURCE =>
         Option(resource)
@@ -83,7 +83,7 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     val allDriverLabels = driverCustomLabels ++ Map(
         SPARK_APP_ID_LABEL -> kubernetesAppId,
         SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
-    val initialSubmissionStep = new BaseSubmissionStep(
+    val initialSubmissionStep = new BaseDriverConfigurationStep(
         kubernetesAppId,
         kubernetesResourceNamePrefix,
         allDriverLabels,
@@ -97,29 +97,31 @@ private[spark] class KubernetesSubmissionStepsOrchestrator(
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
-      case _ => Option.empty[KubernetesSubmissionStep]
+      case _ => Option.empty[DriverConfigurationStep]
     }
     val initContainerBootstrapStep = if ((sparkJars ++ sparkFiles).exists { uri =>
       Option(Utils.resolveURI(uri).getScheme).getOrElse("file") != "local"
     }) {
-      val initContainerStepsOrchestrator = new InitContainerStepsOrchestrator(
-        namespace,
-        kubernetesResourceNamePrefix,
-        sparkJars,
-        sparkFiles,
-        jarsDownloadPath,
-        filesDownloadPath,
-        dockerImagePullPolicy,
-        allDriverLabels,
-        initContainerConfigMapName,
-        INIT_CONTAINER_CONFIG_MAP_KEY,
-        submissionSparkConf)
-      val initContainerSteps = initContainerStepsOrchestrator.getInitContainerSteps()
-      Some(new InitContainerBootstrapStep(initContainerSteps,
+      val initContainerConfigurationStepsOrchestrator =
+          new InitContainerConfigurationStepsOrchestrator(
+              namespace,
+              kubernetesResourceNamePrefix,
+              sparkJars,
+              sparkFiles,
+              jarsDownloadPath,
+              filesDownloadPath,
+              dockerImagePullPolicy,
+              allDriverLabels,
+              initContainerConfigMapName,
+              INIT_CONTAINER_CONFIG_MAP_KEY,
+              submissionSparkConf)
+      val initContainerConfigurationSteps =
+          initContainerConfigurationStepsOrchestrator.getAllConfigurationSteps()
+      Some(new InitContainerBootstrapStep(initContainerConfigurationSteps,
         initContainerConfigMapName,
         INIT_CONTAINER_CONFIG_MAP_KEY))
     } else {
-      Option.empty[KubernetesSubmissionStep]
+      Option.empty[DriverConfigurationStep]
     }
     val dependencyResolutionStep = new DependencyResolutionStep(
       sparkJars,

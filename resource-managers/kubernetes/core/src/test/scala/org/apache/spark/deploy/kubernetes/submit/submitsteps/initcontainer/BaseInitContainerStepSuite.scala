@@ -17,18 +17,17 @@
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer
 
 import io.fabric8.kubernetes.api.model._
-
-import scala.collection.JavaConverters._
-import org.apache.spark.SparkFunSuite
-import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
-import org.apache.spark.deploy.kubernetes.config._
-import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
 import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Matchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
+import scala.collection.JavaConverters._
+
+import org.apache.spark.SparkFunSuite
+import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.kubernetes.config._
 
 class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
   private val SPARK_JARS = Seq(
@@ -70,7 +69,7 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
   }
 
   test("Test of additionalDriverSparkConf with mix of remote files and jars") {
-    val baseInitStep = new BaseInitContainerStep(
+    val baseInitStep = new BaseInitContainerConfigurationStep(
       SPARK_JARS,
       SPARK_FILES,
       JARS_DOWNLOAD_PATH,
@@ -92,7 +91,7 @@ class BaseInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter{
       new Pod,
       Seq.empty[HasMetadata]
     )
-    val returnContainerSpec = baseInitStep.prepareInitContainer(initContainerSpec)
+    val returnContainerSpec = baseInitStep.configureInitContainer(initContainerSpec)
     assert(expectedDriverSparkConf === returnContainerSpec.initContainerProperties)
     assert(returnContainerSpec.initContainer.getName == INIT_CONTAINER_NAME)
     assert(returnContainerSpec.driverContainer.getName == DRIVER_CONTAINER_NAME)

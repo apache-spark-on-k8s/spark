@@ -22,18 +22,18 @@ import java.util.UUID
 import com.google.common.base.Charsets
 import com.google.common.io.{BaseEncoding, Files}
 import io.fabric8.kubernetes.api.model._
-
+import org.mockito.{Mock, MockitoAnnotations}
+import org.mockito.Matchers.any
+import org.mockito.Mockito.when
+import org.scalatest.BeforeAndAfter
 import scala.collection.JavaConverters._
+
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.deploy.kubernetes.InitContainerResourceStagingServerSecretPlugin
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.{KubernetesFileUtils, SubmittedDependencyUploader, SubmittedResourceIdAndSecret}
+import org.apache.spark.deploy.kubernetes.submit.{SubmittedDependencyUploader, SubmittedResourceIdAndSecret}
 import org.apache.spark.util.Utils
-import org.mockito.{Mock, MockitoAnnotations}
-import org.mockito.Matchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.when
-import org.scalatest.BeforeAndAfter
 
 class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter {
   private def createTempFile(extension: String): String = {
@@ -96,7 +96,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
     new File(CERT_FILE).delete()
   }
   test ("testing vanilla prepareInitContainer on resources and properties") {
-    val submittedResourceStep = new SubmittedResourcesInitContainerStep(
+    val submittedResourceStep = new SubmittedResourcesInitContainerConfigurationStep(
       RESOURCE_SECRET_NAME,
       STAGING_SERVER_URI,
       SECRET_MOUNT_PATH,
@@ -109,7 +109,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       submittedResourcesSecretPlugin
     )
     val returnedInitContainer =
-      submittedResourceStep.prepareInitContainer(InitContainerSpec(
+      submittedResourceStep.configureInitContainer(InitContainerSpec(
         Map.empty[String, String],
         Map.empty[String, String],
         new Container(),
@@ -140,7 +140,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
   }
 
   test ("testing prepareInitContainer w/ CERT and TrustStore Files w/o SSL") {
-    val submittedResourceStep = new SubmittedResourcesInitContainerStep(
+    val submittedResourceStep = new SubmittedResourcesInitContainerConfigurationStep(
       RESOURCE_SECRET_NAME,
       STAGING_SERVER_URI,
       SECRET_MOUNT_PATH,
@@ -153,7 +153,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       submittedResourcesSecretPlugin
     )
     val returnedInitContainer =
-      submittedResourceStep.prepareInitContainer(InitContainerSpec(
+      submittedResourceStep.configureInitContainer(InitContainerSpec(
         Map.empty[String, String],
         Map.empty[String, String],
         new Container(),
@@ -184,7 +184,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
   test ("testing prepareInitContainer w/ local CERT and TrustStore Files w/o SSL") {
     val LOCAL_TRUST_FILE = "local:///tmp/trust.jsk"
     val LOCAL_CERT_FILE = "local:///tmp/cert.pem"
-    val submittedResourceStep = new SubmittedResourcesInitContainerStep(
+    val submittedResourceStep = new SubmittedResourcesInitContainerConfigurationStep(
       RESOURCE_SECRET_NAME,
       STAGING_SERVER_URI,
       SECRET_MOUNT_PATH,
@@ -197,7 +197,7 @@ class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with Before
       submittedResourcesSecretPlugin
     )
     val returnedInitContainer =
-      submittedResourceStep.prepareInitContainer(InitContainerSpec(
+      submittedResourceStep.configureInitContainer(InitContainerSpec(
         Map.empty[String, String],
         Map.empty[String, String],
         new Container(),

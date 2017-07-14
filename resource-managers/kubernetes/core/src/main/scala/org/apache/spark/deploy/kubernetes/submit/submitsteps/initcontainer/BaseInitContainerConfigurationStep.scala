@@ -20,7 +20,7 @@ import org.apache.spark.deploy.kubernetes.{PodWithDetachedInitContainer, SparkPo
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
 
-private[spark] class BaseInitContainerStep(
+private[spark] class BaseInitContainerConfigurationStep(
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     jarsDownloadPath: String,
@@ -28,9 +28,9 @@ private[spark] class BaseInitContainerStep(
     configMapName: String,
     configMapKey: String,
     podAndInitContainerBootstrap: SparkPodInitContainerBootstrap)
-  extends InitContainerStep {
+  extends InitContainerConfigurationStep {
 
-  override def prepareInitContainer(initContainerSpec: InitContainerSpec): InitContainerSpec = {
+  override def configureInitContainer(initContainerSpec: InitContainerSpec): InitContainerSpec = {
     val remoteJarsToDownload = KubernetesFileUtils.getOnlyRemoteFiles(sparkJars)
     val remoteFilesToDownload = KubernetesFileUtils.getOnlyRemoteFiles(sparkFiles)
     val remoteJarsConf = if (remoteJarsToDownload.nonEmpty) {

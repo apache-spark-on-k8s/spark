@@ -18,15 +18,15 @@ package org.apache.spark.deploy.kubernetes.submit
 
 import java.util.{Collections, UUID}
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, HasMetadata, OwnerReferenceBuilder, PodBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, OwnerReferenceBuilder, PodBuilder}
 import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.mutable
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.{DriverConfigurationStep, KubernetesDriverSpec}
 import org.apache.spark.deploy.kubernetes.SparkKubernetesClientFactory
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{KubernetesDriverSpec, KubernetesSubmissionStep}
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
 
@@ -57,7 +57,7 @@ private[spark] object ClientArguments {
         throw new RuntimeException(s"Unknown arguments: $other")
     }
     require(mainAppResource.isDefined,
-        "Main app resource must be defined by either --py-file or --main-java-resource.")
+        "Main app resource must be defined by either --primary-py-file or --primary-java-resource.")
     require(mainClass.isDefined, "Main class must be specified via --main-class")
     ClientArguments(
         mainAppResource.get,
@@ -68,7 +68,7 @@ private[spark] object ClientArguments {
 }
 
 private[spark] class Client(
-    submissionSteps: Seq[KubernetesSubmissionStep],
+    submissionSteps: Seq[DriverConfigurationStep],
     submissionSparkConf: SparkConf,
     kubernetesClient: KubernetesClient,
     waitForAppCompletion: Boolean,
@@ -79,25 +79,16 @@ private[spark] class Client(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
 
    /**
-    * Run command that initalizes a DriverSpec that will be updated
-    * after each KubernetesSubmissionStep in the sequence that is passed in.
-    * The final driver-spec will be used to build the Driver Container,
-    * Driver Pod, and Kubernetes Resources
-    *
+    * Run command that initalizes a DriverSpec that will be updated after each
+    * DriverConfigurationStep in the sequence that is passed in. The final KubernetesDriverSpec
+    * will be used to build the Driver Container, Driver Pod, and Kubernetes Resources
     */
   def run(): Unit = {
-    // Set new metadata and a new spec so that submission steps can use PodBuilder#editMetadata()
-    // and/or PodBuilder#editSpec() safely.
-    val basePod = new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build()
-    var currentDriverSpec = KubernetesDriverSpec(
-      driverPod = basePod,
-      driverContainer = new ContainerBuilder().build(),
-      driverSparkConf = submissionSparkConf.clone(),
-      otherKubernetesResources = Seq.empty[HasMetadata])
+    var currentDriverSpec = KubernetesDriverSpec.initialSpec(submissionSparkConf)
     // submissionSteps contain steps necessary to take, to resolve varying
     // client arguments that are passed in, created by orchestrator
     for (nextStep <- submissionSteps) {
-      currentDriverSpec = nextStep.prepareSubmission(currentDriverSpec)
+      currentDriverSpec = nextStep.configureDriver(currentDriverSpec)
     }
     val resolvedDriverJavaOpts = currentDriverSpec
       .driverSparkConf
@@ -159,48 +150,46 @@ private[spark] class Client(
 private[spark] object Client {
   def run(sparkConf: SparkConf, clientArguments: ClientArguments): Unit = {
     val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
-    val launchTime = System.currentTimeMillis()
-    val appName = sparkConf.getOption("spark.app.name").getOrElse("spark")
     val kubernetesAppId = s"spark-${UUID.randomUUID().toString.replaceAll("-", "")}"
-    val master = resolveK8sMaster(sparkConf.get("spark.master"))
-    val submissionStepsOrchestrator = new KubernetesSubmissionStepsOrchestrator(
-      namespace,
-      kubernetesAppId,
-      launchTime,
-      clientArguments.mainAppResource,
-      appName,
-      clientArguments.mainClass,
-      clientArguments.driverArgs,
-      clientArguments.otherPyFiles,
-      sparkConf)
+    val launchTime = System.currentTimeMillis()
     val waitForAppCompletion = sparkConf.get(WAIT_FOR_APP_COMPLETION)
-    val loggingInterval = Option(sparkConf.get(REPORT_INTERVAL))
-      .filter( _ => waitForAppCompletion)
+    val appName = sparkConf.getOption("spark.app.name").getOrElse("spark")
+    val master = resolveK8sMaster(sparkConf.get("spark.master"))
+    val loggingInterval = Option(sparkConf.get(REPORT_INTERVAL)).filter( _ => waitForAppCompletion)
     val loggingPodStatusWatcher = new LoggingPodStatusWatcherImpl(
-      kubernetesAppId, loggingInterval)
-    Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
-      master,
-      Some(namespace),
-      APISERVER_AUTH_SUBMISSION_CONF_PREFIX,
-      sparkConf,
-      None,
-      None)) { kubernetesClient =>
-      new Client(
-        submissionStepsOrchestrator.getAllSubmissionSteps(),
-        sparkConf,
-        kubernetesClient,
-        waitForAppCompletion,
+        kubernetesAppId, loggingInterval)
+    val configurationStepsOrchestrator = new DriverConfigurationStepsOrchestrator(
+        namespace,
+        kubernetesAppId,
+        launchTime,
+        clientArguments.mainAppResource,
         appName,
-        loggingPodStatusWatcher).run()
+        clientArguments.mainClass,
+        clientArguments.driverArgs,
+        clientArguments.otherPyFiles,
+        sparkConf)
+    Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
+        master,
+        Some(namespace),
+        APISERVER_AUTH_SUBMISSION_CONF_PREFIX,
+        sparkConf,
+        None,
+        None)) { kubernetesClient =>
+      new Client(
+          configurationStepsOrchestrator.getAllConfigurationSteps(),
+          sparkConf,
+          kubernetesClient,
+          waitForAppCompletion,
+          appName,
+          loggingPodStatusWatcher).run()
     }
   }
 
    /**
     * Entry point from SparkSubmit in spark-core
     *
-    *
     * @param args Array of strings that have interchanging values that will be
-    *             parsed by ClientArguments with the identifiers that preceed the values
+    *             parsed by ClientArguments with the identifiers that precede the values
     */
   def main(args: Array[String]): Unit = {
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)

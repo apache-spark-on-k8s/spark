@@ -42,7 +42,7 @@ class PythonStepSuite extends SparkFunSuite with BeforeAndAfter {
       PYSPARK_PRIMARY_FILE,
       PYSPARK_FILES,
       FILE_DOWNLOAD_PATH)
-    val returnedDriverContainer = pyStep.prepareSubmission(
+    val returnedDriverContainer = pyStep.configureDriver(
       KubernetesDriverSpec(
         new Pod(),
         new Container(),
@@ -60,7 +60,7 @@ class PythonStepSuite extends SparkFunSuite with BeforeAndAfter {
       PYSPARK_PRIMARY_FILE,
       Seq.empty[String],
       FILE_DOWNLOAD_PATH)
-    val returnedDriverContainer = pyStep.prepareSubmission(
+    val returnedDriverContainer = pyStep.configureDriver(
       KubernetesDriverSpec(
         new Pod(),
         new Container(),
