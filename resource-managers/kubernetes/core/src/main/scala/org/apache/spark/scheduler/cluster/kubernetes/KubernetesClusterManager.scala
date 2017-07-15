@@ -19,15 +19,15 @@ package org.apache.spark.scheduler.cluster.kubernetes
 import java.io.File
 
 import io.fabric8.kubernetes.client.Config
-import org.apache.spark.SparkContext
-import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrapImpl, InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
+
+import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.{ExternalClusterManager, SchedulerBackend, TaskScheduler, TaskSchedulerImpl}
 
 private[spark] class KubernetesClusterManager extends ExternalClusterManager with Logging {
-
+  import org.apache.spark.SparkContext
   override def canCreate(masterURL: String): Boolean = masterURL.startsWith("k8s")
 
   override def createTaskScheduler(sc: SparkContext, masterURL: String): TaskScheduler = {

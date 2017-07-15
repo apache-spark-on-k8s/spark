@@ -18,21 +18,19 @@ package org.apache.spark.deploy.kubernetes
 
 import java.io.File
 
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, KeyToPathBuilder, PodBuilder}
+
 import org.apache.spark.deploy.kubernetes.constants._
-import io.fabric8.kubernetes.api.model.{ConfigMapBuilder, ContainerBuilder, KeyToPathBuilder, PodBuilder}
-
-import collection.JavaConverters._
-
 
 /**
-  * This is separated out from the HadoopConf steps API because this component can be reused to
-  * set up the hadoop-conf for executors as well.
-  */
+ * This is separated out from the HadoopConf steps API because this component can be reused to
+ * set up the hadoop-conf for executors as well.
+ */
 private[spark] trait HadoopConfBootstrap {
-  /**
-    * Bootstraps a main container with the ConfigMaps mounted as volumes and an ENV variable
-    * pointing to the mounted file.
-    */
+ /**
+  * Bootstraps a main container with the ConfigMaps mounted as volumes and an ENV variable
+  * pointing to the mounted file.
+  */
   def bootstrapMainContainerAndVolumes(
     originalPodWithMainContainer: PodWithMainContainer)
   : PodWithMainContainer
@@ -45,6 +43,7 @@ private[spark] class HadoopConfBootstrapImpl(
   override def bootstrapMainContainerAndVolumes(
     originalPodWithMainContainer: PodWithMainContainer)
     : PodWithMainContainer = {
+    import collection.JavaConverters._
     val fileContents = hadoopConfigFiles.map(file => (file.getPath, file.toString)).toMap
     val keyPaths = hadoopConfigFiles.map(file =>
       new KeyToPathBuilder().withKey(file.getPath).withPath(file.getAbsolutePath).build())

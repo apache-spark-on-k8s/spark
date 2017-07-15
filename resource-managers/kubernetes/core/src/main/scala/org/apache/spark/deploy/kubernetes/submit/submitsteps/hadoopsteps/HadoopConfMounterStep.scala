@@ -16,15 +16,7 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps
 
-import java.io.File
-
-import io.fabric8.kubernetes.api.model._
 import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainContainer}
-import org.apache.spark.deploy.kubernetes.config._
-import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.KubernetesFileUtils
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{DriverKubernetesCredentialsStep, KubernetesDriverSpec}
-import scala.collection.JavaConverters._
 
  /**
   * Step that configures the ConfigMap + Volumes for the driver
