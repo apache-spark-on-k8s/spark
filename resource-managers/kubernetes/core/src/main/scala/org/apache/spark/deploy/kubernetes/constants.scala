@@ -86,6 +86,9 @@ package object constants {
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_VOLUME = "spark-init-properties"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_DIR = "/etc/spark-init"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_NAME = "spark-init.properties"
+  private[spark] val HADOOP_FILE_VOLUME = "hadoop-properties"
+  private[spark] val HADOOP_FILE_DIR = "/etc/hadoop"
+  private[spark] val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_PATH =
     s"$INIT_CONTAINER_PROPERTIES_FILE_DIR/$INIT_CONTAINER_PROPERTIES_FILE_NAME"
   private[spark] val DEFAULT_SHUFFLE_MOUNT_NAME = "shuffle"

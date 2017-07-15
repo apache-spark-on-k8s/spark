@@ -19,9 +19,8 @@ package org.apache.spark.scheduler.cluster.kubernetes
 import java.io.File
 
 import io.fabric8.kubernetes.client.Config
-
 import org.apache.spark.SparkContext
-import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrapImpl, InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
@@ -59,7 +58,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     // name. Note that we generally expect both to have been set from spark-submit V2, but for
     // testing developers may simply run the driver JVM locally, but the config map won't be set
     // then.
-    val bootStrap = for {
+    val initBootStrap = for {
       configMap <- maybeConfigMap
       configMapKey <- maybeConfigMapKey
     } yield {
@@ -90,7 +89,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     new KubernetesClusterSchedulerBackend(
         sc.taskScheduler.asInstanceOf[TaskSchedulerImpl],
         sc,
-        bootStrap,
+        initBootStrap,
         executorInitContainerSecretVolumePlugin,
         kubernetesClient)
   }

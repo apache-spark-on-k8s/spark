@@ -498,6 +498,12 @@ package object config extends Logging {
       .createOptional
 
   private[spark] val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
+  private[spark] val KUBERNETES_KERBEROS_SUPPORT =
+    ConfigBuilder("spark.kubernetes.kerberos")
+      .doc("Specify whether your job is a job " +
+        "that will require a Delegation Token to access HDFS")
+      .booleanConf
+      .createWithDefault(false)
 
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {

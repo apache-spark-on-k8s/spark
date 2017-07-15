@@ -16,11 +16,14 @@
  */
 package org.apache.spark.deploy.kubernetes.submit
 
+import java.io.File
+
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.ConfigurationUtils
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, PythonStep}
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps.HadoopStepsOrchestrator
+import org.apache.spark.deploy.kubernetes.submit.submitsteps._
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
@@ -51,6 +54,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
   private val filesDownloadPath = submissionSparkConf.get(INIT_CONTAINER_FILES_DOWNLOAD_LOCATION)
   private val dockerImagePullPolicy = submissionSparkConf.get(DOCKER_IMAGE_PULL_POLICY)
   private val initContainerConfigMapName = s"$kubernetesResourceNamePrefix-init-config"
+  private val hadoopConfigMapName = s"$kubernetesResourceNamePrefix-hadoop-config"
 
   def getAllConfigurationSteps(): Seq[DriverConfigurationStep] = {
     val additionalMainAppJar = mainAppResource match {
@@ -94,6 +98,22 @@ private[spark] class DriverConfigurationStepsOrchestrator(
         submissionSparkConf)
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         submissionSparkConf, kubernetesResourceNamePrefix)
+    val hadoopConfigurations =
+      sys.env.get("HADOOP_CONF_DIR").map{ conf => getHadoopConfFiles(conf)}
+          .getOrElse(Array.empty[File])
+    val hadoopConfigSteps =
+      if (hadoopConfigurations.isEmpty) {
+        Option.empty[DriverConfigurationStep]
+      } else {
+        val hadoopStepsOrchestrator = new HadoopStepsOrchestrator(
+          namespace,
+          kubernetesResourceNamePrefix,
+          submissionSparkConf,
+          hadoopConfigurations)
+        val hadoopConfSteps =
+          hadoopStepsOrchestrator.getHadoopSteps()
+        Some(new HadoopConfigBootstrapStep(hadoopConfSteps))
+      }
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
@@ -133,6 +153,16 @@ private[spark] class DriverConfigurationStepsOrchestrator(
       kubernetesCredentialsStep,
       dependencyResolutionStep) ++
       initContainerBootstrapStep.toSeq ++
+      hadoopConfigSteps.toSeq ++
       pythonStep.toSeq
+  }
+  private def getHadoopConfFiles(path: String) : Array[File] = {
+    def isFile(file: File) = if (file.isFile) Some(file) else None
+    val dir = new File(path)
+    if (dir.isDirectory) {
+      dir.listFiles.flatMap { file => isFile(file) }
+    } else {
+      Array.empty[File]
+    }
   }
 }
