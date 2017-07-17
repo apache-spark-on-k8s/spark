@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets
 import com.google.common.io.{BaseEncoding, Files}
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder, Secret, SecretBuilder}
 import scala.collection.JavaConverters._
+import scala.language.implicitConversions
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.config._
