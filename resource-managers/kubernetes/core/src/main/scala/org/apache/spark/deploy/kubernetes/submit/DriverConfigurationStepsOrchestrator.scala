@@ -107,12 +107,12 @@ private[spark] class DriverConfigurationStepsOrchestrator(
       } else {
         val hadoopStepsOrchestrator = new HadoopStepsOrchestrator(
           namespace,
-          kubernetesResourceNamePrefix,
+          hadoopConfigMapName,
           submissionSparkConf,
           hadoopConfigurations)
         val hadoopConfSteps =
           hadoopStepsOrchestrator.getHadoopSteps()
-        Some(new HadoopConfigBootstrapStep(hadoopConfSteps, kubernetesResourceNamePrefix))
+        Some(new HadoopConfigBootstrapStep(hadoopConfSteps, hadoopConfigMapName))
       }
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>

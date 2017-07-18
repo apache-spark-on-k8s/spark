@@ -28,10 +28,9 @@ import org.apache.spark.deploy.kubernetes.config._
   */
 private[spark] class HadoopStepsOrchestrator(
   namespace: String,
-  kubernetesResourceNamePrefix: String,
+  hadoopConfigMapName: String,
   submissionSparkConf: SparkConf,
   hadoopConfigurationFiles: Array[File]) {
-  private val hadoopConfigMapName = s"$kubernetesResourceNamePrefix-hadoop-config"
   private val maybeKerberosSupport = submissionSparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
 
   def getHadoopSteps(): Seq[HadoopConfigurationStep] = {

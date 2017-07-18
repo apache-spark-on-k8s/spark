@@ -20,6 +20,7 @@ import java.io.StringWriter
 import java.util.Properties
 
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, HasMetadata}
+
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps.{HadoopConfigSpec, HadoopConfigurationStep}
 
@@ -27,9 +28,9 @@ import org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps.{Hadoop
   * Configures the driverSpec that bootstraps dependencies into the driver pod.
   */
 private[spark] class HadoopConfigBootstrapStep(
-  hadoopConfigurationSteps: Seq[HadoopConfigurationStep], kubernetesResourceNamePrefix: String)
+  hadoopConfigurationSteps: Seq[HadoopConfigurationStep],
+  hadoopConfigMapName: String )
   extends DriverConfigurationStep {
-  private val hadoopConfigMapName = s"$kubernetesResourceNamePrefix-hadoop-config"
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     import scala.collection.JavaConverters._
