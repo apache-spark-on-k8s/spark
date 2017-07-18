@@ -74,7 +74,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Include HADOOP_CONF for HDFS based jobs ") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
-
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
   }
 
