@@ -20,7 +20,7 @@ import java.io.File
 
 import io.fabric8.kubernetes.client.Config
 
-import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.kubernetes._
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
@@ -41,6 +41,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val sparkConf = sc.getConf
     val maybeConfigMap = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP)
     val maybeConfigMapKey = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY)
+    val maybeHadoopConfigMap = sparkConf.getOption(HADOOP_CONFIG_MAP_SPARK_CONF_NAME)
 
     val maybeExecutorInitContainerSecretName =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET)
@@ -71,6 +72,17 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         configMap,
         configMapKey)
     }
+    val hadoopBootStrap = for {
+      hadoopConfigMap <- maybeHadoopConfigMap
+    } yield {
+      val hadoopConfigurations =
+        sys.env.get("HADOOP_CONF_DIR").map{ conf => getHadoopConfFiles(conf)}
+          .getOrElse(Array.empty[File])
+      new HadoopConfBootstrapImpl(
+        hadoopConfigMap,
+        hadoopConfigurations
+      )
+    }
     if (maybeConfigMap.isEmpty) {
       logWarning("The executor's init-container config map was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
@@ -78,6 +90,10 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     if (maybeConfigMapKey.isEmpty) {
       logWarning("The executor's init-container config map key was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
+    }
+    if (maybeHadoopConfigMap.isEmpty) {
+      logWarning("The executor's hadoop config map key was not specified. Executors will" +
+        " therefore not attempt to fetch hadoop configuration files.")
     }
     val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
         KUBERNETES_MASTER_INTERNAL_URL,
@@ -90,11 +106,21 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         sc.taskScheduler.asInstanceOf[TaskSchedulerImpl],
         sc,
         initBootStrap,
+        hadoopBootStrap,
         executorInitContainerSecretVolumePlugin,
         kubernetesClient)
   }
 
   override def initialize(scheduler: TaskScheduler, backend: SchedulerBackend): Unit = {
     scheduler.asInstanceOf[TaskSchedulerImpl].initialize(backend)
+  }
+  private def getHadoopConfFiles(path: String) : Array[File] = {
+    def isFile(file: File) = if (file.isFile) Some(file) else None
+    val dir = new File(path)
+    if (dir.isDirectory) {
+      dir.listFiles.flatMap { file => isFile(file) }
+    } else {
+      Array.empty[File]
+    }
   }
 }

@@ -40,6 +40,7 @@ private[spark] class HadoopStepsOrchestrator(
       hadoopConfigurationFiles)
     val hadoopConfMounterStep = new HadoopConfMounterStep(
       hadoopConfigMapName,
+      hadoopConfigurationFiles,
       hadoopConfBootstrapImpl)
     val maybeHadoopKerberosMountingStep =
       if (maybeKerberosSupport) {

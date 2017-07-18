@@ -72,6 +72,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     kubernetesTestComponents.deleteNamespace()
   }
 
+  test("Include HADOOP_CONF for HDFS based jobs ") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
+  }
+
   test("Run PySpark Job on file from SUBMITTER with --py-files") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
 

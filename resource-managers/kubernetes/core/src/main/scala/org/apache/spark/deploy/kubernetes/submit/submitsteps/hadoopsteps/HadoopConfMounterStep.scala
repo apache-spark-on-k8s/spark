@@ -16,6 +16,8 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps
 
+import java.io.File
+
 import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainContainer}
 
  /**
@@ -23,6 +25,7 @@ import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainConta
   */
 private[spark] class HadoopConfMounterStep(
     hadoopConfigMapName: String,
+    hadoopConfigurationFiles: Array[File],
     hadoopConfBootstrapConf: HadoopConfBootstrap)
   extends HadoopConfigurationStep {
 
@@ -35,7 +38,10 @@ private[spark] class HadoopConfMounterStep(
           ))
      hadoopConfigSpec.copy(
        driverPod = bootstrappedPodAndMainContainer.pod,
-       driverContainer = bootstrappedPodAndMainContainer.mainContainer
+       driverContainer = bootstrappedPodAndMainContainer.mainContainer,
+       configMapProperties =
+         hadoopConfigurationFiles.map(file =>
+           (file.toPath.getFileName.toString, file.toString)).toMap
      )
   }
 }

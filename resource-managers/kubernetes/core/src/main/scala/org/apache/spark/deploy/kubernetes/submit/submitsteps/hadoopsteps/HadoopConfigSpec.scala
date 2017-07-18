@@ -26,8 +26,11 @@ import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
   * - The spec of the main container so that it can be modified to share volumes
   * - The spec of the driver pod EXCEPT for the addition of the given hadoop configs (e.g. volumes
   *   the hadoop logic needs)
+  * - The properties that will be stored into the config map which have (key, value)
+  *   pairs of (path, data)
   */
 private[spark] case class HadoopConfigSpec(
 //  additionalDriverSparkConf: Map[String, String],
   driverPod: Pod,
-  driverContainer: Container)
+  driverContainer: Container,
+  configMapProperties: Map[String, String])

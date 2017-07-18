@@ -43,17 +43,17 @@ private[spark] class HadoopConfBootstrapImpl(
   override def bootstrapMainContainerAndVolumes(
     originalPodWithMainContainer: PodWithMainContainer)
     : PodWithMainContainer = {
-    import collection.JavaConverters._
-    val fileContents = hadoopConfigFiles.map(file => (file.getPath, file.toString)).toMap
+    import scala.collection.JavaConverters._
     val keyPaths = hadoopConfigFiles.map(file =>
-      new KeyToPathBuilder().withKey(file.getPath).withPath(file.getAbsolutePath).build())
+      new KeyToPathBuilder().withKey(file.toPath.getFileName.toString)
+        .withPath(file.toPath.getFileName.toString).build()).toList
     val hadoopSupportedPod = new PodBuilder(originalPodWithMainContainer.pod)
       .editSpec()
         .addNewVolume()
           .withName(HADOOP_FILE_VOLUME)
             .withNewConfigMap()
               .withName(hadoopConfConfigMapName)
-              .addAllToItems(keyPaths.toList.asJavaCollection)
+              .withItems(keyPaths.asJava)
             .endConfigMap()
           .endVolume()
         .endSpec()
