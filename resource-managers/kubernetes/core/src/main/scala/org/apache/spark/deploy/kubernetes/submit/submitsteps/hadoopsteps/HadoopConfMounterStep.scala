@@ -17,9 +17,11 @@
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps
 
 import java.io.File
+
 import org.apache.commons.io.FileUtils.readFileToString
 
 import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainContainer}
+import org.apache.spark.deploy.kubernetes.constants._
 
  /**
   * Step that configures the ConfigMap + Volumes for the driver
@@ -27,7 +29,8 @@ import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainConta
 private[spark] class HadoopConfMounterStep(
     hadoopConfigMapName: String,
     hadoopConfigurationFiles: Array[File],
-    hadoopConfBootstrapConf: HadoopConfBootstrap)
+    hadoopConfBootstrapConf: HadoopConfBootstrap,
+    hadoopConfDir: Option[String])
   extends HadoopConfigurationStep {
 
    override def configureContainers(hadoopConfigSpec: HadoopConfigSpec): HadoopConfigSpec = {
@@ -42,7 +45,10 @@ private[spark] class HadoopConfMounterStep(
        driverContainer = bootstrappedPodAndMainContainer.mainContainer,
        configMapProperties =
          hadoopConfigurationFiles.map(file =>
-           (file.toPath.getFileName.toString, readFileToString(file))).toMap
+           (file.toPath.getFileName.toString, readFileToString(file))).toMap,
+       additionalDriverSparkConf = hadoopConfigSpec.additionalDriverSparkConf ++
+        hadoopConfDir.map(conf_dir => Map(HADOOP_CONF_DIR_LOC -> conf_dir)).getOrElse(
+          Map.empty[String, String])
      )
   }
 }

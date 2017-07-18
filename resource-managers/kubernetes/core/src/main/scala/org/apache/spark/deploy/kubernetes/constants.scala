@@ -86,15 +86,17 @@ package object constants {
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_VOLUME = "spark-init-properties"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_DIR = "/etc/spark-init"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_NAME = "spark-init.properties"
-  private[spark] val HADOOP_FILE_VOLUME = "hadoop-properties"
-  private[spark] val HADOOP_FILE_DIR = "/etc/hadoop"
-  private[spark] val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
-  private[spark] val HADOOP_CONFIG_MAP_SPARK_CONF_NAME =
-    "spark.kubernetes.hadoop.executor.hadoopconfigmapname"
   private[spark] val INIT_CONTAINER_PROPERTIES_FILE_PATH =
     s"$INIT_CONTAINER_PROPERTIES_FILE_DIR/$INIT_CONTAINER_PROPERTIES_FILE_NAME"
   private[spark] val DEFAULT_SHUFFLE_MOUNT_NAME = "shuffle"
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_NAME = "spark-init-secret"
+
+  private[spark] val HADOOP_FILE_VOLUME = "hadoop-properties"
+  private[spark] val HADOOP_FILE_DIR = "/etc/hadoop"
+  private[spark] val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
+  private[spark] val HADOOP_CONF_DIR_LOC = "spark.kubernetes.hadoop.conf.dir"
+  private[spark] val HADOOP_CONFIG_MAP_SPARK_CONF_NAME =
+    "spark.kubernetes.hadoop.executor.hadoopconfigmapname"
 
   // Miscellaneous
   private[spark] val ANNOTATION_EXECUTOR_NODE_AFFINITY = "scheduler.alpha.kubernetes.io/affinity"

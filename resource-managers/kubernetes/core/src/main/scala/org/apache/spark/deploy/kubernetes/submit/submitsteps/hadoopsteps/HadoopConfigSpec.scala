@@ -30,7 +30,7 @@ import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
   *   pairs of (path, data)
   */
 private[spark] case class HadoopConfigSpec(
-//  additionalDriverSparkConf: Map[String, String],
+  additionalDriverSparkConf: Map[String, String],
   driverPod: Pod,
   driverContainer: Container,
   configMapProperties: Map[String, String])

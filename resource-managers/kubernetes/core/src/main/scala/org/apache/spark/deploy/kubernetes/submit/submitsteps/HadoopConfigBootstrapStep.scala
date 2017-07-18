@@ -37,7 +37,8 @@ private[spark] class HadoopConfigBootstrapStep(
     var currentHadoopSpec = HadoopConfigSpec(
       driverPod = driverSpec.driverPod,
       driverContainer = driverSpec.driverContainer,
-      configMapProperties = Map.empty[String, String])
+      configMapProperties = Map.empty[String, String],
+      additionalDriverSparkConf = Map.empty[String, String])
     for (nextStep <- hadoopConfigurationSteps) {
       currentHadoopSpec = nextStep.configureContainers(currentHadoopSpec)
     }
@@ -50,6 +51,7 @@ private[spark] class HadoopConfigBootstrapStep(
       .build()
     val executorSparkConf = driverSpec.driverSparkConf.clone()
       .set(HADOOP_CONFIG_MAP_SPARK_CONF_NAME, hadoopConfigMapName)
+      .setAll(currentHadoopSpec.additionalDriverSparkConf)
     driverSpec.copy(
       driverPod = currentHadoopSpec.driverPod,
       driverContainer = currentHadoopSpec.driverContainer,

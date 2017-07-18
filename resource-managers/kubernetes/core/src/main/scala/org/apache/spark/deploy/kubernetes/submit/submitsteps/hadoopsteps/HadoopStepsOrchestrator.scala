@@ -30,7 +30,8 @@ private[spark] class HadoopStepsOrchestrator(
   namespace: String,
   hadoopConfigMapName: String,
   submissionSparkConf: SparkConf,
-  hadoopConfigurationFiles: Array[File]) {
+  hadoopConfigurationFiles: Array[File],
+  hadoopConfDir: Option[String]) {
   private val maybeKerberosSupport = submissionSparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
 
   def getHadoopSteps(): Seq[HadoopConfigurationStep] = {
@@ -40,7 +41,8 @@ private[spark] class HadoopStepsOrchestrator(
     val hadoopConfMounterStep = new HadoopConfMounterStep(
       hadoopConfigMapName,
       hadoopConfigurationFiles,
-      hadoopConfBootstrapImpl)
+      hadoopConfBootstrapImpl,
+      hadoopConfDir)
     val maybeHadoopKerberosMountingStep =
       if (maybeKerberosSupport) {
         // TODO: Implement mounting secrets

@@ -149,7 +149,9 @@ private[spark] class Client(
 }
 
 private[spark] object Client {
-  def run(sparkConf: SparkConf, clientArguments: ClientArguments): Unit = {
+  def run(sparkConf: SparkConf,
+          clientArguments: ClientArguments,
+          hadoopConfDir: Option[String]): Unit = {
     val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
     val kubernetesAppId = s"spark-${UUID.randomUUID().toString.replaceAll("-", "")}"
     val launchTime = System.currentTimeMillis()
@@ -168,6 +170,7 @@ private[spark] object Client {
         clientArguments.mainClass,
         clientArguments.driverArgs,
         clientArguments.otherPyFiles,
+        hadoopConfDir,
         sparkConf)
     Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
         master,
@@ -195,6 +198,7 @@ private[spark] object Client {
   def main(args: Array[String]): Unit = {
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     val sparkConf = new SparkConf()
-    run(sparkConf, parsedArguments)
+    val hadoopConfDir = sys.env.get("HADOOP_CONF_DIR")
+    run(sparkConf, parsedArguments, hadoopConfDir)
   }
 }

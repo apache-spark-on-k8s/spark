@@ -42,6 +42,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val maybeConfigMap = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP)
     val maybeConfigMapKey = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY)
     val maybeHadoopConfigMap = sparkConf.getOption(HADOOP_CONFIG_MAP_SPARK_CONF_NAME)
+    val maybeHadoopConfDir = sparkConf.getOption(HADOOP_CONF_DIR_LOC)
 
     val maybeExecutorInitContainerSecretName =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET)
@@ -75,9 +76,8 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val hadoopBootStrap = for {
       hadoopConfigMap <- maybeHadoopConfigMap
     } yield {
-      val hadoopConfigurations =
-        sys.env.get("HADOOP_CONF_DIR").map{ conf => getHadoopConfFiles(conf)}
-          .getOrElse(Array.empty[File])
+      val hadoopConfigurations = maybeHadoopConfDir.map(
+          conf_dir => getHadoopConfFiles(conf_dir)).getOrElse(Array.empty[File])
       new HadoopConfBootstrapImpl(
         hadoopConfigMap,
         hadoopConfigurations
