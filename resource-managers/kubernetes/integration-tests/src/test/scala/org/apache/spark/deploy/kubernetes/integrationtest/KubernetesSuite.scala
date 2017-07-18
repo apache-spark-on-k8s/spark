@@ -28,15 +28,15 @@ import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
 import scala.collection.JavaConverters._
 
-import org.apache.spark.{SparkConf, SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.kubernetes.SSLUtils
+import org.apache.spark.{SSLOptions, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTestBackendFactory
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.constants.MINIKUBE_TEST_BACKEND
 import org.apache.spark.deploy.kubernetes.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource}
 import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{RedirectThread, Utils}
 
 private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   import KubernetesSuite._
@@ -74,13 +74,31 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Include HADOOP_CONF for HDFS based jobs ") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    // Ensuring that HADOOP_CONF_DIR env variable is set
+    val builder = new ProcessBuilder(
+      Seq("/bin/bash", "-c", "export HADOOP_CONF_DIR=" +
+        "test-data/hadoop-conf-files && exec").asJava)
+    builder.redirectErrorStream(true) // Ugly but needed for stdout and stderr to synchronize
+    val process = builder.start()
+    new RedirectThread(process.getInputStream, System.out, "redirect output").start()
+    val exitCode = process.waitFor()
+    if (exitCode != 0) {
+      logInfo(s"exitCode: $exitCode")
+    }
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
   }
 
   test("Run PySpark Job on file from SUBMITTER with --py-files") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
-
+    // Ensuring that HADOOP_CONF_DIR env variable is unset
+    val builder = new ProcessBuilder(
+      Seq("/bin/bash", "-c", "export HADOOP_CONF_DIR=" +
+        " && exec").asJava)
+    builder.redirectErrorStream(true) // Ugly but needed for stdout and stderr to synchronize
+    val process = builder.start()
+    new RedirectThread(process.getInputStream, System.out, "redirect output").start()
+    val exitCode = process.waitFor()
     launchStagingServer(SSLOptions(), None)
     sparkConf
       .set(DRIVER_DOCKER_IMAGE,
