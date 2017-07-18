@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps
 
 import java.io.File
+import org.apache.commons.io.FileUtils.readFileToString
 
 import org.apache.spark.deploy.kubernetes.{HadoopConfBootstrap, PodWithMainContainer}
 
@@ -41,7 +42,7 @@ private[spark] class HadoopConfMounterStep(
        driverContainer = bootstrappedPodAndMainContainer.mainContainer,
        configMapProperties =
          hadoopConfigurationFiles.map(file =>
-           (file.toPath.getFileName.toString, file.toString)).toMap
+           (file.toPath.getFileName.toString, readFileToString(file))).toMap
      )
   }
 }

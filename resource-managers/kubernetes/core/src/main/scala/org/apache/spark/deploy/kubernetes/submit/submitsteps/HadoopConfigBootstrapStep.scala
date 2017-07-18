@@ -54,7 +54,9 @@ private[spark] class HadoopConfigBootstrapStep(
       driverPod = currentHadoopSpec.driverPod,
       driverContainer = currentHadoopSpec.driverContainer,
       driverSparkConf = executorSparkConf,
-      otherKubernetesResources = Seq(configMap)
+      otherKubernetesResources =
+        driverSpec.otherKubernetesResources ++
+        Seq(configMap)
       )
   }
 }
