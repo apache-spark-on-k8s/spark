@@ -56,7 +56,6 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
     stagedResourcesCleaner = mock[StagedResourcesCleaner]
     serviceImpl = new ResourceStagingServiceImpl(
       new StagedResourcesStoreImpl(Utils.createTempDir()), stagedResourcesCleaner)
-
   }
 
   after {
