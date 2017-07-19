@@ -505,6 +505,20 @@ package object config extends Logging {
       .booleanConf
       .createWithDefault(false)
 
+  private[spark] val KUBERNETES_KERBEROS_KEYTAB =
+    ConfigBuilder("spark.kubernetes.kerberos.keytab")
+      .doc("Specify the location of keytab" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_PRINCIPAL =
+    ConfigBuilder("spark.kubernetes.kerberos.principal")
+      .doc("Specify the principal" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {
       throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")
