@@ -150,8 +150,8 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
           try {
             newServer.stop()
           } catch {
-            case e2: Throwable =>
-              log.warn("Failed to stop a resource staging server that failed to start.", e2)
+            case e1: Throwable =>
+              log.warn("Failed to stop a resource staging server that failed to start.", e1)
           }
 
           if (Utils.isBindCollision(e)) {
