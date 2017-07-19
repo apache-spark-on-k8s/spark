@@ -60,7 +60,16 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
   }
 
   after {
-    server.foreach(_.stop())
+    server.foreach { s =>
+      try {
+        s.stop()
+      } catch {
+        case e: RuntimeException =>
+          log.warn("Failed to stop the resource staging server.", e)
+        case e: Exception =>
+          log.warn("Failed to stop the resource staging server.", e)
+      }
+    }
     server = None
   }
 
@@ -132,23 +141,34 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
   private def startServer(): Int = {
     var currentAttempt = 0
     var successfulStart = false
-    var latestServerPort = -1
+    var latestServerPort = new ServerSocket(0).getLocalPort
     while (currentAttempt < MAX_SERVER_START_ATTEMPTS && !successfulStart) {
-      latestServerPort = new ServerSocket(0).getLocalPort
+      val newServer = new ResourceStagingServer(latestServerPort, serviceImpl, sslOptionsProvider)
       try {
-        val newServer = new ResourceStagingServer(latestServerPort, serviceImpl, sslOptionsProvider)
         newServer.start()
         successfulStart = true
         server = Some(newServer)
       } catch {
-        case e: Exception if Utils.isBindCollision(e) =>
-          currentAttempt += 1
-          if (currentAttempt == MAX_SERVER_START_ATTEMPTS) {
-            throw new RuntimeException(s"Failed to bind to a random port" +
-              s" $MAX_SERVER_START_ATTEMPTS times. Last attempted port: $latestServerPort", e)
-          } else {
-            logWarning(s"Attempt $currentAttempt/$MAX_SERVER_START_ATTEMPTS failed to start" +
-              s" server on port $latestServerPort.", e)
+        case e: Exception =>
+          try {
+            newServer.stop()
+          } catch {
+            case e2: RuntimeException =>
+              log.warn("Failed to stop a resource staging server that failed to start.", e2)
+            case e3: Exception =>
+              log.warn("Failed to stop a resource staging server that failed to start.", e3)
+          }
+
+          if (Utils.isBindCollision(e)) {
+            currentAttempt += 1
+            latestServerPort = latestServerPort + 1
+            if (currentAttempt == MAX_SERVER_START_ATTEMPTS) {
+              throw new RuntimeException(s"Failed to bind to a random port" +
+                s" $MAX_SERVER_START_ATTEMPTS times. Last attempted port: $latestServerPort", e)
+            } else {
+              logWarning(s"Attempt $currentAttempt/$MAX_SERVER_START_ATTEMPTS failed to start" +
+                s" server on port $latestServerPort.", e)
+            }
           }
       }
     }
