@@ -64,9 +64,7 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
       try {
         s.stop()
       } catch {
-        case e: RuntimeException =>
-          log.warn("Failed to stop the resource staging server.", e)
-        case e: Exception =>
+        case e: Throwable =>
           log.warn("Failed to stop the resource staging server.", e)
       }
     }
@@ -149,7 +147,7 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
         successfulStart = true
         server = Some(newServer)
       } catch {
-        case e: Exception =>
+        case e: Throwable =>
           try {
             newServer.stop()
           } catch {
@@ -169,6 +167,8 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
               logWarning(s"Attempt $currentAttempt/$MAX_SERVER_START_ATTEMPTS failed to start" +
                 s" server on port $latestServerPort.", e)
             }
+          } else {
+            throw e
           }
       }
     }
