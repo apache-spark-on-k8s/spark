@@ -18,6 +18,8 @@ package org.apache.spark.deploy.kubernetes
 
 import java.io.File
 
+import scala.collection.JavaConverters._
+
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, KeyToPathBuilder, PodBuilder}
 
 import org.apache.spark.deploy.kubernetes.constants._
@@ -40,16 +42,17 @@ private[spark] trait HadoopConfBootstrap {
 
 private[spark] class HadoopConfBootstrapImpl(
   hadoopConfConfigMapName: String,
-  hadoopConfigFiles: Array[File]) extends HadoopConfBootstrap with Logging{
+  hadoopConfigFiles: Seq[File]) extends HadoopConfBootstrap with Logging{
 
   override def bootstrapMainContainerAndVolumes(
     originalPodWithMainContainer: PodWithMainContainer)
     : PodWithMainContainer = {
-    import scala.collection.JavaConverters._
     logInfo("HADOOP_CONF_DIR defined. Mounting HDFS specific .xml files")
     val keyPaths = hadoopConfigFiles.map(file =>
-      new KeyToPathBuilder().withKey(file.toPath.getFileName.toString)
-        .withPath(file.toPath.getFileName.toString).build()).toList
+      new KeyToPathBuilder()
+        .withKey(file.toPath.getFileName.toString)
+        .withPath(file.toPath.getFileName.toString)
+      .build()).toList
     val hadoopSupportedPod = new PodBuilder(originalPodWithMainContainer.pod)
       .editSpec()
         .addNewVolume()
@@ -72,9 +75,8 @@ private[spark] class HadoopConfBootstrapImpl(
         .withValue(HADOOP_FILE_DIR)
         .endEnv()
       .build()
-    PodWithMainContainer(
-      hadoopSupportedPod,
-      mainContainerWithMountedHadoopConf
-    )
+    originalPodWithMainContainer.copy(
+      pod = hadoopSupportedPod,
+      mainContainer = mainContainerWithMountedHadoopConf)
   }
 }

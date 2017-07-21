@@ -43,6 +43,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val maybeConfigMapKey = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY)
     val maybeHadoopConfigMap = sparkConf.getOption(HADOOP_CONFIG_MAP_SPARK_CONF_NAME)
     val maybeHadoopConfDir = sparkConf.getOption(HADOOP_CONF_DIR_LOC)
+    val maybeDTSecret = sparkConf.getOption(KERBEROS_SPARK_CONF_NAME)
 
     val maybeExecutorInitContainerSecretName =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET)
@@ -83,6 +84,11 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         hadoopConfigurations
       )
     }
+    val kerberosBootstrap = for {
+      dTSecret <- maybeDTSecret
+    } yield {
+      new KerberosConfBootstrapImpl(dTSecret)
+    }
     if (maybeConfigMap.isEmpty) {
       logWarning("The executor's init-container config map was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
@@ -107,6 +113,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         sc,
         initBootStrap,
         hadoopBootStrap,
+        kerberosBootstrap,
         executorInitContainerSecretVolumePlugin,
         kubernetesClient)
   }

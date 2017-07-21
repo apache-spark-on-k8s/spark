@@ -149,7 +149,7 @@ private[spark] class Client(
 }
 
 private[spark] object Client {
-  def run(sparkConf: SparkConf,
+    def run(sparkConf: SparkConf,
           clientArguments: ClientArguments,
           hadoopConfDir: Option[String]): Unit = {
     val namespace = sparkConf.get(KUBERNETES_NAMESPACE)

@@ -16,7 +16,7 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps
 
-import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
+import io.fabric8.kubernetes.api.model.{Container, Pod, Secret}
 
  /**
   * Represents a given configuration of the hadoop configuration logic, informing the
@@ -28,9 +28,11 @@ import io.fabric8.kubernetes.api.model.{Container, HasMetadata, Pod}
   *   the hadoop logic needs)
   * - The properties that will be stored into the config map which have (key, value)
   *   pairs of (path, data)
+  * - The secret containing a DT, either previously specified or re-built
   */
 private[spark] case class HadoopConfigSpec(
   additionalDriverSparkConf: Map[String, String],
   driverPod: Pod,
   driverContainer: Container,
-  configMapProperties: Map[String, String])
+  configMapProperties: Map[String, String],
+  dtSecret: Option[Secret])

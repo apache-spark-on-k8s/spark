@@ -16,13 +16,13 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
-import java.io.StringWriter
-import java.util.Properties
+import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, HasMetadata}
+import io.fabric8.kubernetes.api.model.ConfigMapBuilder
 
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.submit.submitsteps.hadoopsteps.{HadoopConfigSpec, HadoopConfigurationStep}
+
 
  /**
   * Configures the driverSpec that bootstraps dependencies into the driver pod.
@@ -33,12 +33,12 @@ private[spark] class HadoopConfigBootstrapStep(
   extends DriverConfigurationStep {
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
-    import scala.collection.JavaConverters._
     var currentHadoopSpec = HadoopConfigSpec(
       driverPod = driverSpec.driverPod,
       driverContainer = driverSpec.driverContainer,
       configMapProperties = Map.empty[String, String],
-      additionalDriverSparkConf = Map.empty[String, String])
+      additionalDriverSparkConf = Map.empty[String, String],
+      dtSecret = None)
     for (nextStep <- hadoopConfigurationSteps) {
       currentHadoopSpec = nextStep.configureContainers(currentHadoopSpec)
     }
@@ -58,7 +58,7 @@ private[spark] class HadoopConfigBootstrapStep(
       driverSparkConf = executorSparkConf,
       otherKubernetesResources =
         driverSpec.otherKubernetesResources ++
-        Seq(configMap)
+        Seq(configMap) ++ currentHadoopSpec.dtSecret.toSeq
       )
   }
 }

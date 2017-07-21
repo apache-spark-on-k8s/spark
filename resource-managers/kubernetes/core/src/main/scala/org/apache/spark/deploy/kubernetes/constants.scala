@@ -97,6 +97,14 @@ package object constants {
   private[spark] val HADOOP_CONF_DIR_LOC = "spark.kubernetes.hadoop.conf.dir"
   private[spark] val HADOOP_CONFIG_MAP_SPARK_CONF_NAME =
     "spark.kubernetes.hadoop.executor.hadoopconfigmapname"
+  private[spark] val HADOOP_KERBEROS_SECRET_NAME =
+    "spark.kubernetes.kerberos.dt"
+  private[spark] val KERBEROS_SPARK_CONF_NAME =
+    "spark.kubernetes.kerberos.secretlabelname"
+  private[spark] val KERBEROS_SECRET_LABEL_PREFIX =
+    "hadoop-tokens"
+  private[spark] val ENV_KERBEROS_SECRET_LABEL =
+    "KERBEROS_SECRET_LABEL"
 
   // Miscellaneous
   private[spark] val ANNOTATION_EXECUTOR_NODE_AFFINITY = "scheduler.alpha.kubernetes.io/affinity"

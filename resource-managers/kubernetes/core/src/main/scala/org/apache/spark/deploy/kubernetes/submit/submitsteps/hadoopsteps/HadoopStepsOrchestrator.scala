@@ -30,9 +30,14 @@ private[spark] class HadoopStepsOrchestrator(
   namespace: String,
   hadoopConfigMapName: String,
   submissionSparkConf: SparkConf,
-  hadoopConfigurationFiles: Array[File],
   hadoopConfDir: Option[String]) {
   private val maybeKerberosSupport = submissionSparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
+  private val maybePrincipal = submissionSparkConf.get(KUBERNETES_KERBEROS_PRINCIPAL)
+  private val maybeKeytab = submissionSparkConf.get(KUBERNETES_KERBEROS_KEYTAB)
+    .map(k => new File(k))
+  private val maybeExistingSecret = submissionSparkConf.get(KUBERNETES_KERBEROS_DT_SECRET)
+  private val hadoopConfigurationFiles = hadoopConfDir.map(conf => getHadoopConfFiles(conf))
+     .getOrElse(Seq.empty[File])
 
   def getHadoopSteps(): Seq[HadoopConfigurationStep] = {
     val hadoopConfBootstrapImpl = new HadoopConfBootstrapImpl(
@@ -43,13 +48,27 @@ private[spark] class HadoopStepsOrchestrator(
       hadoopConfigurationFiles,
       hadoopConfBootstrapImpl,
       hadoopConfDir)
-    val maybeHadoopKerberosMountingStep =
+    val maybeKerberosStep =
       if (maybeKerberosSupport) {
-        // TODO: Implement mounting secrets
-        Option.empty[HadoopConfigurationStep]
+        maybeExistingSecret.map(secretLabel => Some(new HadoopKerberosSecretResolverStep(
+         submissionSparkConf,
+         secretLabel))).getOrElse(Some(
+            new HadoopKerberosKeytabResolverStep(
+              submissionSparkConf,
+              maybePrincipal,
+              maybeKeytab)))
       } else {
         Option.empty[HadoopConfigurationStep]
       }
-    Seq(hadoopConfMounterStep) ++ maybeHadoopKerberosMountingStep.toSeq
+    Seq(hadoopConfMounterStep) ++ maybeKerberosStep.toSeq
+  }
+  private def getHadoopConfFiles(path: String) : Seq[File] = {
+     def isFile(file: File) = if (file.isFile) Some(file) else None
+     val dir = new File(path)
+     if (dir.isDirectory) {
+        dir.listFiles.flatMap { file => isFile(file) }.toSeq
+     } else {
+       Seq.empty[File]
+     }
   }
 }

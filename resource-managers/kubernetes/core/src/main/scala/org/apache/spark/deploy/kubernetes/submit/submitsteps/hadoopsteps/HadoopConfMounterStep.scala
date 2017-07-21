@@ -28,7 +28,7 @@ import org.apache.spark.deploy.kubernetes.constants._
   */
 private[spark] class HadoopConfMounterStep(
     hadoopConfigMapName: String,
-    hadoopConfigurationFiles: Array[File],
+    hadoopConfigurationFiles: Seq[File],
     hadoopConfBootstrapConf: HadoopConfBootstrap,
     hadoopConfDir: Option[String])
   extends HadoopConfigurationStep {
