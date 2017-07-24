@@ -28,15 +28,15 @@ import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
 import scala.collection.JavaConverters._
 
-import org.apache.spark.{SparkConf, SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.kubernetes.SSLUtils
+import org.apache.spark.{SSLOptions, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTestBackendFactory
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.constants.MINIKUBE_TEST_BACKEND
 import org.apache.spark.deploy.kubernetes.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource}
 import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{RedirectThread, Utils}
 
 private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   import KubernetesSuite._
@@ -72,9 +72,21 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     kubernetesTestComponents.deleteNamespace()
   }
 
+  test("Include HADOOP_CONF for HDFS based jobs ") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    // Ensuring that HADOOP_CONF_DIR variable is set, could also be one via env HADOOP_CONF_DIR
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
+    runSparkApplicationAndVerifyCompletion(
+      JavaMainAppResource(CONTAINER_LOCAL_MAIN_APP_RESOURCE),
+      SPARK_PI_MAIN_CLASS,
+      Seq("HADOOP_CONF_DIR defined. Mounting HDFS specific .xml files", "Pi is roughly 3"),
+      Array("5"),
+      Seq.empty[String],
+      Some("test-data/hadoop-conf-files"))
+  }
+
   test("Run PySpark Job on file from SUBMITTER with --py-files") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
-
     launchStagingServer(SSLOptions(), None)
     sparkConf
       .set(DRIVER_DOCKER_IMAGE,
@@ -159,7 +171,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         GROUP_BY_MAIN_CLASS,
         Seq("The Result is"),
         Array.empty[String],
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   test("Use remote resources without the resource staging server.") {
@@ -223,7 +236,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         FILE_EXISTENCE_MAIN_CLASS,
         Seq(s"File found at /opt/spark/${testExistenceFile.getName} with correct contents."),
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   test("Use a very long application name.") {
@@ -253,9 +267,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(appResource),
         SPARK_PI_MAIN_CLASS,
-        Seq("Pi is roughly 3"),
+        Seq(
+          "hadoop config map key was not specified",
+          "Pi is roughly 3"),
         Array.empty[String],
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   private def runPySparkPiAndVerifyCompletion(
@@ -265,7 +282,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       PYSPARK_PI_MAIN_CLASS,
       Seq("Submitting 5 missing tasks from ResultStage", "Pi is roughly 3"),
       Array("5"),
-      otherPyFiles)
+      otherPyFiles,
+      None)
   }
 
   private def runSparkApplicationAndVerifyCompletion(
@@ -273,13 +291,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       mainClass: String,
       expectedLogOnCompletion: Seq[String],
       appArgs: Array[String],
-      otherPyFiles: Seq[String]): Unit = {
+      otherPyFiles: Seq[String],
+      hadoopConfDir: Option[String]): Unit = {
     val clientArguments = ClientArguments(
       mainAppResource = appResource,
       mainClass = mainClass,
       driverArgs = appArgs,
       otherPyFiles = otherPyFiles)
-    Client.run(sparkConf, clientArguments)
+    Client.run(sparkConf, clientArguments, hadoopConfDir)
     val driverPod = kubernetesTestComponents.kubernetesClient
       .pods()
       .withLabel("spark-app-locator", APP_LOCATOR_LABEL)
