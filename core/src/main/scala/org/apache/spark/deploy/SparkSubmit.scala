@@ -344,7 +344,7 @@ object SparkSubmit extends CommandLineUtils {
 
     // The following modes are not supported or applicable
     (clusterManager, deployMode) match {
-      case (KUBERNETES, CLIENT) =>
+      case (KUBERNETES, CLIENT) if !isShell(args.primaryResource) =>
         printErrorAndExit("Client mode is currently not supported for Kubernetes.")
       case (KUBERNETES, CLUSTER) if args.isR =>
         printErrorAndExit("Kubernetes does not currently support R applications.")
@@ -356,8 +356,12 @@ object SparkSubmit extends CommandLineUtils {
           "applications on standalone clusters.")
       case (LOCAL, CLUSTER) =>
         printErrorAndExit("Cluster deploy mode is not compatible with master \"local\"")
-      case (_, CLUSTER) if isShell(args.primaryResource) =>
-        printErrorAndExit("Cluster deploy mode is not applicable to Spark shells.")
+      case (MESOS, CLUSTER) if isShell(args.primaryResource) =>
+        printErrorAndExit("MESOS Cluster deploy mode is not compatible with Spark shells.")
+      case (YARN, CLUSTER) if isShell(args.primaryResource) =>
+        printErrorAndExit("YARN Cluster deploy mode is not compatible with Spark shells.")
+      case (STANDALONE, CLUSTER) if isShell(args.primaryResource) =>
+        printErrorAndExit("STANDALONE Cluster deploy mode is not compatible with Spark shells.")
       case (_, CLUSTER) if isSqlShell(args.mainClass) =>
         printErrorAndExit("Cluster deploy mode is not applicable to Spark SQL shell.")
       case (_, CLUSTER) if isThriftServer(args.mainClass) =>
