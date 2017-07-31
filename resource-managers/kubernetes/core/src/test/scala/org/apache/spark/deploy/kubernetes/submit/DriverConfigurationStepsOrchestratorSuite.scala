@@ -42,6 +42,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         MAIN_CLASS,
         APP_ARGS,
         ADDITIONAL_PYTHON_FILES,
+        None,
         sparkConf)
     val steps = orchestrator.getAllConfigurationSteps()
     assert(steps.size === 3)
@@ -63,6 +64,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         MAIN_CLASS,
         APP_ARGS,
         ADDITIONAL_PYTHON_FILES,
+        None,
         sparkConf)
     val steps = orchestrator.getAllConfigurationSteps()
     assert(steps.size === 4)
@@ -84,6 +86,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         MAIN_CLASS,
         APP_ARGS,
         ADDITIONAL_PYTHON_FILES,
+        None,
         sparkConf)
     val steps = orchestrator.getAllConfigurationSteps()
     assert(steps.size === 4)

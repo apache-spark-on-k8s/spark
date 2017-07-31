@@ -498,6 +498,33 @@ package object config extends Logging {
       .createOptional
 
   private[spark] val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
+  private[spark] val KUBERNETES_KERBEROS_SUPPORT =
+    ConfigBuilder("spark.kubernetes.kerberos")
+      .doc("Specify whether your job is a job that will require a Delegation Token to access HDFS")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val KUBERNETES_KERBEROS_KEYTAB =
+    ConfigBuilder("spark.kubernetes.kerberos.keytab")
+      .doc("Specify the location of keytab" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_PRINCIPAL =
+    ConfigBuilder("spark.kubernetes.kerberos.principal")
+      .doc("Specify the principal" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_DT_SECRET =
+    ConfigBuilder("spark.kubernetes.kerberos.tokensecret")
+      .doc("Specify the label of the secret where " +
+        " your existing delegation token is stored. This removes the need" +
+        " for the job user to provide any keytab for launching a job")
+      .stringConf
+      .createOptional
 
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {

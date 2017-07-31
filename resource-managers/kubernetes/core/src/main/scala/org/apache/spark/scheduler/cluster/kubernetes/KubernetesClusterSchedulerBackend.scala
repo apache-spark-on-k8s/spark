@@ -34,7 +34,7 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.io.FilenameUtils
 
 import org.apache.spark.{SparkContext, SparkEnv, SparkException}
-import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, InitContainerResourceStagingServerSecretPlugin, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.kubernetes._
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.submit.InitContainerUtil
@@ -50,6 +50,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     val sc: SparkContext,
     executorInitContainerBootstrap: Option[SparkPodInitContainerBootstrap],
+    executorHadoopBootStrap: Option[HadoopConfBootstrap],
+    executorKerberosBootStrap: Option[KerberosConfBootstrap],
     executorMountInitContainerSecretPlugin: Option[InitContainerResourceStagingServerSecretPlugin],
     kubernetesClient: KubernetesClient)
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
@@ -582,9 +584,23 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
     val executorPodWithNodeAffinity = addNodeAffinityAnnotationIfUseful(
         executorPodWithInitContainer, nodeToLocalTaskCount)
-    val resolvedExecutorPod = new PodBuilder(executorPodWithNodeAffinity)
+    val (executorHadoopConfPod, executorHadoopConfContainer) =
+      executorHadoopBootStrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+        )
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+    val (executorKerberosPod, executorKerberosContainer) =
+      executorKerberosBootStrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorHadoopConfPod, executorHadoopConfContainer)
+        )
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse((executorHadoopConfPod, executorHadoopConfContainer))
+    val resolvedExecutorPod = new PodBuilder(executorKerberosPod)
       .editSpec()
-        .addToContainers(initBootstrappedExecutorContainer)
+        .addToContainers(executorKerberosContainer)
         .endSpec()
       .build()
     try {

@@ -20,15 +20,16 @@ import java.io.File
 import java.net.URI
 import java.nio.file.Paths
 
-import scala.collection.JavaConverters._
-
 import com.spotify.docker.client.{DefaultDockerClient, DockerCertificates, LoggingBuildHandler}
 import org.apache.http.client.utils.URIBuilder
+
+import org.apache.spark.internal.Logging
+
+import org.apache.spark.util.RedirectThread
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.util.RedirectThread
+import scala.collection.JavaConverters._
 
 
 
@@ -47,6 +48,7 @@ private[spark] class SparkDockerImageBuilder
   private val STAGING_SERVER_DOCKER_FILE = "dockerfiles/resource-staging-server/Dockerfile"
   private val STATIC_ASSET_SERVER_DOCKER_FILE =
     "dockerfiles/integration-test-asset-server/Dockerfile"
+  private val KERBEROS_DOCKER_FILE = "dockerfiles/kerberos-test/Dockerfile"
   private val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   private val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
   private val dockerHost = dockerEnv.getOrElse("DOCKER_HOST",
@@ -95,6 +97,7 @@ private[spark] class SparkDockerImageBuilder
     buildImage("spark-resource-staging-server", STAGING_SERVER_DOCKER_FILE)
     buildImage("spark-init", INIT_CONTAINER_DOCKER_FILE)
     buildImage("spark-integration-test-asset-server", STATIC_ASSET_SERVER_DOCKER_FILE)
+    buildImage("kerberos-test", KERBEROS_DOCKER_FILE)
   }
 
   private def buildImage(name: String, dockerFile: String): Unit = {
