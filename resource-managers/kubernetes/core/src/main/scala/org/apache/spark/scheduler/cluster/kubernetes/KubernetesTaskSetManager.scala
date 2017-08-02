@@ -20,6 +20,7 @@ import java.net.InetAddress
 
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.scheduler.{TaskSchedulerImpl, TaskSet, TaskSetManager}
 
 private[spark] class KubernetesTaskSetManager(
@@ -28,6 +29,8 @@ private[spark] class KubernetesTaskSetManager(
     maxTaskFailures: Int,
     inetAddressUtil: InetAddressUtil = new InetAddressUtil)
   extends TaskSetManager(sched, taskSet, maxTaskFailures) {
+
+  private val conf = sched.sc.conf
 
   /**
    * Overrides the lookup to use not only the executor pod IP, but also the cluster node
@@ -53,7 +56,8 @@ private[spark] class KubernetesTaskSetManager(
         } else {
           val clusterNodeIP = pod.get.getStatus.getHostIP
           val pendingTasksClusterNodeIP = super.getPendingTasksForHost(clusterNodeIP)
-          if (pendingTasksClusterNodeIP.nonEmpty) {
+          if (pendingTasksClusterNodeIP.nonEmpty ||
+            !conf.get(KUBERNETES_DRIVER_CLUSTER_NODENAME_DNS_LOOKUP_ENABLED)) {
             logDebug(s"Got preferred task list $pendingTasksClusterNodeIP for executor host " +
               s"$executorIP using cluster node IP $clusterNodeIP")
             pendingTasksClusterNodeIP
