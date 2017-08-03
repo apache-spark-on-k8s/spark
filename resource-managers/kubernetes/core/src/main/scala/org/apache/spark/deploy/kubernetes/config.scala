@@ -500,6 +500,7 @@ package object config extends Logging {
         " The driver can slow down and fail to respond to executor heartbeats in time." +
         " If enabling this flag, make sure your DNS server has enough capacity" +
         " for the workload.")
+      .internal()
       .booleanConf
       .createWithDefault(false)
 

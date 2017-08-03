@@ -56,19 +56,24 @@ private[spark] class KubernetesTaskSetManager(
         } else {
           val clusterNodeIP = pod.get.getStatus.getHostIP
           val pendingTasksClusterNodeIP = super.getPendingTasksForHost(clusterNodeIP)
-          if (pendingTasksClusterNodeIP.nonEmpty ||
-            !conf.get(KUBERNETES_DRIVER_CLUSTER_NODENAME_DNS_LOOKUP_ENABLED)) {
+          if (pendingTasksClusterNodeIP.nonEmpty) {
             logDebug(s"Got preferred task list $pendingTasksClusterNodeIP for executor host " +
               s"$executorIP using cluster node IP $clusterNodeIP")
             pendingTasksClusterNodeIP
           } else {
-            val clusterNodeFullName = inetAddressUtil.getFullHostName(clusterNodeIP)
-            val pendingTasksClusterNodeFullName = super.getPendingTasksForHost(clusterNodeFullName)
-            if (pendingTasksClusterNodeFullName.nonEmpty) {
-              logDebug(s"Got preferred task list $pendingTasksClusterNodeFullName " +
-                s"for executor host $executorIP using cluster node full name $clusterNodeFullName")
+            if (conf.get(KUBERNETES_DRIVER_CLUSTER_NODENAME_DNS_LOOKUP_ENABLED)) {
+              val clusterNodeFullName = inetAddressUtil.getFullHostName(clusterNodeIP)
+              val pendingTasksClusterNodeFullName = super.getPendingTasksForHost(
+                clusterNodeFullName)
+              if (pendingTasksClusterNodeFullName.nonEmpty) {
+                logDebug(s"Got preferred task list $pendingTasksClusterNodeFullName " +
+                  s"for executor host $executorIP using cluster node full name " +
+                  s"$clusterNodeFullName")
+              }
+              pendingTasksClusterNodeFullName
+            } else {
+              pendingTasksExecutorIP  // Empty
             }
-            pendingTasksClusterNodeFullName
           }
         }
       } else {
