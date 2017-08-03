@@ -20,18 +20,23 @@ import scala.collection.mutable.ArrayBuffer
 
 import io.fabric8.kubernetes.api.model.{Pod, PodSpec, PodStatus}
 import org.mockito.Mockito._
+import org.scalatest.BeforeAndAfter
 
 import org.apache.spark.{SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.scheduler.{FakeTask, FakeTaskScheduler, HostTaskLocation, TaskLocation}
 
-class KubernetesTaskSetManagerSuite extends SparkFunSuite {
+class KubernetesTaskSetManagerSuite extends SparkFunSuite with BeforeAndAfter {
 
   val sc = new SparkContext("local", "test")
   val sched = new FakeTaskScheduler(sc,
     ("execA", "10.0.0.1"), ("execB", "10.0.0.2"), ("execC", "10.0.0.3"))
   val backend = mock(classOf[KubernetesClusterSchedulerBackend])
   sched.backend = backend
+
+  before {
+    sc.conf.remove(KUBERNETES_DRIVER_CLUSTER_NODENAME_DNS_LOOKUP_ENABLED)
+  }
 
   test("Find pending tasks for executors using executor pod IP addresses") {
     val taskSet = FakeTask.createTaskSet(3,
