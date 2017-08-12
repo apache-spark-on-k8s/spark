@@ -92,6 +92,7 @@
     <dependency>
       <groupId>com.spotify</groupId>
       <artifactId>docker-client</artifactId>
+      <version>8.8.2</version>
       <scope>test</scope>
       <!--
         See https://github.com/spotify/docker-client/pull/272#issuecomment-155249101
@@ -238,6 +239,39 @@
                       </resource>
                   </resources>
               </configuration>
+          </execution>
+          <execution>
+            <id>copy-integration-bash</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/docker/test-scripts</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>kerberos-yml</directory>
+                  <includes>
+                    <include>test-env.sh</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-integration-kerberos-conf</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/docker/hconf</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>src/test/resources</directory>
+                </resource>
+              </resources>
+            </configuration>
           </execution>
           <execution>
             <id>copy-integration-data</id>

@@ -768,6 +768,53 @@ from the other deployment modes. See the [configuration page](configuration.html
     <code>myIdentifier</code>. Multiple node selector keys can be added by setting multiple configurations with this prefix.
   </td>
 </tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos</code></td> 
+  <td>false</td>
+  <td>
+    Specify whether your job is a job that will require a Delegation Token to access HDFS. By default, we
+    will assume that you will not require secure HDFS access. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.keytab</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos</code> to be true. This will let you specify 
+    the location of your Kerberos keytab to be used in order to access Secure HDFS. This is optional as you 
+    may login by running <code>kinit -kt</code> before running the spark-submit, and the submission client
+    will look within your local TGT cache to resolve this. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.principal</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos</code> to be true. This will let you specify 
+    your Kerberos principal that you wish to use to access Secure HDFS. This is optional as you 
+    may login by running <code>kinit -kt</code> before running the spark-submit, and the submission client
+    will look within your local TGT cache to resolve this. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.tokensecret.name</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos</code> to be true. This will let you specify 
+    the name of the secret where your existing delegation token data is stored. You must also specify the 
+    label <code>spark.kubernetes.kerberos.tokensecret.name</code> where your data is stored on the secret. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.tokensecret.label</code></td> 
+  <td>spark.kubernetes.kerberos.dt.label</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos</code> to be true. This will let you specify 
+    the label within the pre-specified secret where the data of your existing delegation token data is stored. 
+    We have a default value of <code>spark.kubernetes.kerberos.dt.label</code> should you not include it. But
+    you should always include this if you are proposing a pre-existing secret contain the delegation token data.
+  </td>
+</tr>
 </table>
 
 

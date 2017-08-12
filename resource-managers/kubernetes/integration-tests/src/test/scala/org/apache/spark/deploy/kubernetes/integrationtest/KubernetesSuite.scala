@@ -34,6 +34,7 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.IntegrationTestBackendFactory
 import org.apache.spark.deploy.kubernetes.integrationtest.backend.minikube.Minikube
 import org.apache.spark.deploy.kubernetes.integrationtest.constants.MINIKUBE_TEST_BACKEND
+import org.apache.spark.deploy.kubernetes.integrationtest.kerberos.KerberosDriverWatcherCache
 import org.apache.spark.deploy.kubernetes.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource}
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
@@ -46,6 +47,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   private var sparkConf: SparkConf = _
   private var resourceStagingServerLauncher: ResourceStagingServerLauncher = _
   private var staticAssetServerLauncher: StaticAssetServerLauncher = _
+  private var kerberizedHadoopClusterLauncher: KerberizedHadoopClusterLauncher = _
+  private var kerberosTestLauncher: KerberosTestPodLauncher = _
 
   override def beforeAll(): Unit = {
     testBackend.initialize()
@@ -54,6 +57,12 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
     staticAssetServerLauncher = new StaticAssetServerLauncher(
       kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
+    kerberizedHadoopClusterLauncher = new KerberizedHadoopClusterLauncher(
+      kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace),
+      kubernetesTestComponents.namespace)
+    kerberosTestLauncher = new KerberosTestPodLauncher(
+      kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace),
+      kubernetesTestComponents.namespace)
   }
 
   override def afterAll(): Unit = {
@@ -69,12 +78,55 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   after {
+    kubernetesTestComponents.deleteKubernetesPVs()
     kubernetesTestComponents.deleteNamespace()
+  }
+
+  test("Include HADOOP_CONF for HDFS based jobs") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    // Ensuring that HADOOP_CONF_DIR variable is set, could also be one via env HADOOP_CONF_DIR
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
+    runSparkApplicationAndVerifyCompletion(
+      JavaMainAppResource(CONTAINER_LOCAL_MAIN_APP_RESOURCE),
+      SPARK_PI_MAIN_CLASS,
+      Seq("HADOOP_CONF_DIR defined. Mounting HDFS specific .xml files", "Pi is roughly 3"),
+      Array("5"),
+      Seq.empty[String],
+      Some("src/test/resources"))
+  }
+
+  test("Secure HDFS test with HDFS keytab") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    launchKerberizedCluster()
+    createKerberosTestPod(CONTAINER_LOCAL_MAIN_APP_RESOURCE, HDFS_TEST_CLASS, APP_LOCATOR_LABEL)
+    val kubernetesClient = kubernetesTestComponents.kubernetesClient
+    val driverWatcherCache = new KerberosDriverWatcherCache(
+      kubernetesClient,
+      Map("spark-app-locator" -> APP_LOCATOR_LABEL))
+    driverWatcherCache.start()
+    driverWatcherCache.stop()
+    val expectedLogOnCompletion = Seq(
+        "Returned length(s) of: 1",
+        "File contents: [This is an awesome word count file]")
+    val driverPod = kubernetesClient
+      .pods()
+      .withLabel("spark-app-locator", APP_LOCATOR_LABEL)
+      .list()
+      .getItems
+      .get(0)
+    Eventually.eventually(TIMEOUT, INTERVAL) {
+      expectedLogOnCompletion.foreach { e =>
+        assert(kubernetesClient
+          .pods()
+          .withName(driverPod.getMetadata.getName)
+          .getLog
+          .contains(e), "The application did not complete.")
+      }
+    }
   }
 
   test("Run PySpark Job on file from SUBMITTER with --py-files") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
-
     launchStagingServer(SSLOptions(), None)
     sparkConf
       .set(DRIVER_DOCKER_IMAGE,
@@ -159,7 +211,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         GROUP_BY_MAIN_CLASS,
         Seq("The Result is"),
         Array.empty[String],
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   test("Use remote resources without the resource staging server.") {
@@ -223,7 +276,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         FILE_EXISTENCE_MAIN_CLASS,
         Seq(s"File found at /opt/spark/${testExistenceFile.getName} with correct contents."),
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   test("Use a very long application name.") {
@@ -249,13 +303,26 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         s"${Minikube.getMinikubeIp}:$resourceStagingServerPort")
   }
 
+  private def launchKerberizedCluster(): Unit = {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    kerberizedHadoopClusterLauncher.launchKerberizedCluster()
+  }
+
+  private def createKerberosTestPod(resource: String, className: String, appLabel: String): Unit = {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    kerberosTestLauncher.startKerberosTest(resource, className, appLabel)
+  }
+
   private def runSparkPiAndVerifyCompletion(appResource: String): Unit = {
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(appResource),
         SPARK_PI_MAIN_CLASS,
-        Seq("Pi is roughly 3"),
+        Seq(
+          "hadoop config map key was not specified",
+          "Pi is roughly 3"),
         Array.empty[String],
-        Seq.empty[String])
+        Seq.empty[String],
+        None)
   }
 
   private def runPySparkPiAndVerifyCompletion(
@@ -265,7 +332,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       PYSPARK_PI_MAIN_CLASS,
       Seq("Submitting 5 missing tasks from ResultStage", "Pi is roughly 3"),
       Array("5"),
-      otherPyFiles)
+      otherPyFiles,
+      None)
   }
 
   private def runSparkApplicationAndVerifyCompletion(
@@ -273,13 +341,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       mainClass: String,
       expectedLogOnCompletion: Seq[String],
       appArgs: Array[String],
-      otherPyFiles: Seq[String]): Unit = {
+      otherPyFiles: Seq[String],
+      hadoopConfDir: Option[String]): Unit = {
     val clientArguments = ClientArguments(
       mainAppResource = appResource,
       mainClass = mainClass,
       driverArgs = appArgs,
       otherPyFiles = otherPyFiles)
-    Client.run(sparkConf, clientArguments)
+    Client.run(sparkConf, clientArguments, hadoopConfDir)
     val driverPod = kubernetesTestComponents.kubernetesClient
       .pods()
       .withLabel("spark-app-locator", APP_LOCATOR_LABEL)
@@ -354,8 +423,8 @@ private[spark] object KubernetesSuite {
     s"integration-tests-jars/${EXAMPLES_JAR_FILE.getName}"
   val CONTAINER_LOCAL_HELPER_JAR_PATH = s"local:///opt/spark/examples/" +
     s"integration-tests-jars/${HELPER_JAR_FILE.getName}"
-  val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
-  val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
+  val TIMEOUT = PatienceConfiguration.Timeout(Span(15, Minutes))
+  val INTERVAL = PatienceConfiguration.Interval(Span(15, Seconds))
   val SPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.SparkPiWithInfiniteWait"
   val PYSPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.PythonRunner"
@@ -368,7 +437,10 @@ private[spark] object KubernetesSuite {
     ".integrationtest.jobs.FileExistenceTest"
   val GROUP_BY_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.GroupByTest"
+  val HDFS_TEST_CLASS = "org.apache.spark.deploy.kubernetes" +
+    ".integrationtest.jobs.HDFSTest"
   val TEST_EXISTENCE_FILE_CONTENTS = "contents"
+
 
   case object ShuffleNotReadyException extends Exception
 }

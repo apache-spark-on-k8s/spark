@@ -45,9 +45,6 @@ package object constants {
 
   // Hadoop credentials secrets for the Spark app.
   private[spark] val SPARK_APP_HADOOP_CREDENTIALS_BASE_DIR = "/mnt/secrets/hadoop-credentials"
-  private[spark] val SPARK_APP_HADOOP_TOKEN_FILE_SECRET_NAME = "hadoop-token-file"
-  private[spark] val SPARK_APP_HADOOP_TOKEN_FILE_PATH =
-    s"$SPARK_APP_HADOOP_CREDENTIALS_BASE_DIR/$SPARK_APP_HADOOP_TOKEN_FILE_SECRET_NAME"
   private[spark] val SPARK_APP_HADOOP_SECRET_VOLUME_NAME = "hadoop-secret"
 
   // Default and fixed ports
@@ -63,6 +60,7 @@ package object constants {
   private[spark] val ENV_DRIVER_URL = "SPARK_DRIVER_URL"
   private[spark] val ENV_EXECUTOR_CORES = "SPARK_EXECUTOR_CORES"
   private[spark] val ENV_EXECUTOR_MEMORY = "SPARK_EXECUTOR_MEMORY"
+  private[spark] val ENV_EXECUTOR_JAVA_OPTS = "SPARK_EXECUTOR_JAVA_OPTS"
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"
   private[spark] val ENV_EXECUTOR_ID = "SPARK_EXECUTOR_ID"
   private[spark] val ENV_EXECUTOR_POD_IP = "SPARK_EXECUTOR_POD_IP"
@@ -77,6 +75,7 @@ package object constants {
   private[spark] val ENV_PYSPARK_FILES = "PYSPARK_FILES"
   private[spark] val ENV_PYSPARK_PRIMARY = "PYSPARK_PRIMARY"
   private[spark] val ENV_HADOOP_TOKEN_FILE_LOCATION = "HADOOP_TOKEN_FILE_LOCATION"
+  private[spark] val ENV_SPARK_USER = "SPARK_USER"
 
   // Bootstrapping dependencies with the init-container
   private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
@@ -98,6 +97,27 @@ package object constants {
     s"$INIT_CONTAINER_PROPERTIES_FILE_DIR/$INIT_CONTAINER_PROPERTIES_FILE_NAME"
   private[spark] val DEFAULT_SHUFFLE_MOUNT_NAME = "shuffle"
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_NAME = "spark-init-secret"
+
+  // Hadoop Configuration
+  private[spark] val HADOOP_FILE_VOLUME = "hadoop-properties"
+  private[spark] val HADOOP_FILE_DIR = "/etc/hadoop"
+  private[spark] val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
+  private[spark] val HADOOP_CONF_DIR_LOC = "spark.kubernetes.hadoop.conf.dir"
+  private[spark] val HADOOP_CONFIG_MAP_SPARK_CONF_NAME =
+    "spark.kubernetes.hadoop.executor.hadoopconfigmapname"
+
+  // Kerberos Configuration
+  private[spark] val HADOOP_KERBEROS_SECRET_NAME =
+    "spark.kubernetes.kerberos.dt"
+  private[spark] val HADOOP_KERBEROS_CONF_SECRET =
+    "spark.kubernetes.kerberos.secretname"
+  private[spark] val HADOOP_KERBEROS_CONF_LABEL =
+    "spark.kubernetes.kerberos.labelname"
+  private[spark] val KERBEROS_SECRET_LABEL_PREFIX =
+    "hadoop-tokens"
+  private[spark] val SPARK_HADOOP_PREFIX = "spark.hadoop."
+  private[spark] val HADOOP_SECURITY_AUTHENTICATION =
+    SPARK_HADOOP_PREFIX + "hadoop.security.authentication"
 
   // Miscellaneous
   private[spark] val ANNOTATION_EXECUTOR_NODE_AFFINITY = "scheduler.alpha.kubernetes.io/affinity"

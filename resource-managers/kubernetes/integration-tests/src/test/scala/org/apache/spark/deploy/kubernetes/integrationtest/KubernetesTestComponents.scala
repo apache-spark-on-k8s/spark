@@ -19,11 +19,12 @@ package org.apache.spark.deploy.kubernetes.integrationtest
 import java.util.UUID
 
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import org.scalatest.concurrent.Eventually
 import scala.collection.JavaConverters._
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.config._
+
+import org.scalatest.concurrent.Eventually
 
 private[spark] class KubernetesTestComponents(defaultClient: DefaultKubernetesClient) {
 
@@ -38,7 +39,21 @@ private[spark] class KubernetesTestComponents(defaultClient: DefaultKubernetesCl
       .endMetadata()
       .done()
   }
-
+  def deleteKubernetesPVs(): Unit = {
+      // Temporary hack until client library for fabric8 is updated to get around
+      // the NPE that comes about when I do .list().getItems().asScala
+      try {
+        val pvList = kubernetesClient.persistentVolumes().list().getItems().asScala
+        if (pvList.nonEmpty) {
+          kubernetesClient.persistentVolumes().delete()
+          Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
+            require(!pvList.exists(_.getMetadata.getNamespace == namespace))
+          }
+        }
+      } catch {
+        case ex: java.lang.NullPointerException =>
+      }
+  }
   def deleteNamespace(): Unit = {
     defaultClient.namespaces.withName(namespace).delete()
     Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {

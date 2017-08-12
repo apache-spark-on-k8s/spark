@@ -34,10 +34,10 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.io.FilenameUtils
 
 import org.apache.spark.{SparkContext, SparkEnv, SparkException}
-import org.apache.spark.deploy.kubernetes.{ConfigurationUtils, InitContainerResourceStagingServerSecretPlugin, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.kubernetes._
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.kubernetes.submit.{HadoopSecretUtil, InitContainerUtil}
+import org.apache.spark.deploy.kubernetes.submit.InitContainerUtil
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEndpointAddress, RpcEnv}
@@ -50,6 +50,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     val sc: SparkContext,
     executorInitContainerBootstrap: Option[SparkPodInitContainerBootstrap],
+    executorHadoopBootStrap: Option[HadoopConfBootstrap],
+    executorKerberosBootStrap: Option[KerberosTokenBootstrapConf],
     executorMountInitContainerSecretPlugin: Option[InitContainerResourceStagingServerSecretPlugin],
     kubernetesClient: KubernetesClient)
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
@@ -70,9 +72,14 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorsToRemove = Collections.newSetFromMap[String](
     new ConcurrentHashMap[String, java.lang.Boolean]()).asScala
 
+  private val executorExtraJavaOpts = conf.get(
+    org.apache.spark.internal.config.EXECUTOR_JAVA_OPTIONS)
   private val executorExtraClasspath = conf.get(
     org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
   private val executorJarsDownloadDir = conf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION)
+  private val isKerberosEnabled = conf.get(KUBERNETES_KERBEROS_SUPPORT)
+  private val maybeSimpleAuthentication =
+    if (isKerberosEnabled) s" -D$HADOOP_SECURITY_AUTHENTICATION=simple" else ""
 
   private val executorLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
       conf,
@@ -129,8 +136,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   private implicit val requestExecutorContext = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonCachedThreadPool("kubernetes-executor-requests"))
-
-  private val maybeMountedHadoopSecret = conf.get(MOUNTED_HADOOP_SECRET_CONF)
 
   private val driverPod = try {
     kubernetesClient.pods().inNamespace(kubernetesNamespace).
@@ -451,6 +456,13 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val executorCpuQuantity = new QuantityBuilder(false)
       .withAmount(executorCores.toString)
       .build()
+    val executorJavaOpts = executorExtraJavaOpts.getOrElse("") + maybeSimpleAuthentication
+    val executorJavaOptsEnv = if (executorJavaOpts.nonEmpty) {
+      Some(new EnvVarBuilder()
+        .withName(ENV_EXECUTOR_JAVA_OPTS)
+        .withValue(executorJavaOpts)
+        .build())
+    } else None
     val executorExtraClasspathEnv = executorExtraClasspath.map { cp =>
       new EnvVarBuilder()
         .withName(ENV_EXECUTOR_EXTRA_CLASSPATH)
@@ -499,6 +511,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       .endResources()
       .addAllToEnv(requiredEnv.asJava)
       .addToEnv(executorExtraClasspathEnv.toSeq: _*)
+      .addToEnv(executorJavaOptsEnv.toSeq: _*)
       .withPorts(requiredPorts.asJava)
       .build()
 
@@ -584,14 +597,22 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
     val executorPodWithNodeAffinity = addNodeAffinityAnnotationIfUseful(
         executorPodWithInitContainer, nodeToLocalTaskCount)
-    val executorPodWithMountedHadoopToken = HadoopSecretUtil.configurePod(maybeMountedHadoopSecret,
-      executorPodWithNodeAffinity)
-    val containerWithMountedHadoopToken = HadoopSecretUtil.configureContainer(
-      maybeMountedHadoopSecret, initBootstrappedExecutorContainer)
-
-    val resolvedExecutorPod = new PodBuilder(executorPodWithMountedHadoopToken)
+    val (executorHadoopConfPod, executorHadoopConfContainer) =
+      executorHadoopBootStrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+        )
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+    val (executorKerberosPod, executorKerberosContainer) =
+      executorKerberosBootStrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorHadoopConfPod, executorHadoopConfContainer))
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse((executorHadoopConfPod, executorHadoopConfContainer))
+    val resolvedExecutorPod = new PodBuilder(executorKerberosPod)
       .editSpec()
-        .addToContainers(containerWithMountedHadoopToken)
+        .addToContainers(executorKerberosContainer)
         .endSpec()
       .build()
     try {
