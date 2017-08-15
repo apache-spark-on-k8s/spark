@@ -24,6 +24,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.deploy.kubernetes.{InitContainerResourceStagingServerSecretPluginImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.deploy.kubernetes.submit.MountSmallFilesBootstrapImpl
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.{ExternalClusterManager, SchedulerBackend, TaskScheduler, TaskSchedulerImpl}
 
@@ -40,16 +41,19 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
   override def createSchedulerBackend(sc: SparkContext, masterURL: String, scheduler: TaskScheduler)
       : SchedulerBackend = {
     val sparkConf = sc.getConf
-    val maybeConfigMap = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP)
-    val maybeConfigMapKey = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY)
+    val maybeInitContainerConfigMap = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP)
+    val maybeInitContainerConfigMapKey = sparkConf.get(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY)
+    val maybeSubmittedFilesSecret = sparkConf.get(EXECUTOR_SUBMITTED_SMALL_FILES_SECRET)
+    val maybeSubmittedFilesSecretMountPath = sparkConf.get(
+      EXECUTOR_SUBMITTED_SMALL_FILES_SECRET_MOUNT_PATH)
 
     val maybeExecutorInitContainerSecretName =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET)
-    val maybeExecutorInitContainerSecretMount =
+    val maybeExecutorInitContainerSecretMountPath =
       sparkConf.get(EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR)
     val executorInitContainerSecretVolumePlugin = for {
       initContainerSecretName <- maybeExecutorInitContainerSecretName
-      initContainerSecretMountPath <- maybeExecutorInitContainerSecretMount
+      initContainerSecretMountPath <- maybeExecutorInitContainerSecretMountPath
     } yield {
       new InitContainerResourceStagingServerSecretPluginImpl(
         initContainerSecretName,
@@ -59,9 +63,9 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     // name. Note that we generally expect both to have been set from spark-submit V2, but for
     // testing developers may simply run the driver JVM locally, but the config map won't be set
     // then.
-    val bootStrap = for {
-      configMap <- maybeConfigMap
-      configMapKey <- maybeConfigMapKey
+    val executorInitContainerbootStrap = for {
+      configMap <- maybeInitContainerConfigMap
+      configMapKey <- maybeInitContainerConfigMapKey
     } yield {
       new SparkPodInitContainerBootstrapImpl(
         sparkConf.get(INIT_CONTAINER_DOCKER_IMAGE),
@@ -72,11 +76,17 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         configMap,
         configMapKey)
     }
-    if (maybeConfigMap.isEmpty) {
+    val mountSmallFilesBootstrap = for {
+      secretName <-maybeSubmittedFilesSecret
+      secretMountPath <-maybeSubmittedFilesSecretMountPath
+    } yield {
+      new MountSmallFilesBootstrapImpl(secretName, secretMountPath)
+    }
+    if (maybeInitContainerConfigMap.isEmpty) {
       logWarning("The executor's init-container config map was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
     }
-    if (maybeConfigMapKey.isEmpty) {
+    if (maybeInitContainerConfigMapKey.isEmpty) {
       logWarning("The executor's init-container config map key was not specified. Executors will" +
         " therefore not attempt to fetch remote or submitted dependencies.")
     }
@@ -90,8 +100,9 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     new KubernetesClusterSchedulerBackend(
         sc.taskScheduler.asInstanceOf[TaskSchedulerImpl],
         sc,
-        bootStrap,
+        executorInitContainerbootStrap,
         executorInitContainerSecretVolumePlugin,
+        mountSmallFilesBootstrap,
         kubernetesClient)
   }
 
