@@ -77,8 +77,8 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         configMapKey)
     }
     val mountSmallFilesBootstrap = for {
-      secretName <-maybeSubmittedFilesSecret
-      secretMountPath <-maybeSubmittedFilesSecretMountPath
+      secretName <- maybeSubmittedFilesSecret
+      secretMountPath <- maybeSubmittedFilesSecretMountPath
     } yield {
       new MountSmallFilesBootstrapImpl(secretName, secretMountPath)
     }

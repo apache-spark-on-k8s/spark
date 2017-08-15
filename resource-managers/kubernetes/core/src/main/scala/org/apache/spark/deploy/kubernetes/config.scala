@@ -452,8 +452,8 @@ package object config extends Logging {
 
   private[spark] val EXECUTOR_SUBMITTED_SMALL_FILES_SECRET =
     ConfigBuilder("spark.kubernetes.mountdependencies.smallfiles.executor.secretName")
-      .doc("Name of the secret that should be mounted into the executor containers for distributing" +
-        " submitted small files without the resource staging server.")
+      .doc("Name of the secret that should be mounted into the executor containers for" +
+        " distributing submitted small files without the resource staging server.")
       .internal()
       .stringConf
       .createOptional
