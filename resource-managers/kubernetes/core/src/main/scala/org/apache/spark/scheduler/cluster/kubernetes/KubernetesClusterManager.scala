@@ -60,9 +60,8 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         initContainerSecretMountPath)
     }
     // Only set up the bootstrap if they've provided both the config map key and the config map
-    // name. Note that we generally expect both to have been set from spark-submit V2, but for
-    // testing developers may simply run the driver JVM locally, but the config map won't be set
-    // then.
+    // name. The config map might not be provided if init-containers aren't being used to
+    // bootstrap dependencies.
     val executorInitContainerbootStrap = for {
       configMap <- maybeInitContainerConfigMap
       configMapKey <- maybeInitContainerConfigMapKey

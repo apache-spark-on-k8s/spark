@@ -113,7 +113,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
             // Then, indicate to the outer block that the init-container should not handle
             // those local files simply by filtering them out.
             val sparkFilesWithoutLocal = KubernetesFileUtils.getNonSubmitterLocalFiles(sparkFiles)
-            val smallFilesSecretName = s"$kubernetesAppId-submitted-files"
+            val smallFilesSecretName = s"${kubernetesAppId}-submitted-files"
             val mountSmallFilesBootstrap = new MountSmallFilesBootstrapImpl(
                 smallFilesSecretName, MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH)
             val mountSmallLocalFilesStep = new MountSmallLocalFilesStep(
