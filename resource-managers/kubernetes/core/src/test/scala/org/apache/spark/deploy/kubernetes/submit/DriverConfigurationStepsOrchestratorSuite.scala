@@ -32,7 +32,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
 
   test("Base submission steps without an init-container or python files.") {
     val sparkConf = new SparkConf(false)
-      .set("spark.jars", "local:///var/apps/jars/jar1.jar")
+        .set("spark.jars", "local:///var/apps/jars/jar1.jar")
     val mainAppResource = JavaMainAppResource("local:///var/apps/jars/main.jar")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
         NAMESPACE,
@@ -53,8 +53,8 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
 
   test("Submission steps with an init-container.") {
     val sparkConf = new SparkConf(false)
-      .set("spark.jars", "hdfs://localhost:9000/var/apps/jars/jar1.jar")
-      .set(RESOURCE_STAGING_SERVER_URI, "https://localhost:8080")
+        .set("spark.jars", "hdfs://localhost:9000/var/apps/jars/jar1.jar")
+        .set(RESOURCE_STAGING_SERVER_URI, "https://localhost:8080")
     val mainAppResource = JavaMainAppResource("local:///var/apps/jars/main.jar")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
         NAMESPACE,
