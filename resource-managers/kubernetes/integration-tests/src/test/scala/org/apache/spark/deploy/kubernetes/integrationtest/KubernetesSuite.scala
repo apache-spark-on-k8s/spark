@@ -222,7 +222,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
         JavaMainAppResource(SUBMITTER_LOCAL_MAIN_APP_RESOURCE),
         FILE_EXISTENCE_MAIN_CLASS,
         Seq(
-          s"File found at /opt/spark/${testExistenceFile.getName} with correct contents.",
+          s"File found at /opt/spark/work-dir/${testExistenceFile.getName} with correct contents.",
           s"File found on the executors at the relative path ${testExistenceFile.getName} with" +
             s" the correct contents."),
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
@@ -240,7 +240,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       JavaMainAppResource(CONTAINER_LOCAL_MAIN_APP_RESOURCE),
       FILE_EXISTENCE_MAIN_CLASS,
       Seq(
-        s"File found at /opt/spark/${testExistenceFile.getName} with correct contents.",
+        s"File found at /opt/spark/work-dir/${testExistenceFile.getName} with correct contents.",
         s"File found on the executors at the relative path ${testExistenceFile.getName} with" +
           s" the correct contents."),
       Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
