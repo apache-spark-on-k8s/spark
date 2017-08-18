@@ -32,10 +32,7 @@ private[spark] class MountSmallLocalFilesStep(
     smallFilesSecretMountPath: String,
     mountSmallFilesBootstrap: MountSmallFilesBootstrap) extends DriverConfigurationStep {
 
-  private val MAX_SECRET_BUNDLE_SIZE_BYTES = 10000
-  private val MAX_SECRET_BUNDLE_SIZE_BYTES_STRING =
-      Utils.bytesToString(MAX_SECRET_BUNDLE_SIZE_BYTES)
-
+  import MountSmallLocalFilesStep._
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val localFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles).map(new File(_))
     val totalSizeBytes = localFiles.map(_.length()).sum
@@ -67,4 +64,10 @@ private[spark] class MountSmallLocalFilesStep(
       driverSparkConf = resolvedSparkConf,
       otherKubernetesResources = driverSpec.otherKubernetesResources ++ Seq(localFilesSecret))
   }
+}
+
+private[spark] object MountSmallLocalFilesStep {
+  val MAX_SECRET_BUNDLE_SIZE_BYTES = 10240
+  val MAX_SECRET_BUNDLE_SIZE_BYTES_STRING =
+    Utils.bytesToString(MAX_SECRET_BUNDLE_SIZE_BYTES)
 }

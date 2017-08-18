@@ -557,7 +557,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
           .build()
       }
     }.getOrElse(executorPod)
-    val (withMaybeSmallFIlesMountedPod, withMaybeSmallFilesMountedContainer) =
+    val (withMaybeSmallFilesMountedPod, withMaybeSmallFilesMountedContainer) =
         mountSmallFilesBootstrap.map { bootstrap =>
           bootstrap.mountSmallFilesSecret(
             withMaybeShuffleConfigPod, withMaybeShuffleConfigExecutorContainer)
@@ -566,7 +566,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
         executorInitContainerBootstrap.map { bootstrap =>
           val podWithDetachedInitContainer = bootstrap.bootstrapInitContainerAndVolumes(
               PodWithDetachedInitContainer(
-                  withMaybeSmallFIlesMountedPod,
+                  withMaybeSmallFilesMountedPod,
                   new ContainerBuilder().build(),
                 withMaybeSmallFilesMountedContainer))
 
@@ -583,7 +583,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
           }.getOrElse(podWithAttachedInitContainer)
 
           (resolvedPodWithMountedSecret, podWithDetachedInitContainer.mainContainer)
-      }.getOrElse((withMaybeSmallFIlesMountedPod, withMaybeSmallFilesMountedContainer))
+      }.getOrElse((withMaybeSmallFilesMountedPod, withMaybeSmallFilesMountedContainer))
 
     val executorPodWithNodeAffinity = addNodeAffinityAnnotationIfUseful(
         executorPodWithInitContainer, nodeToLocalTaskCount)

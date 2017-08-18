@@ -16,7 +16,7 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
-import java.io.File
+import java.io.{File, RandomAccessFile}
 
 import com.google.common.base.Charsets
 import com.google.common.io.{BaseEncoding, Files}
@@ -97,6 +97,35 @@ private[spark] class MountSmallLocalFilesStepTest extends SparkFunSuite with Bef
     assert(configuredDriverSpec.driverSparkConf.get(
         EXECUTOR_SUBMITTED_SMALL_FILES_SECRET_MOUNT_PATH) ===
         Some(MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH))
+  }
+
+  test("Using large files should throw an exception.") {
+    val largeTempFileContents = BaseEncoding.base64().encode(new Array[Byte](20000))
+    val largeTempFile = createTempFileWithContents(tempFolder, "large.txt", largeTempFileContents)
+    val configurationStep = new MountSmallLocalFilesStep(
+        Seq(largeTempFile.getAbsolutePath),
+        SECRET_NAME,
+        MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH,
+        mountSmallFilesBootstrap)
+    val baseDriverSpec = new KubernetesDriverSpec(
+        new PodBuilder().build(),
+        new ContainerBuilder().build(),
+        Seq.empty[HasMetadata],
+        new SparkConf(false))
+    try {
+      configurationStep.configureDriver(baseDriverSpec)
+      fail("Using the small local files mounter should not be allowed with big files.")
+    } catch {
+      case e: Throwable =>
+        assert(e.getMessage ===
+          s"requirement failed: Total size of all files submitted must be less than" +
+            s" ${MountSmallLocalFilesStep.MAX_SECRET_BUNDLE_SIZE_BYTES_STRING} if you do not" +
+            s" use a resource staging server. The total size of all submitted local" +
+            s" files is ${Utils.bytesToString(largeTempFile.length())}. Please install a" +
+            s" resource staging server and configure your application to use it via" +
+            s" ${RESOURCE_STAGING_SERVER_URI.key}"
+        )
+    }
   }
 
   private def createTempFileWithContents(
