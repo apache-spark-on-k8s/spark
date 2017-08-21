@@ -100,7 +100,7 @@ private[spark] class MountSmallLocalFilesStepTest extends SparkFunSuite with Bef
   }
 
   test("Using large files should throw an exception.") {
-    val largeTempFileContents = BaseEncoding.base64().encode(new Array[Byte](20000))
+    val largeTempFileContents = BaseEncoding.base64().encode(new Array[Byte](10241))
     val largeTempFile = createTempFileWithContents(tempFolder, "large.txt", largeTempFileContents)
     val configurationStep = new MountSmallLocalFilesStep(
         Seq(largeTempFile.getAbsolutePath),
