@@ -561,7 +561,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
         mountSmallFilesBootstrap.map { bootstrap =>
           bootstrap.mountSmallFilesSecret(
             withMaybeShuffleConfigPod, withMaybeShuffleConfigExecutorContainer)
-        }.getOrElse(withMaybeShuffleConfigPod, withMaybeShuffleConfigExecutorContainer)
+        }.getOrElse((withMaybeShuffleConfigPod, withMaybeShuffleConfigExecutorContainer))
     val (executorPodWithInitContainer, initBootstrappedExecutorContainer) =
         executorInitContainerBootstrap.map { bootstrap =>
           val podWithDetachedInitContainer = bootstrap.bootstrapInitContainerAndVolumes(
