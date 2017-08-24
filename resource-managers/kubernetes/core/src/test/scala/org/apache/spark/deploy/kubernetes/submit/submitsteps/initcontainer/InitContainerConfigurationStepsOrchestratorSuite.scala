@@ -66,7 +66,7 @@ class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
         sparkConf)
     }
 
-    assert(thrown.getMessage === "Local JARs were provided, however no resource staging" +
+    assert(thrown.getMessage contains "Local JARs were provided, however no resource staging" +
       " server URI was found.")
   }
 
