@@ -51,7 +51,7 @@ class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
 
     assert(sparkConf.get(RESOURCE_STAGING_SERVER_URI).isEmpty)
 
-    intercept[IllegalArgumentException] {
+    val thrown = intercept[IllegalArgumentException] {
       val orchestrator = new InitContainerConfigurationStepsOrchestrator(
         NAMESPACE,
         APP_RESOURCE_PREFIX,
@@ -65,6 +65,9 @@ class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
         INIT_CONTAINER_CONFIG_MAP_KEY,
         sparkConf)
     }
+
+    assert(thrown.getMessage === "Local JARs were provided, however no resource staging" +
+      " server URI was found.")
   }
 
   test ("error not thrown with non-local jars and resource staging server provided") {

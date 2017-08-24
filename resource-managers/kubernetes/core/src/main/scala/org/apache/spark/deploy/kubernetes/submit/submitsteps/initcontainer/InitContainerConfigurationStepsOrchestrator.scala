@@ -64,12 +64,9 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
       .getOrElse(false)
 
   OptionRequirements.requireSecondIfFirstIsDefined(
-    KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars).nonEmpty match {
-      case true => Some(true)
-      case false => None
-    },
+    KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkJars).headOption,
     resourceStagingServerUri,
-    "Local files were provided, however no resource staging server URI was found.")
+    "Local JARs were provided, however no resource staging server URI was found.")
 
   OptionRequirements.requireNandDefined(
     maybeResourceStagingServerInternalClientCert,
