@@ -86,10 +86,10 @@ private[spark] class BaseDriverConfigurationStep(
       .withAmount(driverCpuCores)
       .build()
     val driverMemoryQuantity = new QuantityBuilder(false)
-      .withAmount(s"${driverMemoryMb}M")
+      .withAmount(s"${driverMemoryMb}Mi")
       .build()
     val driverMemoryLimitQuantity = new QuantityBuilder(false)
-      .withAmount(s"${driverContainerMemoryWithOverhead}M")
+      .withAmount(s"${driverContainerMemoryWithOverhead}Mi")
       .build()
     val maybeCpuLimitQuantity = driverLimitCores.map { limitCores =>
       ("cpu", new QuantityBuilder(false).withAmount(limitCores).build())

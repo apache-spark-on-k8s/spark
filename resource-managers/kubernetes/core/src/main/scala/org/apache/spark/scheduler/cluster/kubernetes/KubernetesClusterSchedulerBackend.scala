@@ -114,9 +114,6 @@ private[spark] class KubernetesClusterSchedulerBackend(
   private val executorPodNamePrefix = conf.get(KUBERNETES_EXECUTOR_POD_NAME_PREFIX)
 
   private val executorMemoryMb = conf.get(org.apache.spark.internal.config.EXECUTOR_MEMORY)
-  private val executorMemoryString = conf.get(
-    org.apache.spark.internal.config.EXECUTOR_MEMORY.key,
-    org.apache.spark.internal.config.EXECUTOR_MEMORY.defaultValueString)
 
   private val memoryOverheadMb = conf
     .get(KUBERNETES_EXECUTOR_MEMORY_OVERHEAD)
@@ -441,10 +438,10 @@ private[spark] class KubernetesClusterSchedulerBackend(
       SPARK_ROLE_LABEL -> SPARK_POD_EXECUTOR_ROLE) ++
       executorLabels
     val executorMemoryQuantity = new QuantityBuilder(false)
-      .withAmount(s"${executorMemoryMb}M")
+      .withAmount(s"${executorMemoryMb}Mi")
       .build()
     val executorMemoryLimitQuantity = new QuantityBuilder(false)
-      .withAmount(s"${executorMemoryWithOverhead}M")
+      .withAmount(s"${executorMemoryWithOverhead}Mi")
       .build()
     val executorCpuQuantity = new QuantityBuilder(false)
       .withAmount(executorCores.toString)
@@ -469,7 +466,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
       (ENV_DRIVER_URL, driverUrl),
       // Executor backend expects integral value for executor cores, so round it up to an int.
       (ENV_EXECUTOR_CORES, math.ceil(executorCores).toInt.toString),
-      (ENV_EXECUTOR_MEMORY, executorMemoryString),
+      (ENV_EXECUTOR_MEMORY, executorMemoryWithOverhead + "m"),
       (ENV_APPLICATION_ID, applicationId()),
       (ENV_EXECUTOR_ID, executorId),
       (ENV_MOUNTED_CLASSPATH, s"$executorJarsDownloadDir/*")) ++ sc.executorEnvs.toSeq)

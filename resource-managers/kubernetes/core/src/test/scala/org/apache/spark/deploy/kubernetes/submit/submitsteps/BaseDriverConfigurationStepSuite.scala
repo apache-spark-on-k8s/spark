@@ -89,9 +89,9 @@ private[spark] class BaseDriverConfigurationStepSuite extends SparkFunSuite {
     val resourceRequirements = preparedDriverSpec.driverContainer.getResources
     val requests = resourceRequirements.getRequests.asScala
     assert(requests("cpu").getAmount === "2")
-    assert(requests("memory").getAmount === "256M")
+    assert(requests("memory").getAmount === "256Mi")
     val limits = resourceRequirements.getLimits.asScala
-    assert(limits("memory").getAmount === "456M")
+    assert(limits("memory").getAmount === "456Mi")
     assert(limits("cpu").getAmount === "4")
     val driverPodMetadata = preparedDriverSpec.driverPod.getMetadata
     assert(driverPodMetadata.getName === "spark-driver-pod")
