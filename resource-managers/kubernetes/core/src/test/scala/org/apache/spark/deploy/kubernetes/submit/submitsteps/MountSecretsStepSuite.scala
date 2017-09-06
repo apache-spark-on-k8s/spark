@@ -16,8 +16,6 @@
  */
 package org.apache.spark.deploy.kubernetes.submit.submitsteps
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, HasMetadata, PodBuilder}
-
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.submit.{MountSecretsBootstrapImpl, SecretVolumeUtils}
 
@@ -28,15 +26,10 @@ private[spark] class MountSecretsStepSuite extends SparkFunSuite {
   private val SECRET_MOUNT_PATH = "/etc/secrets/driver"
 
   test("Mounts all given secrets") {
+    val baseDriverSpec = KubernetesDriverSpec.initialSpec(new SparkConf(false))
     val secretNamesToMountPaths = Map(
       SECRET_FOO -> SECRET_MOUNT_PATH,
       SECRET_BAR -> SECRET_MOUNT_PATH)
-
-    val baseDriverSpec = new KubernetesDriverSpec(
-      new PodBuilder().build(),
-      new ContainerBuilder().build(),
-      Seq.empty[HasMetadata],
-      new SparkConf(false))
 
     val mountSecretsBootstrap = new MountSecretsBootstrapImpl(secretNamesToMountPaths)
     val mountSecretsStep = new MountSecretsStep(mountSecretsBootstrap)

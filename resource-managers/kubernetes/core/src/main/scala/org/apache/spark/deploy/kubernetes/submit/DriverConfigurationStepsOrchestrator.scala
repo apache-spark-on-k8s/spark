@@ -169,9 +169,9 @@ private[spark] class DriverConfigurationStepsOrchestrator(
 
     val mountSecretsStep = if (driverSecretNamesToMountPaths.nonEmpty) {
       val mountSecretsBootstrap = new MountSecretsBootstrapImpl(driverSecretNamesToMountPaths)
-      Option(new MountSecretsStep(mountSecretsBootstrap))
+      Some(new MountSecretsStep(mountSecretsBootstrap))
     } else {
-      Option.empty[DriverConfigurationStep]
+      None
     }
 
     Seq(

@@ -32,11 +32,7 @@ private[spark] class MountSecretsBootstrapSuite extends SparkFunSuite {
       SECRET_BAR -> SECRET_MOUNT_PATH)
 
     val driverContainer = new ContainerBuilder().build()
-    val driverPod = new PodBuilder()
-      .withNewSpec()
-        .addToContainers(driverContainer)
-        .endSpec()
-      .build()
+    val driverPod = new PodBuilder().build()
 
     val mountSecretsBootstrap = new MountSecretsBootstrapImpl(secretNamesToMountPaths)
     val (driverPodWithSecretsMounted, driverContainerWithSecretsMounted) =

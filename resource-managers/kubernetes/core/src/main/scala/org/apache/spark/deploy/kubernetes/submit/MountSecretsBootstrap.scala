@@ -38,13 +38,13 @@ private[spark] class MountSecretsBootstrapImpl(
 
   override def mountSecrets(pod: Pod, container: Container): (Pod, Container) = {
     var podBuilder = new PodBuilder(pod)
-    secretNamesToMountPaths.foreach(namePath =>
+    secretNamesToMountPaths.keys.foreach(name =>
       podBuilder = podBuilder
         .editOrNewSpec()
           .addNewVolume()
-            .withName(secretVolumeName(namePath._1))
+            .withName(secretVolumeName(name))
             .withNewSecret()
-              .withSecretName(namePath._1)
+              .withSecretName(name)
               .endSecret()
             .endVolume()
           .endSpec())
