@@ -93,6 +93,15 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_EXECUTOR_MEMORY_OVERHEAD_FACTOR =
+    ConfigBuilder("spark.kubernetes.executor.memoryOverheadFactor")
+      .doc("The additional percentage of the executor heap to request from Kubernetes for pods" +
+        " memory limits, e.g. 0.10 for 10% overhead.  This is overridden by" +
+        " spark.kubernetes.executor.memoryOverhead")
+      .doubleConf
+      .checkValue(_ > 0, "Overhead factors must be positive")
+      .createWithDefault(0.1)
+
   // Note that while we set a default for this when we start up the
   // scheduler, the specific default value is dynamically determined
   // based on the executor memory.
@@ -112,6 +121,15 @@ package object config extends Logging {
         " memory size (typically 6-10%).")
       .bytesConf(ByteUnit.MiB)
       .createOptional
+
+  private[spark] val KUBERNETES_DRIVER_MEMORY_OVERHEAD_FACTOR =
+    ConfigBuilder("spark.kubernetes.driver.memoryOverheadFactor")
+      .doc("The additional percentage of the driver heap to request from Kubernetes for pod" +
+        " memory limits, e.g. 0.10 for 10% overhead.  This is overridden by" +
+        " spark.kubernetes.driver.memoryOverhead")
+      .doubleConf
+      .checkValue(_ > 0, "Overhead factors must be positive")
+      .createWithDefault(0.1)
 
   private[spark] val KUBERNETES_DRIVER_LABEL_PREFIX = "spark.kubernetes.driver.label."
   private[spark] val KUBERNETES_DRIVER_ANNOTATION_PREFIX = "spark.kubernetes.driver.annotation."

@@ -52,9 +52,10 @@ private[spark] class BaseDriverConfigurationStep(
       org.apache.spark.internal.config.DRIVER_MEMORY.key,
       org.apache.spark.internal.config.DRIVER_MEMORY.defaultValueString)
   private val memoryOverheadMiB = submissionSparkConf
-      .get(KUBERNETES_DRIVER_MEMORY_OVERHEAD)
-      .getOrElse(math.max((MEMORY_OVERHEAD_FACTOR * driverMemoryMiB).toInt,
-          MEMORY_OVERHEAD_MIN_MIB))
+    .get(KUBERNETES_DRIVER_MEMORY_OVERHEAD)
+    .getOrElse(math.max(
+      (submissionSparkConf.get(KUBERNETES_DRIVER_MEMORY_OVERHEAD_FACTOR) * driverMemoryMiB).toInt,
+      MEMORY_OVERHEAD_MIN_MIB))
   private val driverContainerMemoryWithOverheadMiB = driverMemoryMiB + memoryOverheadMiB
   private val driverDockerImage = submissionSparkConf.get(DRIVER_DOCKER_IMAGE)
 

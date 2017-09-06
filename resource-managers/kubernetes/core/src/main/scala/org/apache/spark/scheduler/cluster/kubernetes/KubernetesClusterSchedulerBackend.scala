@@ -120,7 +120,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   private val memoryOverheadMiB = conf
     .get(KUBERNETES_EXECUTOR_MEMORY_OVERHEAD)
-    .getOrElse(math.max((MEMORY_OVERHEAD_FACTOR * executorMemoryMiB).toInt,
+    .getOrElse(math.max(
+      (conf.get(KUBERNETES_EXECUTOR_MEMORY_OVERHEAD_FACTOR) * executorMemoryMiB).toInt,
       MEMORY_OVERHEAD_MIN_MIB))
   private val executorMemoryWithOverheadMiB = executorMemoryMiB + memoryOverheadMiB
 

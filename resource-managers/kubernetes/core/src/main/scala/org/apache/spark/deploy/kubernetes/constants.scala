@@ -100,6 +100,5 @@ package object constants {
   private[spark] val ANNOTATION_EXECUTOR_NODE_AFFINITY = "scheduler.alpha.kubernetes.io/affinity"
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
-  private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
   private[spark] val MEMORY_OVERHEAD_MIN_MIB = 384L
 }
