@@ -141,6 +141,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
       orchestrator,
       classOf[BaseDriverConfigurationStep],
+      classOf[DriverAddressConfigurationStep],
       classOf[DriverKubernetesCredentialsStep],
       classOf[DependencyResolutionStep],
       classOf[MountSecretsStep])
