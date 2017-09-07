@@ -18,7 +18,7 @@ package org.apache.spark.deploy.kubernetes.submit
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
-import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSmallLocalFilesStep, PythonStep}
+import org.apache.spark.deploy.kubernetes.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSmallLocalFilesStep, PythonStep}
 
 private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunSuite {
 
@@ -47,6 +47,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
+        classOf[DriverAddressConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep])
   }
@@ -69,6 +70,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
+        classOf[DriverAddressConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[InitContainerBootstrapStep])
@@ -90,6 +92,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
+        classOf[DriverAddressConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[PythonStep])
@@ -111,6 +114,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
+        classOf[DriverAddressConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[MountSmallLocalFilesStep])
