@@ -29,6 +29,9 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
   private val MAIN_CLASS = "org.apache.spark.examples.SparkPi"
   private val APP_ARGS = Array("arg1", "arg2")
   private val ADDITIONAL_PYTHON_FILES = Seq("local:///var/apps/python/py1.py")
+  private val SECRET_FOO = "foo"
+  private val SECRET_BAR = "bar"
+  private val SECRET_MOUNT_PATH = "/etc/secrets/driver"
 
   test("Base submission steps without an init-container or python files.") {
     val sparkConf = new SparkConf(false)
@@ -118,6 +121,29 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[MountSmallLocalFilesStep])
+  }
+
+  test("Submission steps with driver secrets to mount") {
+    val sparkConf = new SparkConf(false)
+      .set(s"$KUBERNETES_DRIVER_SECRETS_PREFIX$SECRET_FOO", SECRET_MOUNT_PATH)
+      .set(s"$KUBERNETES_DRIVER_SECRETS_PREFIX$SECRET_BAR", SECRET_MOUNT_PATH)
+    val mainAppResource = JavaMainAppResource("local:///var/apps/jars/main.jar")
+    val orchestrator = new DriverConfigurationStepsOrchestrator(
+      NAMESPACE,
+      APP_ID,
+      LAUNCH_TIME,
+      mainAppResource,
+      APP_NAME,
+      MAIN_CLASS,
+      APP_ARGS,
+      ADDITIONAL_PYTHON_FILES,
+      sparkConf)
+    validateStepTypes(
+      orchestrator,
+      classOf[BaseDriverConfigurationStep],
+      classOf[DriverKubernetesCredentialsStep],
+      classOf[DependencyResolutionStep],
+      classOf[MountSecretsStep])
   }
 
   private def validateStepTypes(
