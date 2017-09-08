@@ -26,7 +26,10 @@ import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.deploy.kubernetes.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl}
 import org.apache.spark.internal.Logging
+import org.apache.spark.network.netty.SparkTransportConf
+import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
 import org.apache.spark.scheduler.{ExternalClusterManager, SchedulerBackend, TaskScheduler, TaskSchedulerImpl}
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 private[spark] class KubernetesClusterManager extends ExternalClusterManager with Logging {
 
@@ -109,18 +112,38 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         sparkConf,
         Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH)),
         Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH)))
+
+    val kubernetesShuffleManager = if (Utils.isDynamicAllocationEnabled(sparkConf)) {
+      val kubernetesExternalShuffleClient = new KubernetesExternalShuffleClientImpl(
+        SparkTransportConf.fromSparkConf(sparkConf, "shuffle"),
+        sc.env.securityManager,
+        sc.env.securityManager.isAuthenticationEnabled())
+      Some(new KubernetesExternalShuffleManagerImpl(
+        sparkConf,
+        kubernetesClient,
+        kubernetesExternalShuffleClient))
+    } else None
+
     val executorPodFactory = new ExecutorPodFactoryImpl(
         sparkConf,
         NodeAffinityExecutorPodModifierImpl,
         mountSecretBootstrap,
         mountSmallFilesBootstrap,
         executorInitContainerBootstrap,
-        executorInitContainerSecretVolumePlugin)
+        executorInitContainerSecretVolumePlugin,
+        kubernetesShuffleManager)
+    val allocatorExecutor = ThreadUtils
+        .newDaemonSingleThreadScheduledExecutor("kubernetes-pod-allocator")
+    val requestExecutorsService = ThreadUtils.newDaemonCachedThreadPool(
+        "kubernetes-executor-requests")
     new KubernetesClusterSchedulerBackend(
-        sc.taskScheduler.asInstanceOf[TaskSchedulerImpl],
-        sc,
+        scheduler.asInstanceOf[TaskSchedulerImpl],
+        sc.env.rpcEnv,
         executorPodFactory,
-        kubernetesClient)
+        kubernetesShuffleManager,
+        kubernetesClient,
+        allocatorExecutor,
+        requestExecutorsService)
   }
 
   override def initialize(scheduler: TaskScheduler, backend: SchedulerBackend): Unit = {
