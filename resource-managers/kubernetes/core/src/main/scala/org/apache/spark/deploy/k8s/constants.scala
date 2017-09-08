@@ -71,6 +71,7 @@ package object constants {
   private[spark] val ENV_PYSPARK_PRIMARY = "PYSPARK_PRIMARY"
   private[spark] val ENV_JAVA_OPT_PREFIX = "SPARK_JAVA_OPT_"
   private[spark] val ENV_MOUNTED_FILES_FROM_SECRET_DIR = "SPARK_MOUNTED_FILES_FROM_SECRET_DIR"
+  private[spark] val ENV_SPARK_LOCAL_DIRS = "SPARK_LOCAL_DIRS"
 
   // Bootstrapping dependencies with the init-container
   private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
@@ -102,4 +103,5 @@ package object constants {
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
   private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
   private[spark] val MEMORY_OVERHEAD_MIN_MIB = 384L
+  private[spark] val GENERATED_LOCAL_DIR_MOUNT_ROOT = "/mnt/tmp/spark-local"
 }

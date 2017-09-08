@@ -16,7 +16,9 @@
  */
 package org.apache.spark.scheduler.cluster.k8s
 
-import scala.collection.JavaConverters._
+import java.io.File
+import java.nio.file.Paths
+import java.util.UUID
 
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 
@@ -262,9 +264,53 @@ private[spark] class ExecutorPodFactoryImpl(
     val executorPodWithNodeAffinity =
         nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
             executorPodWithInitContainer, nodeToLocalTaskCount)
-    new PodBuilder(executorPodWithNodeAffinity)
+
+    val (executorPodWithTempLocalDirs, executorContainerWithTempLocalDirs) =
+        if (shuffleManager.isEmpty) {
+          // If we're not using the external shuffle manager, we should use emptyDir volumes for
+          // shuffle directories since it's important for disk I/O for these directories to be
+          // performant. If the user has not provided a local directory, instead of using the
+          // Java temporary directory, we create one instead. This is because we want to avoid
+          // as much as possible mounting an emptyDir which overlaps with an existing path in
+          // the Docker image, which is very likely what would happen if we tried to mount the
+          // volume at Java's temporary directory path, which is /tmp in many JDKs.
+          val resolvedLocalDirs = sparkConf.get(
+              "spark.local.dir", s"$GENERATED_LOCAL_DIR_MOUNT_ROOT/${UUID.randomUUID()}")
+              .split(",")
+          val localDirVolumes = resolvedLocalDirs.zipWithIndex.map { case (dir, index) =>
+            new VolumeBuilder()
+              .withName(s"spark-local-dir-$index-${Paths.get(dir).getFileName.toString}")
+              .withNewEmptyDir().endEmptyDir()
+              .build()
+          }
+          val localDirVolumeMounts = localDirVolumes.zip(resolvedLocalDirs).map {
+            case (volume, path) =>
+              new VolumeMountBuilder()
+                .withName(volume.getName)
+                .withMountPath(path)
+                .build()
+          }
+          // Setting the SPARK_LOCAL_DIRS environment variable will force the executor to use the
+          // generated directory if the user did not provide one, as opposed to using the Java
+          // temporary directory. This also overrides the value of spark.local.dir in SparkConf,
+          // which is intended. See Utils#getConfiguredLocalDirs().
+          (new PodBuilder(executorPodWithNodeAffinity)
+            .editSpec()
+              .addToVolumes(localDirVolumes: _*)
+              .endSpec()
+            .build(),
+            new ContainerBuilder(initBootstrappedExecutorContainer)
+              .addToVolumeMounts(localDirVolumeMounts: _*)
+              .addNewEnv()
+                .withName(ENV_SPARK_LOCAL_DIRS)
+                .withValue(resolvedLocalDirs.mkString(","))
+                .endEnv()
+              .build())
+        } else (executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+
+    new PodBuilder(executorPodWithTempLocalDirs)
       .editSpec()
-        .addToContainers(initBootstrappedExecutorContainer)
+        .addToContainers(executorContainerWithTempLocalDirs)
         .endSpec()
       .build()
   }

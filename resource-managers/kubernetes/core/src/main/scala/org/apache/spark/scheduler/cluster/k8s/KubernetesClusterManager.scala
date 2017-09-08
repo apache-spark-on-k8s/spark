@@ -113,15 +113,16 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH)),
         Some(new File(Config.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH)))
 
-    val kubernetesShuffleManager = if (Utils.isDynamicAllocationEnabled(sparkConf)) {
+    val kubernetesShuffleManager = if (sparkConf.get(
+        org.apache.spark.internal.config.SHUFFLE_SERVICE_ENABLED)) {
       val kubernetesExternalShuffleClient = new KubernetesExternalShuffleClientImpl(
-        SparkTransportConf.fromSparkConf(sparkConf, "shuffle"),
-        sc.env.securityManager,
-        sc.env.securityManager.isAuthenticationEnabled())
+          SparkTransportConf.fromSparkConf(sparkConf, "shuffle"),
+          sc.env.securityManager,
+          sc.env.securityManager.isAuthenticationEnabled())
       Some(new KubernetesExternalShuffleManagerImpl(
-        sparkConf,
-        kubernetesClient,
-        kubernetesExternalShuffleClient))
+          sparkConf,
+          kubernetesClient,
+          kubernetesExternalShuffleClient))
     } else None
 
     val executorPodFactory = new ExecutorPodFactoryImpl(
