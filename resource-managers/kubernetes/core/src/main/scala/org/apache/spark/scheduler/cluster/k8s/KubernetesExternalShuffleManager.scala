@@ -138,6 +138,12 @@ private[spark] class KubernetesExternalShuffleManagerImpl(
   }
 
   override def getExecutorShuffleDirVolumesWithMounts(): Seq[(Volume, VolumeMount)] = {
+    // TODO: Using hostPath for the local directory will also make it such that the
+    // other uses of the local directory - broadcasting and caching - will also write
+    // to the directory that the shuffle service is aware of. It would be better for
+    // these directories to be separate so that the lifetime of the non-shuffle scratch
+    // space is tied to an emptyDir instead of the hostPath. This requires a change in
+    // core Spark as well.
     shuffleDirs.zipWithIndex.map {
       case (shuffleDir, shuffleDirIndex) =>
         val volumeName = s"$shuffleDirIndex-${FilenameUtils.getBaseName(shuffleDir)}"
