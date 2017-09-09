@@ -67,9 +67,7 @@ private[spark] class KubernetesExternalShuffleManagerImpl(
         s"but no ${KUBERNETES_SHUFFLE_LABELS.key} specified")
   }
   private val externalShufflePort = sparkConf.getInt("spark.shuffle.service.port", 7337)
-  private val shuffleDirs = sparkConf.get(KUBERNETES_SHUFFLE_DIR).map {
-    _.split(",")
-  }.getOrElse(Utils.getConfiguredLocalDirs(sparkConf))
+  private val shuffleDirs = Utils.getConfiguredLocalDirs(sparkConf)
   private var shufflePodCache = scala.collection.mutable.Map[String, String]()
   private var watcher: Watch = _
 
