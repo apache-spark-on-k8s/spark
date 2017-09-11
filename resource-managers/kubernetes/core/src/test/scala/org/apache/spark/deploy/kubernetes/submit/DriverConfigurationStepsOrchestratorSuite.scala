@@ -51,7 +51,8 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         orchestrator,
         classOf[BaseDriverConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
-        classOf[DependencyResolutionStep])
+        classOf[DependencyResolutionStep],
+        classOf[LocalDirectoryMountConfigurationStep])
   }
 
   test("Submission steps with an init-container.") {
@@ -74,6 +75,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         classOf[BaseDriverConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
+        classOf[LocalDirectoryMountConfigurationStep],
         classOf[InitContainerBootstrapStep])
   }
 
@@ -95,6 +97,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         classOf[BaseDriverConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
+        classOf[LocalDirectoryMountConfigurationStep],
         classOf[PythonStep])
   }
 
@@ -116,6 +119,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         classOf[BaseDriverConfigurationStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
+        classOf[LocalDirectoryMountConfigurationStep],
         classOf[MountSmallLocalFilesStep])
   }
 
@@ -139,6 +143,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
       classOf[BaseDriverConfigurationStep],
       classOf[DriverKubernetesCredentialsStep],
       classOf[DependencyResolutionStep],
+      classOf[LocalDirectoryMountConfigurationStep],
       classOf[MountSecretsStep])
   }
 

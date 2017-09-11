@@ -101,6 +101,9 @@ private[spark] class DriverConfigurationStepsOrchestrator(
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         submissionSparkConf, kubernetesResourceNamePrefix)
 
+    val localDirectoryMountConfigurationStep = new LocalDirectoryMountConfigurationStep(
+        submissionSparkConf)
+
     val pythonStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
@@ -177,7 +180,8 @@ private[spark] class DriverConfigurationStepsOrchestrator(
     Seq(
       initialSubmissionStep,
       kubernetesCredentialsStep,
-      dependencyResolutionStep) ++
+      dependencyResolutionStep,
+      localDirectoryMountConfigurationStep) ++
       submittedDependenciesBootstrapSteps ++
       pythonStep.toSeq ++
       mountSecretsStep.toSeq
