@@ -143,6 +143,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val conf = baseConf.clone()
     conf.set(KUBERNETES_SHUFFLE_LABELS, "label=value")
     conf.set(KUBERNETES_SHUFFLE_NAMESPACE, "default")
+    conf.set(KUBERNETES_SHUFFLE_DIR, "/tmp")
 
     val kubernetesExternalShuffleClient = new KubernetesExternalShuffleClientImpl(
       SparkTransportConf.fromSparkConf(conf, "shuffle"),
@@ -185,7 +186,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName == "secret1")
 
     checkOwnerReferences(executor, driverPodUid)
-    checkEnv(executor, Set())
+    checkEnv(executor, Set("SPARK_MOUNTED_FILES_FROM_SECRET_DIR"))
   }
 
   test("classpath and extra java options get translated into environment variables") {
