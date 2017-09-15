@@ -14,16 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.spark.scheduler.cluster.kubernetes
 
-package org.apache.spark.network.shuffle.kubernetes;
+import java.net.InetAddress
 
-import java.io.Closeable;
-import java.io.IOException;
+/**
+ * Gets full host names of given IP addresses from DNS.
+ */
+private[kubernetes] trait InetAddressUtil {
 
-public interface KubernetesExternalShuffleClient extends Closeable {
+  def getFullHostName(ipAddress: String): String
+}
 
-  void init(String appId);
+private[kubernetes] object InetAddressUtilImpl extends InetAddressUtil {
 
-  void registerDriverWithShuffleService(String host, int port)
-      throws IOException, InterruptedException;
+  // NOTE: This does issue a network call to DNS. Caching is done internally by the InetAddress
+  // class for both hits and misses.
+  override def getFullHostName(ipAddress: String): String = {
+    InetAddress.getByName(ipAddress).getCanonicalHostName
+  }
 }

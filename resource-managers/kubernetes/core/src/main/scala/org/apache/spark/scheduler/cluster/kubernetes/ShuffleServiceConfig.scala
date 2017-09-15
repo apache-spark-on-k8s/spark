@@ -14,16 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.spark.scheduler.cluster.kubernetes
 
-package org.apache.spark.network.shuffle.kubernetes;
-
-import java.io.Closeable;
-import java.io.IOException;
-
-public interface KubernetesExternalShuffleClient extends Closeable {
-
-  void init(String appId);
-
-  void registerDriverWithShuffleService(String host, int port)
-      throws IOException, InterruptedException;
-}
+private[spark] case class ShuffleServiceConfig(
+    shuffleNamespace: String,
+    shuffleLabels: Map[String, String],
+    shuffleDirs: Seq[String])

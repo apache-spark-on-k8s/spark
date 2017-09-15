@@ -44,11 +44,11 @@ package object constants {
   private[spark] val DRIVER_CREDENTIALS_SECRET_VOLUME_NAME = "kubernetes-credentials"
 
   // Default and fixed ports
-  private[spark] val SUBMISSION_SERVER_PORT = 7077
   private[spark] val DEFAULT_DRIVER_PORT = 7078
   private[spark] val DEFAULT_BLOCKMANAGER_PORT = 7079
   private[spark] val DEFAULT_UI_PORT = 4040
   private[spark] val BLOCK_MANAGER_PORT_NAME = "blockmanager"
+  private[spark] val DRIVER_PORT_NAME = "driver-rpc-port"
   private[spark] val EXECUTOR_PORT_NAME = "executor"
 
   // Environment Variables
@@ -69,6 +69,8 @@ package object constants {
   private[spark] val ENV_MOUNTED_FILES_DIR = "SPARK_MOUNTED_FILES_DIR"
   private[spark] val ENV_PYSPARK_FILES = "PYSPARK_FILES"
   private[spark] val ENV_PYSPARK_PRIMARY = "PYSPARK_PRIMARY"
+  private[spark] val ENV_JAVA_OPT_PREFIX = "SPARK_JAVA_OPT_"
+  private[spark] val ENV_MOUNTED_FILES_FROM_SECRET_DIR = "SPARK_MOUNTED_FILES_FROM_SECRET_DIR"
 
   // Bootstrapping dependencies with the init-container
   private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
@@ -91,10 +93,13 @@ package object constants {
   private[spark] val DEFAULT_SHUFFLE_MOUNT_NAME = "shuffle"
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_NAME = "spark-init-secret"
 
+  // Bootstrapping dependencies via a secret
+  private[spark] val MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH = "/etc/spark-submitted-files"
+
   // Miscellaneous
   private[spark] val ANNOTATION_EXECUTOR_NODE_AFFINITY = "scheduler.alpha.kubernetes.io/affinity"
   private[spark] val DRIVER_CONTAINER_NAME = "spark-kubernetes-driver"
   private[spark] val KUBERNETES_MASTER_INTERNAL_URL = "https://kubernetes.default.svc"
   private[spark] val MEMORY_OVERHEAD_FACTOR = 0.10
-  private[spark] val MEMORY_OVERHEAD_MIN = 384L
+  private[spark] val MEMORY_OVERHEAD_MIN_MIB = 384L
 }

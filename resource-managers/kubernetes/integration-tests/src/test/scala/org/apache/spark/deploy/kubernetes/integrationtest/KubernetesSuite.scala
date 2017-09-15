@@ -16,9 +16,9 @@
  */
 package org.apache.spark.deploy.kubernetes.integrationtest
 
-import java.io.File
+import java.io.{File, FileOutputStream}
 import java.nio.file.Paths
-import java.util.UUID
+import java.util.{Properties, UUID}
 
 import com.google.common.base.Charsets
 import com.google.common.io.Files
@@ -213,17 +213,68 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Added files should be placed in the driver's working directory.") {
     assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    launchStagingServer(SSLOptions(), None)
     val testExistenceFileTempDir = Utils.createTempDir(namePrefix = "test-existence-file-temp-dir")
     val testExistenceFile = new File(testExistenceFileTempDir, "input.txt")
     Files.write(TEST_EXISTENCE_FILE_CONTENTS, testExistenceFile, Charsets.UTF_8)
-    launchStagingServer(SSLOptions(), None)
     sparkConf.set("spark.files", testExistenceFile.getAbsolutePath)
     runSparkApplicationAndVerifyCompletion(
         JavaMainAppResource(SUBMITTER_LOCAL_MAIN_APP_RESOURCE),
         FILE_EXISTENCE_MAIN_CLASS,
-        Seq(s"File found at /opt/spark/${testExistenceFile.getName} with correct contents."),
+        Seq(
+          s"File found at /opt/spark/work-dir/${testExistenceFile.getName} with correct contents.",
+          s"File found on the executors at the relative path ${testExistenceFile.getName} with" +
+            s" the correct contents."),
         Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
         Seq.empty[String])
+  }
+
+  test("Setting JVM options on the driver and executors with spaces.") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    launchStagingServer(SSLOptions(), None)
+    val driverJvmOptionsFile = storeJvmOptionsInTempFile(
+        Map("simpleDriverConf" -> "simpleDriverConfValue",
+            "driverconfwithspaces" -> "driver conf with spaces value"),
+        "driver-jvm-options.properties",
+        "JVM options that should be set on the driver.")
+    val executorJvmOptionsFile = storeJvmOptionsInTempFile(
+        Map("simpleExecutorConf" -> "simpleExecutorConfValue",
+            "executor conf with spaces" -> "executor conf with spaces value"),
+        "executor-jvm-options.properties",
+        "JVM options that should be set on the executors.")
+    sparkConf.set(SparkLauncher.DRIVER_EXTRA_JAVA_OPTIONS,
+        "-DsimpleDriverConf=simpleDriverConfValue" +
+            " -Ddriverconfwithspaces='driver conf with spaces value'")
+    sparkConf.set(SparkLauncher.EXECUTOR_EXTRA_JAVA_OPTIONS,
+        "-DsimpleExecutorConf=simpleExecutorConfValue" +
+            " -D\'executor conf with spaces\'=\'executor conf with spaces value\'")
+    sparkConf.set("spark.files",
+        Seq(driverJvmOptionsFile.getAbsolutePath, executorJvmOptionsFile.getAbsolutePath)
+            .mkString(","))
+    runSparkApplicationAndVerifyCompletion(
+        JavaMainAppResource(SUBMITTER_LOCAL_MAIN_APP_RESOURCE),
+        JAVA_OPTIONS_MAIN_CLASS,
+        Seq(s"All expected JVM options were present on the driver and executors."),
+        Array(driverJvmOptionsFile.getName, executorJvmOptionsFile.getName),
+        Seq.empty[String])
+  }
+
+  test("Submit small local files without the resource staging server.") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
+    val testExistenceFileTempDir = Utils.createTempDir(namePrefix = "test-existence-file-temp-dir")
+    val testExistenceFile = new File(testExistenceFileTempDir, "input.txt")
+    Files.write(TEST_EXISTENCE_FILE_CONTENTS, testExistenceFile, Charsets.UTF_8)
+    sparkConf.set("spark.files", testExistenceFile.getAbsolutePath)
+    runSparkApplicationAndVerifyCompletion(
+      JavaMainAppResource(CONTAINER_LOCAL_MAIN_APP_RESOURCE),
+      FILE_EXISTENCE_MAIN_CLASS,
+      Seq(
+        s"File found at /opt/spark/work-dir/${testExistenceFile.getName} with correct contents.",
+        s"File found on the executors at the relative path ${testExistenceFile.getName} with" +
+          s" the correct contents."),
+      Array(testExistenceFile.getName, TEST_EXISTENCE_FILE_CONTENTS),
+      Seq.empty[String])
   }
 
   test("Use a very long application name.") {
@@ -339,6 +390,20 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       }
     }
   }
+
+  private def storeJvmOptionsInTempFile(
+      options: Map[String, String],
+      propertiesFileName: String,
+      comments: String): File = {
+    val tempDir = Utils.createTempDir()
+    val propertiesFile = new File(tempDir, propertiesFileName)
+    val properties = new Properties()
+    options.foreach { case (propKey, propValue) => properties.setProperty(propKey, propValue) }
+    Utils.tryWithResource(new FileOutputStream(propertiesFile)) { os =>
+      properties.store(os, comments)
+    }
+    propertiesFile
+  }
 }
 
 private[spark] object KubernetesSuite {
@@ -368,6 +433,8 @@ private[spark] object KubernetesSuite {
     ".integrationtest.jobs.FileExistenceTest"
   val GROUP_BY_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
     ".integrationtest.jobs.GroupByTest"
+  val JAVA_OPTIONS_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
+    ".integrationtest.jobs.JavaOptionsTest"
   val TEST_EXISTENCE_FILE_CONTENTS = "contents"
 
   case object ShuffleNotReadyException extends Exception

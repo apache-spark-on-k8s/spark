@@ -152,6 +152,9 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_DRIVER_SECRETS_PREFIX = "spark.kubernetes.driver.secrets."
+  private[spark] val KUBERNETES_EXECUTOR_SECRETS_PREFIX = "spark.kubernetes.executor.secrets."
+
   private[spark] val KUBERNETES_DRIVER_POD_NAME =
     ConfigBuilder("spark.kubernetes.driver.pod.name")
       .doc("Name of the driver pod.")
@@ -449,6 +452,22 @@ package object config extends Logging {
         " executor pods.")
       .timeConf(TimeUnit.MINUTES)
       .createWithDefault(5)
+
+  private[spark] val EXECUTOR_SUBMITTED_SMALL_FILES_SECRET =
+    ConfigBuilder("spark.kubernetes.mountdependencies.smallfiles.executor.secretName")
+      .doc("Name of the secret that should be mounted into the executor containers for" +
+        " distributing submitted small files without the resource staging server.")
+      .internal()
+      .stringConf
+      .createOptional
+
+  private[spark] val EXECUTOR_SUBMITTED_SMALL_FILES_SECRET_MOUNT_PATH =
+    ConfigBuilder("spark.kubernetes.mountdependencies.smallfiles.executor.secretMountPath")
+      .doc(s"Mount path in the executors for the secret given by" +
+        s" ${EXECUTOR_SUBMITTED_SMALL_FILES_SECRET.key}")
+      .internal()
+      .stringConf
+      .createOptional
 
   private[spark] val EXECUTOR_INIT_CONTAINER_CONFIG_MAP =
     ConfigBuilder("spark.kubernetes.initcontainer.executor.configmapname")

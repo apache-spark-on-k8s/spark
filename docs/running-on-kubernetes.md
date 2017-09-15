@@ -17,11 +17,15 @@ cluster, you may setup a test cluster on your local machine using
 * You must have appropriate permissions to create and list [pods](https://kubernetes.io/docs/user-guide/pods/),
 [ConfigMaps](https://kubernetes.io/docs/tasks/configure-pod-container/configmap/) and
 [secrets](https://kubernetes.io/docs/concepts/configuration/secret/) in your cluster. You can verify that
-you can list these resources by running `kubectl get pods` `kubectl get configmap`, and `kubectl get secrets` which
+you can list these resources by running `kubectl get pods`, `kubectl get configmap`, and `kubectl get secrets` which
 should give you a list of pods and configmaps (if any) respectively.
+  * The service account or credentials used by the driver pods must have appropriate permissions
+    as well for editing pod spec.
 * You must have a spark distribution with Kubernetes support. This may be obtained from the
 [release tarball](https://github.com/apache-spark-on-k8s/spark/releases) or by
 [building Spark with Kubernetes support](../resource-managers/kubernetes/README.md#building-spark-with-kubernetes-support).
+* You must have [Kubernetes DNS](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) configured in
+your cluster.
 
 ## Driver & Executor Images
 
@@ -36,15 +40,15 @@ If you wish to use pre-built docker images, you may use the images published in
 <tr><th>Component</th><th>Image</th></tr>
 <tr>
   <td>Spark Driver Image</td>
-  <td><code>kubespark/spark-driver:v2.1.0-kubernetes-0.2.0</code></td>
+  <td><code>kubespark/spark-driver:v2.2.0-kubernetes-0.3.0</code></td>
 </tr>
 <tr>
   <td>Spark Executor Image</td>
-  <td><code>kubespark/spark-executor:v2.1.0-kubernetes-0.2.0</code></td>
+  <td><code>kubespark/spark-executor:v2.2.0-kubernetes-0.3.0</code></td>
 </tr>
 <tr>
   <td>Spark Initialization Image</td>
-  <td><code>kubespark/spark-init:v2.1.0-kubernetes-0.2.0</code></td>
+  <td><code>kubespark/spark-init:v2.2.0-kubernetes-0.3.0</code></td>
 </tr>
 </table>
 
@@ -57,7 +61,7 @@ to the registry.
 For example, if the registry host is `registry-host` and the registry is listening on port 5000:
 
     cd $SPARK_HOME
-    docker build -t registry-host:5000/spark-base:latest -f dockerfiles/driver/spark-base .
+    docker build -t registry-host:5000/spark-base:latest -f dockerfiles/spark-base/Dockerfile .
     docker build -t registry-host:5000/spark-driver:latest -f dockerfiles/driver/Dockerfile .
     docker build -t registry-host:5000/spark-executor:latest -f dockerfiles/executor/Dockerfile .
     docker build -t registry-host:5000/spark-init:latest -f dockerfiles/init-container/Dockerfile .
@@ -80,10 +84,10 @@ are set up as described above:
       --kubernetes-namespace default \
       --conf spark.executor.instances=5 \
       --conf spark.app.name=spark-pi \
-      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.1.0-kubernetes-0.2.0 \
-      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar
+      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.2.0-kubernetes-0.3.0 \
+      local:///opt/spark/examples/jars/spark-examples_2.11-2.2.0-k8s-0.3.0.jar
 
 The Spark master, specified either via passing the `--master` command line argument to `spark-submit` or by setting
 `spark.master` in the application's configuration, must be a URL with the format `k8s://<api_server_url>`. Prefixing the
@@ -107,6 +111,18 @@ Finally, notice that in the above example we specify a jar with a specific URI w
 the location of the example jar that is already in the Docker image. Using dependencies that are on your machine's local
 disk is discussed below.
 
+When Kubernetes [RBAC](https://kubernetes.io/docs/admin/authorization/rbac/) is enabled,
+the `default` service account used by the driver may not have appropriate pod `edit` permissions
+for launching executor pods. We recommend to add another service account, say `spark`, with
+the necessary privilege. For example:
+
+    kubectl create serviceaccount spark
+    kubectl create clusterrolebinding spark-edit --clusterrole edit  \
+        --serviceaccount default:spark --namespace default
+
+With this, one can add `--conf spark.kubernetes.authenticate.driver.serviceAccountName=spark` to
+the spark-submit command line above to specify the service account to use.
+
 ## Dependency Management
 
 Application dependencies that are being submitted from your machine need to be sent to a **resource staging server**
@@ -129,11 +145,11 @@ and then you can compute the value of Pi as follows:
       --kubernetes-namespace default \
       --conf spark.executor.instances=5 \
       --conf spark.app.name=spark-pi \
-      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.1.0-kubernetes-0.2.0 \
+      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.2.0-kubernetes-0.3.0 \
       --conf spark.kubernetes.resourceStagingServer.uri=http://<address-of-any-cluster-node>:31000 \
-      examples/jars/spark_examples_2.11-2.2.0.jar
+      examples/jars/spark-examples_2.11-2.2.0-k8s-0.3.0.jar
 
 The Docker image for the resource staging server may also be built from source, in a similar manner to the driver
 and executor images. The Dockerfile is provided in `dockerfiles/resource-staging-server/Dockerfile`.
@@ -170,10 +186,10 @@ If our local proxy were listening on port 8001, we would have our submission loo
       --kubernetes-namespace default \
       --conf spark.executor.instances=5 \
       --conf spark.app.name=spark-pi \
-      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.1.0-kubernetes-0.2.0 \
-      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar
+      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.2.0-kubernetes-0.3.0 \
+      local:///opt/spark/examples/jars/spark-examples_2.11-2.2.0-k8s-0.3.0.jar
 
 Communication between Spark and Kubernetes clusters is performed using the fabric8 kubernetes-client library.
 The above mechanism using `kubectl proxy` can be used when we have authentication providers that the fabric8
@@ -220,7 +236,7 @@ service because there may be multiple shuffle service instances running in a clu
 a way to target a particular shuffle service.
 
 For example, if the shuffle service we want to use is in the default namespace, and
-has pods with labels `app=spark-shuffle-service` and `spark-version=2.1.0`, we can
+has pods with labels `app=spark-shuffle-service` and `spark-version=2.2.0`, we can
 use those tags to target that particular shuffle service at job launch time. In order to run a job with dynamic allocation enabled,
 the command may then look like the following:
 
@@ -235,8 +251,8 @@ the command may then look like the following:
       --conf spark.dynamicAllocation.enabled=true \
       --conf spark.shuffle.service.enabled=true \
       --conf spark.kubernetes.shuffle.namespace=default \
-      --conf spark.kubernetes.shuffle.labels="app=spark-shuffle-service,spark-version=2.1.0" \
-      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar 10 400000 2
+      --conf spark.kubernetes.shuffle.labels="app=spark-shuffle-service,spark-version=2.2.0" \
+      local:///opt/spark/examples/jars/spark-examples_2.11-2.2.0-k8s-0.3.0.jar 10 400000 2
 
 ## Advanced
 
@@ -312,13 +328,13 @@ communicate with the resource staging server over TLS. The trustStore can be set
       --kubernetes-namespace default \
       --conf spark.executor.instances=5 \
       --conf spark.app.name=spark-pi \
-      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.1.0-kubernetes-0.2.0 \
-      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.1.0-kubernetes-0.2.0 \
+      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:v2.2.0-kubernetes-0.3.0 \
+      --conf spark.kubernetes.initcontainer.docker.image=kubespark/spark-init:v2.2.0-kubernetes-0.3.0 \
       --conf spark.kubernetes.resourceStagingServer.uri=https://<address-of-any-cluster-node>:31000 \
       --conf spark.ssl.kubernetes.resourceStagingServer.enabled=true \
       --conf spark.ssl.kubernetes.resourceStagingServer.clientCertPem=/home/myuser/cert.pem \
-      examples/jars/spark_examples_2.11-2.2.0.jar
+      examples/jars/spark-examples_2.11-2.2.0-k8s-0.3.0.jar
 
 ### Spark Properties
 
@@ -782,6 +798,22 @@ from the other deployment modes. See the [configuration page](configuration.html
   <td>
     Add the environment variable specified by <code>EnvironmentVariableName</code> to
     the Driver process. The user can specify multiple of these to set multiple environment variables.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.driver.secrets.[SecretName]</code></td>
+  <td>(none)</td>
+  <td>
+    Mounts the Kubernetes secret named <code>SecretName</code> onto the path specified by the value
+    in the driver Pod. The user can specify multiple instances of this for multiple secrets.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.executor.secrets.[SecretName]</code></td>
+  <td>(none)</td>
+  <td>
+    Mounts the Kubernetes secret named <code>SecretName</code> onto the path specified by the value
+    in the executor Pods. The user can specify multiple instances of this for multiple secrets.
   </td>
 </tr>
 </table>

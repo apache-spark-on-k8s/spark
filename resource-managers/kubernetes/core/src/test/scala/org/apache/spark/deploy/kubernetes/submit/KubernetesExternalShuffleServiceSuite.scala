@@ -20,7 +20,7 @@ import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.KubernetesExternalShuffleService
 import org.apache.spark.network.netty.SparkTransportConf
-import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClient
+import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
 
 private[spark] class KubernetesExternalShuffleServiceSuite extends SparkFunSuite {
 
@@ -32,7 +32,7 @@ private[spark] class KubernetesExternalShuffleServiceSuite extends SparkFunSuite
       SPARK_CONF,
       new SecurityManager(SPARK_CONF))
 
-    val shuffleClient = new KubernetesExternalShuffleClient(
+    val shuffleClient = new KubernetesExternalShuffleClientImpl(
       SparkTransportConf.fromSparkConf(SPARK_CONF, "shuffle"),
       new SecurityManager(SPARK_CONF),
       false)
