@@ -38,15 +38,15 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   private val executorImage: String = "executor-image"
   private val driverPod = new PodBuilder()
     .withNewMetadata()
-    .withName(driverPodName)
-    .withUid(driverPodUid)
-    .endMetadata()
+      .withName(driverPodName)
+      .withUid(driverPodUid)
+      .endMetadata()
     .withNewSpec()
-    .withNodeName("some-node")
-    .endSpec()
+      .withNodeName("some-node")
+      .endSpec()
     .withNewStatus()
-    .withHostIP("192.168.99.100")
-    .endStatus()
+      .withHostIP("192.168.99.100")
+      .endStatus()
     .build()
   private var baseConf: SparkConf = _
   private var sc: SparkContext = _
