@@ -635,7 +635,7 @@ object SparkSubmit extends CommandLineUtils {
     }
 
     if (isKubernetesCluster) {
-      childMainClass = "org.apache.spark.deploy.kubernetes.submit.Client"
+      childMainClass = "org.apache.spark.deploy.k8s.submit.Client"
       if (args.isPython) {
         childArgs ++= Array("--primary-py-file", args.primaryResource)
         childArgs ++= Array("--main-class", "org.apache.spark.deploy.PythonRunner")

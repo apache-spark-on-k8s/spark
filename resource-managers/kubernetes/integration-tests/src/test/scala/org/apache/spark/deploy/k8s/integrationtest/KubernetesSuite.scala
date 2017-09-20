@@ -421,7 +421,7 @@ private[spark] object KubernetesSuite {
     s"integration-tests-jars/${HELPER_JAR_FILE.getName}"
   val TIMEOUT = PatienceConfiguration.Timeout(Span(2, Minutes))
   val INTERVAL = PatienceConfiguration.Interval(Span(2, Seconds))
-  val SPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
+  val SPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.SparkPiWithInfiniteWait"
   val PYSPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.PythonRunner"
   val PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION =
@@ -429,11 +429,11 @@ private[spark] object KubernetesSuite {
   val PYSPARK_SORT_CONTAINER_LOCAL_FILE_LOCATION =
     "local:///opt/spark/examples/src/main/python/sort.py"
   val PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION = "src/test/python/pi.py"
-  val FILE_EXISTENCE_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
+  val FILE_EXISTENCE_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.FileExistenceTest"
-  val GROUP_BY_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
+  val GROUP_BY_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.GroupByTest"
-  val JAVA_OPTIONS_MAIN_CLASS = "org.apache.spark.deploy.kubernetes" +
+  val JAVA_OPTIONS_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.JavaOptionsTest"
   val TEST_EXISTENCE_FILE_CONTENTS = "contents"
 
