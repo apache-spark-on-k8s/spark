@@ -72,10 +72,9 @@ private[spark] class DriverConfigurationStepsOrchestrator(
         .getOrElse(Array.empty[String]) ++
         additionalMainAppPythonFile.toSeq ++
         additionalPythonFiles
-    val driverCustomLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+    val driverCustomLabels = ConfigurationUtils.parsePrefixedKeyValuePairs(
         submissionSparkConf,
         KUBERNETES_DRIVER_LABEL_PREFIX,
-        KUBERNETES_DRIVER_LABELS,
         "label")
     require(!driverCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
         s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping" +

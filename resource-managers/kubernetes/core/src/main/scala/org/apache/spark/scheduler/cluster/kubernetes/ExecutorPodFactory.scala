@@ -56,10 +56,9 @@ private[spark] class ExecutorPodFactoryImpl(
       org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
   private val executorJarsDownloadDir = sparkConf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION)
 
-  private val executorLabels = ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+  private val executorLabels = ConfigurationUtils.parsePrefixedKeyValuePairs(
       sparkConf,
       KUBERNETES_EXECUTOR_LABEL_PREFIX,
-      KUBERNETES_EXECUTOR_LABELS,
       "executor label")
   require(
       !executorLabels.contains(SPARK_APP_ID_LABEL),
@@ -70,10 +69,9 @@ private[spark] class ExecutorPodFactoryImpl(
         s" Spark.")
 
   private val executorAnnotations =
-      ConfigurationUtils.combinePrefixedKeyValuePairsWithDeprecatedConf(
+      ConfigurationUtils.parsePrefixedKeyValuePairs(
           sparkConf,
           KUBERNETES_EXECUTOR_ANNOTATION_PREFIX,
-          KUBERNETES_EXECUTOR_ANNOTATIONS,
           "executor annotation")
   private val nodeSelector =
       ConfigurationUtils.parsePrefixedKeyValuePairs(
