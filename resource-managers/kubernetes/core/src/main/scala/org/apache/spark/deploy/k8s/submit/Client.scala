@@ -46,6 +46,8 @@ private[spark] object ClientArguments {
     args.sliding(2, 2).toList.collect {
       case Array("--primary-py-file", mainPyFile: String) =>
         mainAppResource = Some(PythonMainAppResource(mainPyFile))
+      case Array("--primary-r-file", primaryRFile: String) =>
+        mainAppResource = Some(RMainAppResource(primaryRFile))
       case Array("--primary-java-resource", primaryJavaResource: String) =>
         mainAppResource = Some(JavaMainAppResource(primaryJavaResource))
       case Array("--main-class", clazz: String) =>

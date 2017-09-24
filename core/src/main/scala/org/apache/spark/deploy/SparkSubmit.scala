@@ -346,8 +346,6 @@ object SparkSubmit extends CommandLineUtils {
     (clusterManager, deployMode) match {
       case (KUBERNETES, CLIENT) =>
         printErrorAndExit("Client mode is currently not supported for Kubernetes.")
-      case (KUBERNETES, CLUSTER) if args.isR =>
-        printErrorAndExit("Kubernetes does not currently support R applications.")
       case (STANDALONE, CLUSTER) if args.isPython =>
         printErrorAndExit("Cluster deploy mode is currently not supported for python " +
           "applications on standalone clusters.")
@@ -642,6 +640,9 @@ object SparkSubmit extends CommandLineUtils {
         if (args.pyFiles != null) {
           childArgs ++= Array("--other-py-files", args.pyFiles)
         }
+      } else if (args.isR) {
+        childArgs ++= Array("--primary-r-file", args.primaryResource)
+        childArgs ++= Array("--main-class", "org.apache.spark.deploy.RRunner")
       } else {
         childArgs ++= Array("--primary-java-resource", args.primaryResource)
         childArgs ++= Array("--main-class", args.mainClass)

@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s.submit
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.k8s.config._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep}
+import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 
 private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunSuite {
 
@@ -45,7 +45,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         APP_NAME,
         MAIN_CLASS,
         APP_ARGS,
-        ADDITIONAL_PYTHON_FILES,
+        Seq.empty[String],
         sparkConf)
     validateStepTypes(
         orchestrator,
@@ -68,7 +68,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         APP_NAME,
         MAIN_CLASS,
         APP_ARGS,
-        ADDITIONAL_PYTHON_FILES,
+        Seq.empty[String],
         sparkConf)
     validateStepTypes(
         orchestrator,
@@ -83,23 +83,46 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     val sparkConf = new SparkConf(false)
     val mainAppResource = PythonMainAppResource("local:///var/apps/python/main.py")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
-        NAMESPACE,
-        APP_ID,
-        LAUNCH_TIME,
-        mainAppResource,
-        APP_NAME,
-        MAIN_CLASS,
-        APP_ARGS,
-        ADDITIONAL_PYTHON_FILES,
-        sparkConf)
+      NAMESPACE,
+      APP_ID,
+      LAUNCH_TIME,
+      mainAppResource,
+      APP_NAME,
+      MAIN_CLASS,
+      APP_ARGS,
+      ADDITIONAL_PYTHON_FILES,
+      sparkConf)
     validateStepTypes(
-        orchestrator,
-        classOf[BaseDriverConfigurationStep],
-        classOf[DriverAddressConfigurationStep],
-        classOf[DriverKubernetesCredentialsStep],
-        classOf[DependencyResolutionStep],
-        classOf[PythonStep])
+      orchestrator,
+      classOf[BaseDriverConfigurationStep],
+      classOf[DriverAddressConfigurationStep],
+      classOf[DriverKubernetesCredentialsStep],
+      classOf[DependencyResolutionStep],
+      classOf[PythonStep])
   }
+
+  test("Submission steps with R file.") {
+    val sparkConf = new SparkConf(false)
+    val mainAppResource = RMainAppResource("local:///var/apps/r/main.r")
+    val orchestrator = new DriverConfigurationStepsOrchestrator(
+      NAMESPACE,
+      APP_ID,
+      LAUNCH_TIME,
+      mainAppResource,
+      APP_NAME,
+      MAIN_CLASS,
+      APP_ARGS,
+      Seq.empty[String],
+      sparkConf)
+    validateStepTypes(
+      orchestrator,
+      classOf[BaseDriverConfigurationStep],
+      classOf[DriverAddressConfigurationStep],
+      classOf[DriverKubernetesCredentialsStep],
+      classOf[DependencyResolutionStep],
+      classOf[RStep])
+  }
+
 
   test("Only local files without a resource staging server.") {
     val sparkConf = new SparkConf(false).set("spark.files", "/var/spark/file1.txt")
@@ -112,7 +135,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
         APP_NAME,
         MAIN_CLASS,
         APP_ARGS,
-        ADDITIONAL_PYTHON_FILES,
+        Seq.empty[String],
         sparkConf)
     validateStepTypes(
         orchestrator,
@@ -136,7 +159,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
       APP_NAME,
       MAIN_CLASS,
       APP_ARGS,
-      ADDITIONAL_PYTHON_FILES,
+      Seq.empty[String],
       sparkConf)
     validateStepTypes(
       orchestrator,

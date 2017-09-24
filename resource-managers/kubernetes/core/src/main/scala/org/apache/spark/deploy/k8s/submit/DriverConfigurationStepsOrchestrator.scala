@@ -20,7 +20,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.ConfigurationUtils
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep}
+import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{SystemClock, Utils}
@@ -63,6 +63,11 @@ private[spark] class DriverConfigurationStepsOrchestrator(
         Option(resource)
       case _ => Option.empty
     }
+    val additionalMainAppRFile = mainAppResource match {
+      case RMainAppResource(resource) if resource != SparkLauncher.NO_RESOURCE =>
+        Option(resource)
+      case _ => Option.empty
+    }
     val sparkJars = submissionSparkConf.getOption("spark.jars")
         .map(_.split(","))
         .getOrElse(Array.empty[String]) ++
@@ -71,6 +76,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
         .map(_.split(","))
         .getOrElse(Array.empty[String]) ++
         additionalMainAppPythonFile.toSeq ++
+        additionalMainAppRFile.toSeq ++
         additionalPythonFiles
     val driverCustomLabels = ConfigurationUtils.parsePrefixedKeyValuePairs(
         submissionSparkConf,
@@ -104,9 +110,11 @@ private[spark] class DriverConfigurationStepsOrchestrator(
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         submissionSparkConf, kubernetesResourceNamePrefix)
 
-    val pythonStep = mainAppResource match {
+    val resourceStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
+      case RMainAppResource(mainRFile) =>
+        Option(new RStep(mainRFile, filesDownloadPath))
       case _ => Option.empty[DriverConfigurationStep]
     }
 
@@ -183,7 +191,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
       kubernetesCredentialsStep,
       dependencyResolutionStep) ++
       submittedDependenciesBootstrapSteps ++
-      pythonStep.toSeq ++
+      resourceStep.toSeq ++
       mountSecretsStep.toSeq
   }
 

@@ -14,12 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.k8s.submit
+package org.apache.spark.deploy.k8s.submit.submitsteps
 
-private[spark] sealed trait MainAppResource
+import io.fabric8.kubernetes.api.model.ContainerBuilder
 
-private[spark] case class PythonMainAppResource(primaryPyFile: String) extends MainAppResource
+import org.apache.spark.deploy.k8s.constants._
+import org.apache.spark.deploy.k8s.submit.KubernetesFileUtils
 
-private[spark] case class RMainAppResource(primaryRFile: String) extends MainAppResource
+private[spark] class RStep(
+  mainRFile: String,
+  filesDownloadPath: String) extends DriverConfigurationStep {
 
-private[spark] case class JavaMainAppResource(primaryResource: String) extends MainAppResource
+  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
+    val withRFileContainer = new ContainerBuilder(driverSpec.driverContainer)
+      .addNewEnv()
+        .withName(ENV_R_FILE)
+        .withValue(KubernetesFileUtils.resolveFilePath(mainRFile, filesDownloadPath))
+        .endEnv()
+    driverSpec.copy(driverContainer = withRFileContainer.build())
+  }
+}
