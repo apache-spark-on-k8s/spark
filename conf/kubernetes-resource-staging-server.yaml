@@ -39,7 +39,7 @@ spec:
               memory: 256Mi
             limits:
               cpu: 100m
-              memory: 256Mi
+              memory: 1Gi
           volumeMounts:
             - name: resource-staging-server-properties
               mountPath: '/etc/spark-resource-staging-server'

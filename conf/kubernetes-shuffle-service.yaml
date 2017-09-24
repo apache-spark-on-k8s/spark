@@ -32,7 +32,7 @@ spec:
       volumes:
         - name: temp-volume
           hostPath:
-            path: '/var/tmp' # change this path according to your cluster configuration.
+            path: '/tmp' # change this path according to your cluster configuration.
       containers:
         - name: shuffle
           # This is an official image that is built
