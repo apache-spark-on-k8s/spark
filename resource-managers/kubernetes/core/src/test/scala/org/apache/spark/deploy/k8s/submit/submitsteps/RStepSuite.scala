@@ -24,10 +24,10 @@ import org.apache.spark.{SparkConf, SparkFunSuite}
 
 class RStepSuite extends SparkFunSuite with BeforeAndAfter {
   private val FILE_DOWNLOAD_PATH = "/var/data/spark-files"
-  private val R_PRIMARY_FILE_OP1 = "local:///app/files/file1.py"
-  private val RESOLVED_R_PRIMARY_FILE_OP1 = "/app/files/file1.py"
-  private val R_PRIMARY_FILE_OP2 = "file:///app/files/file2.py"
-  private val RESOLVED_R_PRIMARY_FILE_OP2 = FILE_DOWNLOAD_PATH + "/file2.py"
+  private val R_PRIMARY_FILE_OP1 = "local:///app/files/file1.R"
+  private val RESOLVED_R_PRIMARY_FILE_OP1 = "/app/files/file1.R"
+  private val R_PRIMARY_FILE_OP2 = "file:///app/files/file2.R"
+  private val RESOLVED_R_PRIMARY_FILE_OP2 = FILE_DOWNLOAD_PATH + "/file2.R"
 
   test("testing RSpark with local file") {
     val rStep = new RStep(

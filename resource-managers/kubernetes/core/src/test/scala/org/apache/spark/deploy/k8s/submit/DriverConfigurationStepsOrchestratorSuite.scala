@@ -103,7 +103,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
 
   test("Submission steps with R file.") {
     val sparkConf = new SparkConf(false)
-    val mainAppResource = RMainAppResource("local:///var/apps/r/main.r")
+    val mainAppResource = RMainAppResource("local:///var/apps/r/main.R")
     val orchestrator = new DriverConfigurationStepsOrchestrator(
       NAMESPACE,
       APP_ID,

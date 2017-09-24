@@ -34,7 +34,7 @@ import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackendFactory
 import org.apache.spark.deploy.k8s.integrationtest.backend.minikube.Minikube
 import org.apache.spark.deploy.k8s.integrationtest.constants.MINIKUBE_TEST_BACKEND
-import org.apache.spark.deploy.k8s.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource}
+import org.apache.spark.deploy.k8s.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource, RMainAppResource}
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
@@ -99,6 +99,32 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
 
     runPySparkPiAndVerifyCompletion(PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION, Seq.empty[String])
+  }
+
+  test("Run SparkR Job on file locally") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    launchStagingServer(SSLOptions(), None)
+    sparkConf
+      .set(DRIVER_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.driverImage", "spark-driver-r:latest"))
+      .set(EXECUTOR_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.executorImage", "spark-executor-r:latest"))
+
+    runSparkRAndVerifyCompletion(SPARK_R_DATAFRAME_CONTAINER_LOCAL_FILE_LOCATION)
+  }
+
+  test("Run SparkR Job on file from SUBMITTER") {
+    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+
+    sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
+    sparkConf
+      .set(DRIVER_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.driverImage", "spark-driver-r:latest"))
+      .set(EXECUTOR_DOCKER_IMAGE,
+        System.getProperty("spark.docker.test.executorImage", "spark-executor-r:latest"))
+
+    runSparkRAndVerifyCompletion(SPARK_R_DATAFRAME_SUBMITTER_FILE_LOCATION)
   }
 
   test("Simple submission test with the resource staging server.") {
@@ -319,6 +345,16 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
       otherPyFiles)
   }
 
+  private def runSparkRAndVerifyCompletion(
+    appResource: String): Unit = {
+    runSparkApplicationAndVerifyCompletion(
+      RMainAppResource(appResource),
+      SPARK_R_MAIN_CLASS,
+      Seq("name: string (nullable = true)", "1 Justin"),
+      Array.empty[String],
+      Seq.empty[String])
+  }
+
   private def runSparkApplicationAndVerifyCompletion(
       appResource: MainAppResource,
       mainClass: String,
@@ -424,10 +460,15 @@ private[spark] object KubernetesSuite {
   val SPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.SparkPiWithInfiniteWait"
   val PYSPARK_PI_MAIN_CLASS = "org.apache.spark.deploy.PythonRunner"
+  val SPARK_R_MAIN_CLASS = "org.apache.spark.deploy.RRunner"
   val PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION =
     "local:///opt/spark/examples/src/main/python/pi.py"
   val PYSPARK_SORT_CONTAINER_LOCAL_FILE_LOCATION =
     "local:///opt/spark/examples/src/main/python/sort.py"
+  val SPARK_R_DATAFRAME_SUBMITTER_FILE_LOCATION =
+    "local:///opt/spark/examples/src/main/r/dataframe.R"
+  val SPARK_R_DATAFRAME_CONTAINER_LOCAL_FILE_LOCATION =
+    "src/test/r/dataframe.R"
   val PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION = "src/test/python/pi.py"
   val FILE_EXISTENCE_MAIN_CLASS = "org.apache.spark.deploy.k8s" +
     ".integrationtest.jobs.FileExistenceTest"

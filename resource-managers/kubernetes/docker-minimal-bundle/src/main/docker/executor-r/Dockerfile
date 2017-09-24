@@ -24,8 +24,9 @@ FROM spark-base
 ADD examples /opt/spark/examples
 ADD R /opt/spark/R
 
-RUN apk add --no-cache R && \
-    rm -r /root/.cache
+RUN apk add --no-cache R R-dev
+
+ENV R_HOME /usr/lib/R
 
 CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/*" && \
     env | grep SPARK_JAVA_OPT_ | sed 's/[^=]*=\(.*\)/\1/g' > /tmp/java_opts.txt && \

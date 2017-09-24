@@ -19,13 +19,14 @@ FROM spark-base
 
 # If this docker file is being used in the context of building your images from a Spark distribution, the docker build
 # command should be invoked from the top level directory of the Spark distribution. E.g.:
-# docker build -t spark-driver-f:latest -f dockerfiles/driver-f/Dockerfile .
+# docker build -t spark-driver-r:latest -f dockerfiles/driver-r/Dockerfile .
 
 ADD examples /opt/spark/examples
 ADD R /opt/spark/R
 
-RUN apk add --no-cache R && \
-    rm -r /root/.cache
+RUN apk add --no-cache R R-dev
+
+ENV R_HOME /usr/lib/R
 
 CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/*" && \
     env | grep SPARK_JAVA_OPT_ | sed 's/[^=]*=\(.*\)/\1/g' > /tmp/java_opts.txt && \

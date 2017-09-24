@@ -240,6 +240,21 @@
               </configuration>
           </execution>
           <execution>
+            <id>copy-integration-r</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/docker/R</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.parent.basedir}/R</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
             <id>copy-integration-data</id>
             <phase>pre-integration-test</phase>
             <goals>
