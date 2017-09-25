@@ -466,7 +466,7 @@ private[spark] object KubernetesSuite {
   val PYSPARK_SORT_CONTAINER_LOCAL_FILE_LOCATION =
     "local:///opt/spark/examples/src/main/python/sort.py"
   val SPARK_R_DATAFRAME_SUBMITTER_FILE_LOCATION =
-    "local:///opt/spark/examples/src/main/R/dataframe.R"
+    "local:///opt/spark/examples/src/main/r/dataframe.R"
   val SPARK_R_DATAFRAME_CONTAINER_LOCAL_FILE_LOCATION =
     "src/test/R/dataframe.R"
   val PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION = "src/test/python/pi.py"
