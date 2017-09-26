@@ -75,17 +75,17 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     // The executor pod name and default labels.
-    assert(executor.getMetadata.getName == s"$executorPrefix-exec-1")
-    assert(executor.getMetadata.getLabels.size() == 3)
+    assert(executor.getMetadata.getName === s"$executorPrefix-exec-1")
+    assert(executor.getMetadata.getLabels.size() === 3)
 
     // There is exactly 1 container with no volume mounts and default memory limits.
     // Default memory limit is 1024M + 384M (minimum overhead constant).
-    assert(executor.getSpec.getContainers.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getImage == executorImage)
+    assert(executor.getSpec.getContainers.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getImage === executorImage)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.isEmpty)
-    assert(executor.getSpec.getContainers.get(0).getResources.getLimits.size() == 1)
+    assert(executor.getSpec.getContainers.get(0).getResources.getLimits.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getResources
-      .getLimits.get("memory").getAmount == "1408Mi")
+      .getLimits.get("memory").getAmount === "1408Mi")
 
     // The pod has no node selector, volumes.
     assert(executor.getSpec.getNodeSelector.isEmpty)
@@ -105,7 +105,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
-    assert(executor.getSpec.getHostname.length == 63)
+    assert(executor.getSpec.getHostname.length === 63)
   }
 
   test("secrets get mounted") {
@@ -123,15 +123,15 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
-    assert(executor.getSpec.getContainers.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName == "secret1-volume")
+    assert(executor.getSpec.getContainers.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName === "secret1-volume")
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
-      .getMountPath == "/var/secret1")
+      .getMountPath === "/var/secret1")
 
     // check volume mounted.
-    assert(executor.getSpec.getVolumes.size() == 1)
-    assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName == "secret1")
+    assert(executor.getSpec.getVolumes.size() === 1)
+    assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName === "secret1")
 
     checkOwnerReferences(executor, driverPodUid)
   }
@@ -159,7 +159,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
-    assert(executor.getMetadata.getAnnotations.size() == 1)
+    assert(executor.getMetadata.getAnnotations.size() === 1)
     assert(executor.getMetadata.getAnnotations.containsKey(constants.INIT_CONTAINER_ANNOTATION))
     checkOwnerReferences(executor, driverPodUid)
   }
@@ -188,11 +188,11 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
 
-    assert(executor.getSpec.getContainers.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName == "0-tmp")
+    assert(executor.getSpec.getContainers.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName === "0-tmp")
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
-      .getMountPath == "/tmp")
+      .getMountPath === "/tmp")
     checkOwnerReferences(executor, driverPodUid)
   }
 
@@ -212,15 +212,15 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
 
-    assert(executor.getSpec.getContainers.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 1)
+    assert(executor.getSpec.getContainers.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
-      .getName == "submitted-files")
+      .getName === "submitted-files")
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
-      .getMountPath == "/var/secret1")
+      .getMountPath === "/var/secret1")
 
-    assert(executor.getSpec.getVolumes.size() == 1)
-    assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName == "secret1")
+    assert(executor.getSpec.getVolumes.size() === 1)
+    assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName === "secret1")
 
     checkOwnerReferences(executor, driverPodUid)
     checkEnv(executor, Set("SPARK_MOUNTED_FILES_FROM_SECRET_DIR"))
@@ -242,9 +242,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
 
   // There is always exactly one controller reference, and it points to the driver pod.
   private def checkOwnerReferences(executor: Pod, driverPodUid: String): Unit = {
-    assert(executor.getMetadata.getOwnerReferences.size() == 1)
-    assert(executor.getMetadata.getOwnerReferences.get(0).getUid == driverPodUid)
-    assert(executor.getMetadata.getOwnerReferences.get(0).getController == true)
+    assert(executor.getMetadata.getOwnerReferences.size() === 1)
+    assert(executor.getMetadata.getOwnerReferences.get(0).getUid === driverPodUid)
+    assert(executor.getMetadata.getOwnerReferences.get(0).getController === true)
   }
 
   // Check that the expected environment variables are present.
@@ -255,11 +255,11 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       constants.ENV_MOUNTED_CLASSPATH, constants.ENV_EXECUTOR_POD_IP,
       constants.ENV_EXECUTOR_PORT) ++ additionalEnvVars
 
-    assert(executor.getSpec.getContainers.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getEnv().size() == defaultEnvs.size)
+    assert(executor.getSpec.getContainers.size() === 1)
+    assert(executor.getSpec.getContainers.get(0).getEnv().size() === defaultEnvs.size)
     val setEnvs = executor.getSpec.getContainers.get(0).getEnv.asScala.map {
       x => x.getName
     }.toSet
-    assert(defaultEnvs == setEnvs)
+    assert(defaultEnvs === setEnvs)
   }
 }
