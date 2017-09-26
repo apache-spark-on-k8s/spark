@@ -65,8 +65,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   test("basic executor pod has reasonable defaults") {
     val factory = new ExecutorPodFactoryImpl(baseConf,
       NodeAffinityExecutorPodModifierImpl, None, None, None, None, None)
-    val executor = factory.createExecutorPod("1", "dummy", "dummy",
-      Seq[(String, String)](), driverPod, Map[String, Int]())
+    val executor = factory.createExecutorPod(
+      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     // The executor pod name and default labels.
     assert(executor.getMetadata.getName == s"$executorPrefix-exec-1")
@@ -76,14 +76,14 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     // Default memory limit is 1024M + 384M (minimum overhead constant).
     assert(executor.getSpec.getContainers.size() == 1)
     assert(executor.getSpec.getContainers.get(0).getImage == executorImage)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 0)
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.isEmpty)
     assert(executor.getSpec.getContainers.get(0).getResources.getLimits.size() == 1)
-    assert(executor.getSpec.getContainers.get(0).getResources.
-      getLimits.get("memory").getAmount == "1408Mi")
+    assert(executor.getSpec.getContainers.get(0).getResources
+      .getLimits.get("memory").getAmount == "1408Mi")
 
     // The pod has no node selector, volumes.
-    assert(executor.getSpec.getNodeSelector.size() == 0)
-    assert(executor.getSpec.getVolumes.size() == 0)
+    assert(executor.getSpec.getNodeSelector.isEmpty)
+    assert(executor.getSpec.getVolumes.isEmpty)
 
     checkEnv(executor, Set())
     checkOwnerReferences(executor, driverPodUid)
@@ -114,8 +114,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     assert(executor.getSpec.getContainers.size() == 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName == "secret1-volume")
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).
-      getMountPath == "/var/secret1")
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
+      .getMountPath == "/var/secret1")
 
     // check volume mounted.
     assert(executor.getSpec.getVolumes.size() == 1)
@@ -160,8 +160,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     assert(executor.getSpec.getContainers.size() == 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() == 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName == "0-tmp")
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).
-      getMountPath == "/tmp")
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
+      .getMountPath == "/tmp")
     checkOwnerReferences(executor, driverPodUid)
   }
 
