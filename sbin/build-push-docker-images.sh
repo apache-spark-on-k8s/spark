@@ -23,6 +23,8 @@ declare -A path=( [spark-driver]=dockerfiles/driver/Dockerfile \
                   [spark-executor]=dockerfiles/executor/Dockerfile \
                   [spark-driver-py]=dockerfiles/driver-py/Dockerfile \
                   [spark-executor-py]=dockerfiles/executor-py/Dockerfile \
+                  [spark-driver-r]=dockerfiles/driver-r/Dockerfile \
+                  [spark-executor-r]=dockerfiles/executor-r/Dockerfile \
                   [spark-init]=dockerfiles/init-container/Dockerfile \
                   [spark-shuffle]=dockerfiles/shuffle-service/Dockerfile \
                   [spark-resource-staging-server]=dockerfiles/resource-staging-server/Dockerfile )
