@@ -58,17 +58,16 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   private var baseConf: SparkConf = _
 
   private val nodeAffinityExecutorPodModifier = mock(classOf[NodeAffinityExecutorPodModifier])
-  when(nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
-    any(classOf[Pod]),
-    any(classOf[Map[String, Int]]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
 
   before {
-    SparkContext.clearActiveContext()
     MockitoAnnotations.initMocks(this)
     baseConf = new SparkConf()
       .set(KUBERNETES_DRIVER_POD_NAME, driverPodName)
       .set(KUBERNETES_EXECUTOR_POD_NAME_PREFIX, executorPrefix)
       .set(EXECUTOR_DOCKER_IMAGE, executorImage)
+    when(nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
+      any(classOf[Pod]),
+      any(classOf[Map[String, Int]]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
   }
   private var kubernetesClient: KubernetesClient = _
 
