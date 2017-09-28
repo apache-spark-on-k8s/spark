@@ -31,11 +31,11 @@ import org.scalatest.mock.MockitoSugar._
 import org.apache.commons.io.FilenameUtils
 
 import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
-import org.apache.spark.deploy.kubernetes.{constants, SparkPodInitContainerBootstrapImpl}
-import org.apache.spark.deploy.kubernetes.config._
-import org.apache.spark.deploy.kubernetes.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
+import org.apache.spark.deploy.k8s.{constants, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.k8s.config._
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl}
 
 class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   private val driverPodName: String = "driver-pod"
