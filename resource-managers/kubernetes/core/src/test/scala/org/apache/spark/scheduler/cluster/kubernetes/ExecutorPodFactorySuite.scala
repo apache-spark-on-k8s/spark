@@ -20,8 +20,15 @@ import scala.collection.JavaConverters._
 
 import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.KubernetesClient
-import org.mockito.MockitoAnnotations
+import io.fabric8.kubernetes.api.model.{Pod, Volume, VolumeBuilder, VolumeMount, VolumeMountBuilder}
+
 import org.scalatest.BeforeAndAfter
+import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
+import org.mockito.Matchers.{any, eq => mockitoEq}
+import org.mockito.Mockito.{doNothing, never, times, verify, when, mock}
+import org.scalatest.mock.MockitoSugar._
+
+import org.apache.commons.io.FilenameUtils
 
 import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.kubernetes.{constants, SparkPodInitContainerBootstrapImpl}
@@ -49,7 +56,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .endStatus()
     .build()
   private var baseConf: SparkConf = _
-  private var sc: SparkContext = _
+  //private var sc: SparkContext = mock(classOf[SparkContext])
 
   before {
     SparkContext.clearActiveContext()
@@ -58,7 +65,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .set(KUBERNETES_DRIVER_POD_NAME, driverPodName)
       .set(KUBERNETES_EXECUTOR_POD_NAME_PREFIX, executorPrefix)
       .set(EXECUTOR_DOCKER_IMAGE, executorImage)
-    sc = new SparkContext("local", "test")
+    //sc = new SparkContext("local", "test")
   }
   private var kubernetesClient: KubernetesClient = _
 
@@ -170,12 +177,32 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     conf.set(KUBERNETES_SHUFFLE_NAMESPACE, "default")
     conf.set(KUBERNETES_SHUFFLE_DIR, "/tmp")
 
+/*
     val kubernetesExternalShuffleClient = new KubernetesExternalShuffleClientImpl(
       SparkTransportConf.fromSparkConf(conf, "shuffle"),
       sc.env.securityManager,
       sc.env.securityManager.isAuthenticationEnabled())
     val shuffleManager = new KubernetesExternalShuffleManagerImpl(
       conf, kubernetesClient, kubernetesExternalShuffleClient)
+*/
+
+    val shuffleManager = mock(classOf[KubernetesExternalShuffleManager])
+    when(shuffleManager.getExecutorShuffleDirVolumesWithMounts).thenReturn({
+      val shuffleDirs = Seq("/tmp")
+      shuffleDirs.zipWithIndex.map { case (shuffleDir, shuffleDirIndex) =>
+        val volumeName = s"$shuffleDirIndex-${FilenameUtils.getBaseName(shuffleDir)}"
+        val volume = new VolumeBuilder()
+          .withName(volumeName)
+          .withNewHostPath(shuffleDir)
+          .build()
+        val volumeMount = new VolumeMountBuilder()
+          .withName(volumeName)
+          .withMountPath(shuffleDir)
+          .build()
+        (volume, volumeMount)
+      }
+    })
+
     val factory = new ExecutorPodFactoryImpl(
       conf,
       NodeAffinityExecutorPodModifierImpl,
