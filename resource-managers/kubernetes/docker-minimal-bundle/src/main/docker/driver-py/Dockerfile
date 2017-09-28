@@ -38,7 +38,7 @@ ENV PYSPARK_PYTHON python
 ENV PYSPARK_DRIVER_PYTHON python
 ENV PYTHONPATH ${SPARK_HOME}/python/:${SPARK_HOME}/python/lib/py4j-0.10.4-src.zip:${PYTHONPATH}
 
-CMD SPARK_CLASSPATH="$SPARK_CLASSPATH:${SPARK_HOME}/jars/*" && \
+CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/\"*\"" && \
     env | grep SPARK_JAVA_OPT_ | sed 's/[^=]*=\(.*\)/\1/g' > /tmp/java_opts.txt && \
     readarray -t SPARK_DRIVER_JAVA_OPTS < /tmp/java_opts.txt && \
     if ! [ -z ${SPARK_MOUNTED_CLASSPATH+x} ]; then SPARK_CLASSPATH="$SPARK_MOUNTED_CLASSPATH:$SPARK_CLASSPATH"; fi && \
