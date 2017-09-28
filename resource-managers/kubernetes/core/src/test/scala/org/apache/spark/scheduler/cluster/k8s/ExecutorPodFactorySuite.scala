@@ -180,15 +180,6 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     conf.set(KUBERNETES_SHUFFLE_NAMESPACE, "default")
     conf.set(KUBERNETES_SHUFFLE_DIR, "/tmp")
 
-/*
-    val kubernetesExternalShuffleClient = new KubernetesExternalShuffleClientImpl(
-      SparkTransportConf.fromSparkConf(conf, "shuffle"),
-      sc.env.securityManager,
-      sc.env.securityManager.isAuthenticationEnabled())
-    val shuffleManager = new KubernetesExternalShuffleManagerImpl(
-      conf, kubernetesClient, kubernetesExternalShuffleClient)
-*/
-
     val shuffleManager = mock(classOf[KubernetesExternalShuffleManager])
     when(shuffleManager.getExecutorShuffleDirVolumesWithMounts).thenReturn({
       val shuffleDirs = Seq("/tmp")
