@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.scheduler.cluster.kubernetes
+package org.apache.spark.scheduler.cluster.k8s
 
 import scala.collection.JavaConverters._
 
