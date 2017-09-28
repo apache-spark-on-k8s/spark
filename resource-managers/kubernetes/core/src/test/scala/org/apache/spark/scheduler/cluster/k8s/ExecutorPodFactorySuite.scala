@@ -56,7 +56,11 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .endStatus()
     .build()
   private var baseConf: SparkConf = _
-  //private var sc: SparkContext = mock(classOf[SparkContext])
+
+  private val nodeAffinityExecutorPodModifier = mock(classOf[NodeAffinityExecutorPodModifier])
+  when(nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
+    any(classOf[Pod]),
+    any(classOf[Map[String, Int]]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
 
   before {
     SparkContext.clearActiveContext()
@@ -65,14 +69,13 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .set(KUBERNETES_DRIVER_POD_NAME, driverPodName)
       .set(KUBERNETES_EXECUTOR_POD_NAME_PREFIX, executorPrefix)
       .set(EXECUTOR_DOCKER_IMAGE, executorImage)
-    //sc = new SparkContext("local", "test")
   }
   private var kubernetesClient: KubernetesClient = _
 
   test("basic executor pod has reasonable defaults") {
     val factory = new ExecutorPodFactoryImpl(
       baseConf,
-      NodeAffinityExecutorPodModifierImpl,
+      nodeAffinityExecutorPodModifier,
       None,
       None,
       None,
@@ -108,7 +111,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       "loremipsumdolorsitametvimatelitrefficiendisuscipianturvixlegeresple")
 
     val factory = new ExecutorPodFactoryImpl(
-      conf, NodeAffinityExecutorPodModifierImpl, None, None, None, None, None)
+      conf, nodeAffinityExecutorPodModifier, None, None, None, None, None)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
@@ -121,7 +124,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val secretsBootstrap = new MountSecretsBootstrapImpl(Map("secret1" -> "/var/secret1"))
     val factory = new ExecutorPodFactoryImpl(
       conf,
-      NodeAffinityExecutorPodModifierImpl,
+      nodeAffinityExecutorPodModifier,
       Some(secretsBootstrap),
       None,
       None,
@@ -157,7 +160,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
-      NodeAffinityExecutorPodModifierImpl,
+      nodeAffinityExecutorPodModifier,
       None,
       None,
       Some(initContainerBootstrap),
@@ -205,7 +208,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
-      NodeAffinityExecutorPodModifierImpl,
+      nodeAffinityExecutorPodModifier,
       None,
       None,
       None,
@@ -229,7 +232,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
-      NodeAffinityExecutorPodModifierImpl,
+      nodeAffinityExecutorPodModifier,
       None,
       Some(smallFiles),
       None,
@@ -259,7 +262,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     conf.set(org.apache.spark.internal.config.EXECUTOR_CLASS_PATH, "bar=baz")
 
     val factory = new ExecutorPodFactoryImpl(
-      conf, NodeAffinityExecutorPodModifierImpl, None, None, None, None, None)
+      conf, nodeAffinityExecutorPodModifier, None, None, None, None, None)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"), driverPod, Map[String, Int]())
 
