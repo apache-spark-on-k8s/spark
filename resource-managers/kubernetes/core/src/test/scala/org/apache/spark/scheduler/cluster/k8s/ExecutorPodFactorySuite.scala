@@ -236,7 +236,27 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
           val container = invocation.getArgumentAt(1, classOf[Container])
           val secretName = "secret1"
           val secretMountPath = "/var/secret1"
-          (pod, container)
+          val resolvedPod = new PodBuilder(pod)
+            .editOrNewSpec()
+              .addNewVolume()
+                .withName("submitted-files")
+                .withNewSecret()
+                  .withSecretName(secretName)
+                  .endSecret()
+                .endVolume()
+              .endSpec()
+            .build()
+          val resolvedContainer = new ContainerBuilder(container)
+            .addNewEnv()
+              .withName(constants.ENV_MOUNTED_FILES_FROM_SECRET_DIR)
+              .withValue(secretMountPath)
+              .endEnv()
+            .addNewVolumeMount()
+              .withName("submitted-files")
+              .withMountPath(secretMountPath)
+              .endVolumeMount()
+            .build()
+          (resolvedPod, resolvedContainer)
         }
       })
 
