@@ -26,6 +26,8 @@ import org.scalatest.BeforeAndAfter
 import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
 import org.mockito.Matchers.{any, eq => mockitoEq}
 import org.mockito.Mockito.{doNothing, never, times, verify, when, mock}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalatest.mock.MockitoSugar._
 
 import org.apache.commons.io.FilenameUtils
@@ -33,9 +35,9 @@ import org.apache.commons.io.FilenameUtils
 import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
-import org.apache.spark.deploy.k8s.{constants, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.k8s.{constants, SparkPodInitContainerBootstrapImpl, SparkPodInitContainerBootstrap, PodWithDetachedInitContainer}
 import org.apache.spark.deploy.k8s.config._
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl}
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl, MountSmallFilesBootstrap}
 
 class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   private val driverPodName: String = "driver-pod"
@@ -56,7 +58,6 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .endStatus()
     .build()
   private var baseConf: SparkConf = _
-
   private val nodeAffinityExecutorPodModifier = mock(classOf[NodeAffinityExecutorPodModifier])
 
   before {
@@ -148,6 +149,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
   test("init-container bootstrap step adds an init container") {
     val conf = baseConf.clone()
 
+/*
     val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
       "init-image",
       "IfNotPresent",
@@ -156,6 +158,11 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       10,
       "config-map-name",
       "config-map-key")
+*/
+
+    val initContainerBootstrap = mock(classOf[SparkPodInitContainerBootstrap])
+    when(initContainerBootstrap.bootstrapInitContainerAndVolumes(
+      any(classOf[PodWithDetachedInitContainer]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
@@ -218,7 +225,20 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Small-files add a secret & secret volume mount to the container") {
     val conf = baseConf.clone()
-    val smallFiles = new MountSmallFilesBootstrapImpl("secret1", "/var/secret1")
+
+    //val smallFiles = new MountSmallFilesBootstrapImpl("secret1", "/var/secret1")
+    val smallFiles = mock(classOf[MountSmallFilesBootstrap])
+    when(smallFiles.mountSmallFilesSecret(
+      any(classOf[Pod]),
+      any(classOf[Container]))).thenAnswer(new Answer[(Pod, Container)] {
+        def answer(invocation: InvocationOnMock): (Pod, Container) = {
+          val pod = invocation.getArgumentAt(0, classOf[Pod])
+          val container = invocation.getArgumentAt(1, classOf[Container])
+          val secretName = "secret1"
+          val secretMountPath = "/var/secret1"
+          (pod, container)
+        }
+      })
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
