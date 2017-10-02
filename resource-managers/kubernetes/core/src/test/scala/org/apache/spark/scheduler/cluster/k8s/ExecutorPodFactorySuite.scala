@@ -22,12 +22,13 @@ import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.fabric8.kubernetes.api.model.{Pod, Volume, VolumeBuilder, VolumeMount, VolumeMountBuilder}
 
-import org.scalatest.BeforeAndAfter
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
 import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
 import org.mockito.Matchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.{doNothing, never, times, verify, when, mock}
+import org.mockito.Mockito.{doNothing, never, times, verify, when, mock, reset}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+
 import org.scalatest.mock.MockitoSugar._
 
 import org.apache.commons.io.FilenameUtils
@@ -39,7 +40,7 @@ import org.apache.spark.deploy.k8s.{constants, SparkPodInitContainerBootstrapImp
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl, MountSmallFilesBootstrap}
 
-class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
+class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with BeforeAndAfterEach {
   private val driverPodName: String = "driver-pod"
   private val driverPodUid: String = "driver-uid"
   private val driverUrl: String = "driver-url"
@@ -66,11 +67,15 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       .set(KUBERNETES_DRIVER_POD_NAME, driverPodName)
       .set(KUBERNETES_EXECUTOR_POD_NAME_PREFIX, executorPrefix)
       .set(EXECUTOR_DOCKER_IMAGE, executorImage)
+  }
+  private var kubernetesClient: KubernetesClient = _
+
+  override def beforeEach(cmap: org.scalatest.ConfigMap) {
+    reset(nodeAffinityExecutorPodModifier)
     when(nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
       any(classOf[Pod]),
       any(classOf[Map[String, Int]]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
   }
-  private var kubernetesClient: KubernetesClient = _
 
   test("basic executor pod has reasonable defaults") {
     val factory = new ExecutorPodFactoryImpl(
