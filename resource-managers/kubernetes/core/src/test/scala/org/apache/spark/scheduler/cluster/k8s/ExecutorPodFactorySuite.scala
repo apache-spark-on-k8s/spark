@@ -84,6 +84,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
+
     // The executor pod name and default labels.
     assert(executor.getMetadata.getName === s"$executorPrefix-exec-1")
     assert(executor.getMetadata.getLabels.size() === 3)
@@ -115,6 +118,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
+
     assert(executor.getSpec.getHostname.length === 63)
   }
 
@@ -132,6 +138,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       None)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
     assert(executor.getSpec.getContainers.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
@@ -175,6 +184,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
+
     assert(executor.getMetadata.getAnnotations.size() === 1)
     assert(executor.getMetadata.getAnnotations.containsKey(constants.INIT_CONTAINER_ANNOTATION))
     checkOwnerReferences(executor, driverPodUid)
@@ -214,6 +226,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
     assert(executor.getSpec.getContainers.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
@@ -271,6 +285,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
     assert(executor.getSpec.getContainers.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
@@ -295,6 +311,9 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter {
       conf, nodeAffinityExecutorPodModifier, None, None, None, None, None)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"), driverPod, Map[String, Int]())
+
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
     checkEnv(executor, Set("SPARK_JAVA_OPT_0", "SPARK_EXECUTOR_EXTRA_CLASSPATH", "qux"))
     checkOwnerReferences(executor, driverPodUid)
