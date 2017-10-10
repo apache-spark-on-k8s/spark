@@ -19,24 +19,24 @@ package org.apache.spark.scheduler.cluster.k8s
 import java.util.concurrent.{ExecutorService, ScheduledExecutorService, TimeUnit}
 
 import io.fabric8.kubernetes.api.model.{DoneablePod, Pod, PodBuilder, PodList}
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, MixedOperation, NonNamespaceOperation, PodResource}
-import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
-import org.mockito.Matchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.{doNothing, never, times, verify, when}
-import org.scalatest.BeforeAndAfter
-import org.scalatest.mock.MockitoSugar._
-import scala.collection.JavaConverters._
-import scala.concurrent.Future
-
-import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
+import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEndpoint, RpcEndpointAddress, RpcEndpointRef, RpcEnv, RpcTimeout}
-import org.apache.spark.scheduler.{ExecutorExited, LiveListenerBus, SlaveLost, TaskSchedulerImpl}
+import org.apache.spark.rpc._
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor, RemoveExecutor}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.scheduler.{ExecutorExited, LiveListenerBus, SlaveLost, TaskSchedulerImpl}
+import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
+import org.mockito.Matchers.{any, eq => mockitoEq}
+import org.mockito.Mockito.{mock => _, _}
+import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
+import org.scalatest.BeforeAndAfter
+import org.scalatest.mock.MockitoSugar._
+
+import scala.collection.JavaConverters._
+import scala.concurrent.Future
 
 private[spark] class KubernetesClusterSchedulerBackendSuite
     extends SparkFunSuite with BeforeAndAfter {

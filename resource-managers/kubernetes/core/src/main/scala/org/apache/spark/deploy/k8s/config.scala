@@ -69,6 +69,18 @@ package object config extends Logging {
   private[spark] val CLIENT_CERT_FILE_CONF_SUFFIX = "clientCertFile"
   private[spark] val CA_CERT_FILE_CONF_SUFFIX = "caCertFile"
 
+  // TODO: This option is intended to be used for internal prototype only until the submission
+  // client automatically creates the secret file. Remove this option afterward
+  // unless other use is found.
+  private[spark] val MOUNTED_HADOOP_SECRET_CONF =
+    ConfigBuilder("spark.kubernetes.mounted.hadoopSecret")
+        .doc("Use a Kubernetes secret containing Hadoop tokens such as an HDFS delegation token." +
+          " The secret should have an entry named 'hadoop-token-file' under the data section," +
+          " which contains binary dumps of Hadoop tokens.")
+        .internal()
+        .stringConf
+        .createOptional
+
   private[spark] val RESOURCE_STAGING_SERVER_USE_SERVICE_ACCOUNT_CREDENTIALS =
     ConfigBuilder(
           s"$APISERVER_AUTH_RESOURCE_STAGING_SERVER_CONF_PREFIX.useServiceAccountCredentials")
@@ -501,6 +513,49 @@ package object config extends Logging {
       .createOptional
 
   private[spark] val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
+
+  private[spark] val KUBERNETES_KERBEROS_SUPPORT =
+    ConfigBuilder("spark.kubernetes.kerberos.enabled")
+      .doc("Specify whether your job is a job that will require a Delegation Token to access HDFS")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val KUBERNETES_KERBEROS_KEYTAB =
+    ConfigBuilder("spark.kubernetes.kerberos.keytab")
+      .doc("Specify the location of keytab" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_PRINCIPAL =
+    ConfigBuilder("spark.kubernetes.kerberos.principal")
+      .doc("Specify the principal" +
+        " for Kerberos in order to access Secure HDFS")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_RENEWER_PRINCIPAL =
+    ConfigBuilder("spark.kubernetes.kerberos.rewnewer.principal")
+      .doc("Specify the principal" +
+        " you wish to renew and retrieve your Kerberos values with")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_DT_SECRET_NAME =
+    ConfigBuilder("spark.kubernetes.kerberos.tokensecret.name")
+      .doc("Specify the name of the secret where " +
+        " your existing delegation token is stored. This removes the need" +
+        " for the job user to provide any keytab for launching a job")
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_KERBEROS_DT_SECRET_ITEM_KEY =
+    ConfigBuilder("spark.kubernetes.kerberos.tokensecret.itemkey")
+      .doc("Specify the item key of the data where " +
+        " your existing delegation token is stored. This removes the need" +
+        " for the job user to provide any keytab for launching a job")
+      .stringConf
+      .createOptional
 
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {

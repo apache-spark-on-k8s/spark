@@ -16,23 +16,25 @@
  */
 package org.apache.spark.deploy.k8s.submit
 
+import scala.collection.JavaConverters._
+
 import com.google.common.collect.Iterables
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, DoneablePod, HasMetadata, Pod, PodBuilder, PodList, Secret, SecretBuilder}
+import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
-import io.fabric8.kubernetes.client.dsl.{MixedOperation, NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable, NamespaceVisitFromServerGetWatchDeleteRecreateWaitApplicable, PodResource, Resource}
+import io.fabric8.kubernetes.client.dsl.{MixedOperation, NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable, PodResource}
 import org.mockito.{ArgumentCaptor, Mock, MockitoAnnotations}
-import org.mockito.Mockito.{doReturn, verify, when}
 import org.mockito.invocation.InvocationOnMock
+import org.mockito.Mockito.{doReturn, verify, when}
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfter
 import org.scalatest.mock.MockitoSugar._
-import scala.collection.JavaConverters._
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
+import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.submitsteps.{DriverConfigurationStep, KubernetesDriverSpec}
 
-class ClientSuite extends SparkFunSuite with BeforeAndAfter {
+private[spark] class ClientSuite extends SparkFunSuite with BeforeAndAfter {
 
   private val DRIVER_POD_UID = "pod-id"
   private val DRIVER_POD_API_VERSION = "v1"
@@ -136,6 +138,10 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
         .set(
           org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS,
           "-XX:+HeapDumpOnOutOfMemoryError -XX:+PrintGCDetails")
+        .set(
+          KUBERNETES_KERBEROS_SUPPORT,
+          true
+        )
     val submissionClient = new Client(
         submissionSteps,
         sparkConf,
@@ -150,14 +156,16 @@ class ClientSuite extends SparkFunSuite with BeforeAndAfter {
     val driverJvmOptsEnvs = driverContainer.getEnv.asScala.filter { env =>
       env.getName.startsWith(ENV_JAVA_OPT_PREFIX)
     }.sortBy(_.getName)
-    assert(driverJvmOptsEnvs.size === 4)
+    assert(driverJvmOptsEnvs.size === 6)
 
     val expectedJvmOptsValues = Seq(
+        "-Dspark.kubernetes.kerberos.enabled=true",
         "-Dspark.logConf=true",
         s"-D${SecondTestConfigurationStep.sparkConfKey}=" +
             s"${SecondTestConfigurationStep.sparkConfValue}",
         s"-XX:+HeapDumpOnOutOfMemoryError",
-        s"-XX:+PrintGCDetails")
+        s"-XX:+PrintGCDetails",
+        "-Dspark.hadoop.hadoop.security.authentication=simple")
     driverJvmOptsEnvs.zip(expectedJvmOptsValues).zipWithIndex.foreach {
       case ((resolvedEnv, expectedJvmOpt), index) =>
         assert(resolvedEnv.getName === s"$ENV_JAVA_OPT_PREFIX$index")

@@ -79,6 +79,9 @@ private[spark] class Client(
 
   private val driverJavaOptions = submissionSparkConf.get(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
+  private val isKerberosEnabled = submissionSparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
+  private val maybeSimpleAuthentication =
+    if (isKerberosEnabled) Some(s"-D$HADOOP_SECURITY_AUTHENTICATION=simple") else None
 
    /**
     * Run command that initalizes a DriverSpec that will be updated after each
@@ -99,7 +102,8 @@ private[spark] class Client(
         .getAll
         .map {
           case (confKey, confValue) => s"-D$confKey=$confValue"
-        } ++ driverJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty)
+        } ++ driverJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty) ++
+        maybeSimpleAuthentication
     val driverJavaOptsEnvs: Seq[EnvVar] = resolvedDriverJavaOpts.zipWithIndex.map {
       case (option, index) => new EnvVarBuilder()
           .withName(s"$ENV_JAVA_OPT_PREFIX$index")
@@ -153,7 +157,9 @@ private[spark] class Client(
 }
 
 private[spark] object Client {
-  def run(sparkConf: SparkConf, clientArguments: ClientArguments): Unit = {
+    def run(sparkConf: SparkConf,
+          clientArguments: ClientArguments,
+          hadoopConfDir: Option[String]): Unit = {
     val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
     val kubernetesAppId = s"spark-${UUID.randomUUID().toString.replaceAll("-", "")}"
     val launchTime = System.currentTimeMillis()
@@ -172,6 +178,7 @@ private[spark] object Client {
         clientArguments.mainClass,
         clientArguments.driverArgs,
         clientArguments.otherPyFiles,
+        hadoopConfDir,
         sparkConf)
     Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
         master,
@@ -199,6 +206,9 @@ private[spark] object Client {
   def main(args: Array[String]): Unit = {
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
     val sparkConf = new SparkConf()
-    run(sparkConf, parsedArguments)
+    // hadoopConfDir is passed into Client#run() to allow for us to
+    // test this env variable within the integration test environment
+    val hadoopConfDir = sys.env.get("HADOOP_CONF_DIR")
+    run(sparkConf, parsedArguments, hadoopConfDir)
   }
 }

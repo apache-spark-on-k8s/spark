@@ -121,7 +121,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
         } else {
           val nodeToLocalTaskCount = getNodesWithLocalTaskCounts
           for (i <- 0 until math.min(
-              totalExpectedExecutors.get - runningExecutorsToPods.size, podAllocationSize)) {
+            totalExpectedExecutors.get - runningExecutorsToPods.size, podAllocationSize)) {
             val (executorId, pod) = allocateNewExecutorPod(nodeToLocalTaskCount)
             runningExecutorsToPods.put(executorId, pod)
             runningPodsToExecutors.put(pod.getMetadata.getName, executorId)
@@ -208,7 +208,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
             .watch(new ExecutorPodsWatcher()))
 
     allocatorExecutor.scheduleWithFixedDelay(
-        allocatorRunnable, 0L, podAllocationInterval, TimeUnit.SECONDS)
+      allocatorRunnable, 0L, podAllocationInterval, TimeUnit.SECONDS)
     shuffleManager.foreach(_.start(applicationId()))
 
     if (!Utils.isDynamicAllocationEnabled(conf)) {
@@ -486,4 +486,3 @@ private object KubernetesClusterSchedulerBackend {
       " Consider boosting spark executor memory overhead."
   }
 }
-

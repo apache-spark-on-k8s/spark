@@ -37,7 +37,8 @@ import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.{SubmittedDependencyUploader, SubmittedResourceIdAndSecret}
 import org.apache.spark.util.Utils
 
-class SubmittedResourcesInitContainerStepSuite extends SparkFunSuite with BeforeAndAfter {
+private[spark] class SubmittedResourcesInitContainerStepSuite
+  extends SparkFunSuite with BeforeAndAfter {
   private val RESOURCE_SECRET_NAME = "secret"
   private val JARS_RESOURCE_ID = "jarsID"
   private val JARS_SECRET = "jarsSecret"

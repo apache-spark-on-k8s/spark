@@ -743,6 +743,61 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.kerberos.enabled</code></td> 
+  <td>false</td>
+  <td>
+    Specify whether your job requires a Kerberos Authentication to access HDFS. By default, we
+    will assume that you will not require secure HDFS access. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.keytab</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos.enabled</code> to be true. This will let you specify 
+    the location of your Kerberos keytab to be used in order to access Secure HDFS. This is optional as you 
+    may login by running <code>kinit</code> before running the spark-submit, and the submission client
+    will look within your local TGT cache to resolve this. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.principal</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos.enabled</code> to be true. This will let you specify 
+    your Kerberos principal that you wish to use to access Secure HDFS. This is optional as you 
+    may login by running <code>kinit</code> before running the spark-submit, and the submission client
+    will look within your local TGT cache to resolve this. 
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.rewewer.principal</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos.enabled</code> to be true. This will let you specify 
+    the principal that you wish to use to handle renewing of Delegation Tokens. This is optional as you 
+    we will set the principal to be the job users principal by default.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.tokensecret.name</code></td> 
+  <td>(none)</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos.enabled</code> to be true. This will let you specify 
+    the name of the secret where your existing delegation token data is stored. You must also specify the 
+    item key <code>spark.kubernetes.kerberos.tokensecret.itemkey</code> where your data is stored on the secret. 
+    This is optional in the case that you want to use pre-existing secret, otherwise a new secret will be automatically
+    created.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.kubernetes.kerberos.tokensecret.itemkey</code></td> 
+  <td>spark.kubernetes.kerberos.dt.label</td>
+  <td>
+    Assuming you have set <code>spark.kubernetes.kerberos.enabled</code> to be true. This will let you specify 
+    the data item key name within the pre-specified secret where the data of your existing delegation token data is stored. 
+    We have a default value of <code>spark.kubernetes.kerberos.tokensecret.itemkey</code> should you not include it. But
+    you should always include this if you are proposing a pre-existing secret contain the delegation token data.
   <td><code>spark.executorEnv.[EnvironmentVariableName]</code></td> 
   <td>(none)</td>
   <td>

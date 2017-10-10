@@ -21,7 +21,7 @@ import scala.collection.JavaConverters._
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 
 import org.apache.spark.{SparkConf, SparkException}
-import org.apache.spark.deploy.k8s.{ConfigurationUtils, InitContainerResourceStagingServerSecretPlugin, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.k8s.{ConfigurationUtils, HadoopConfBootstrap, InitContainerResourceStagingServerSecretPlugin, KerberosTokenConfBootstrap, PodWithDetachedInitContainer, PodWithMainContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.{InitContainerUtil, MountSecretsBootstrap, MountSmallFilesBootstrap}
@@ -46,7 +46,9 @@ private[spark] class ExecutorPodFactoryImpl(
     mountSmallFilesBootstrap: Option[MountSmallFilesBootstrap],
     executorInitContainerBootstrap: Option[SparkPodInitContainerBootstrap],
     executorMountInitContainerSecretPlugin: Option[InitContainerResourceStagingServerSecretPlugin],
-    shuffleManager: Option[KubernetesExternalShuffleManager])
+    shuffleManager: Option[KubernetesExternalShuffleManager],
+    hadoopBootStrap: Option[HadoopConfBootstrap],
+    kerberosBootstrap: Option[KerberosTokenConfBootstrap])
   extends ExecutorPodFactory {
 
   import ExecutorPodFactoryImpl._
@@ -55,6 +57,9 @@ private[spark] class ExecutorPodFactoryImpl(
       org.apache.spark.internal.config.EXECUTOR_CLASS_PATH)
   private val executorJarsDownloadDir = sparkConf.get(INIT_CONTAINER_JARS_DOWNLOAD_LOCATION)
 
+  private val isKerberosEnabled = sparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
+  private val maybeSimpleAuthentication =
+    if (isKerberosEnabled) Some(s"-D$HADOOP_SECURITY_AUTHENTICATION=simple") else None
   private val executorLabels = ConfigurationUtils.parsePrefixedKeyValuePairs(
       sparkConf,
       KUBERNETES_EXECUTOR_LABEL_PREFIX,
@@ -136,15 +141,19 @@ private[spark] class ExecutorPodFactoryImpl(
         .withValue(cp)
         .build()
     }
-    val executorExtraJavaOptionsEnv = sparkConf
-      .get(org.apache.spark.internal.config.EXECUTOR_JAVA_OPTIONS)
-      .map { opts =>
-        val delimitedOpts = Utils.splitCommandString(opts)
-        delimitedOpts.zipWithIndex.map {
-          case (opt, index) =>
-            new EnvVarBuilder().withName(s"$ENV_JAVA_OPT_PREFIX$index").withValue(opt).build()
-        }
-      }.getOrElse(Seq.empty[EnvVar])
+    val executorExtraJavaOptions = (
+      sparkConf.get(org.apache.spark.internal.config.EXECUTOR_JAVA_OPTIONS)
+        ++ maybeSimpleAuthentication).mkString(" ") match {
+        case "" => None
+        case str => Some(str)
+      }
+    val executorExtraJavaOptionsEnv = executorExtraJavaOptions.map { opts =>
+      val delimitedOpts = Utils.splitCommandString(opts)
+      delimitedOpts.zipWithIndex.map {
+        case (opt, index) =>
+          new EnvVarBuilder().withName(s"$ENV_JAVA_OPT_PREFIX$index").withValue(opt).build()
+      }
+    }.getOrElse(Seq.empty[EnvVar])
     val executorEnv = (Seq(
       (ENV_EXECUTOR_PORT, executorPort.toString),
       (ENV_DRIVER_URL, driverUrl),
@@ -262,9 +271,24 @@ private[spark] class ExecutorPodFactoryImpl(
     val executorPodWithNodeAffinity =
         nodeAffinityExecutorPodModifier.addNodeAffinityAnnotationIfUseful(
             executorPodWithInitContainer, nodeToLocalTaskCount)
-    new PodBuilder(executorPodWithNodeAffinity)
+    val (executorHadoopConfPod, executorHadoopConfContainer) =
+      hadoopBootStrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+        )
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse(executorPodWithNodeAffinity, initBootstrappedExecutorContainer)
+
+    val (executorKerberosPod, executorKerberosContainer) =
+      kerberosBootstrap.map { bootstrap =>
+        val podWithMainContainer = bootstrap.bootstrapMainContainerAndVolumes(
+          PodWithMainContainer(executorHadoopConfPod, executorHadoopConfContainer))
+        (podWithMainContainer.pod, podWithMainContainer.mainContainer)
+      }.getOrElse((executorHadoopConfPod, executorHadoopConfContainer))
+    val resolvedExecutorPod = new PodBuilder(executorKerberosPod)
+    new PodBuilder(resolvedExecutorPod)
       .editSpec()
-        .addToContainers(initBootstrappedExecutorContainer)
+        .addToContainers(executorKerberosContainer)
         .endSpec()
       .build()
   }
