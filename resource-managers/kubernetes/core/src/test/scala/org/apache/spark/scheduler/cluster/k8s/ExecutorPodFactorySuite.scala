@@ -18,29 +18,22 @@ package org.apache.spark.scheduler.cluster.k8s
 
 import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.api.model.{Pod, VolumeBuilder, VolumeMountBuilder, _}
 import io.fabric8.kubernetes.client.KubernetesClient
-import io.fabric8.kubernetes.api.model.{Pod, Volume, VolumeBuilder, VolumeMount, VolumeMountBuilder}
-
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
-import org.mockito.{AdditionalAnswers, ArgumentCaptor, Mock, MockitoAnnotations}
+import org.apache.commons.io.FilenameUtils
+import org.mockito.{AdditionalAnswers, MockitoAnnotations}
 import org.mockito.Matchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.{doNothing, never, times, verify, when, mock, reset}
+import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
 
-import org.scalatest.mock.MockitoSugar._
-
-import org.apache.commons.io.FilenameUtils
-
-import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
-import org.apache.spark.network.netty.SparkTransportConf
-import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
-import org.apache.spark.deploy.k8s.{constants, SparkPodInitContainerBootstrapImpl, SparkPodInitContainerBootstrap, PodWithDetachedInitContainer}
+import org.apache.spark.{SparkConf, SparkFunSuite}
+import org.apache.spark.deploy.k8s.{constants, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.k8s.config._
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl, MountSmallFilesBootstrap}
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrap, MountSmallFilesBootstrapImpl}
 
-class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with BeforeAndAfterEach {
+class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with BeforeAndAfterEach {
   private val driverPodName: String = "driver-pod"
   private val driverPodUid: String = "driver-uid"
   private val driverUrl: String = "driver-url"
@@ -109,7 +102,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
     assert(executor.getSpec.getNodeSelector.isEmpty)
     assert(executor.getSpec.getVolumes.isEmpty)
 
-    checkEnv(executor, Set())
+    checkEnv(executor, Map())
     checkOwnerReferences(executor, driverPodUid)
   }
 
@@ -149,7 +142,8 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
 
     assert(executor.getSpec.getContainers.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.size() === 1)
-    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName === "secret1-volume")
+    assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0).getName
+      === "secret1-volume")
     assert(executor.getSpec.getContainers.get(0).getVolumeMounts.get(0)
       .getMountPath === "/var/secret1")
 
@@ -162,18 +156,6 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
 
   test("init-container bootstrap step adds an init container") {
     val conf = baseConf.clone()
-
-/*
-    val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
-      "init-image",
-      "IfNotPresent",
-      "/some/path/",
-      "some/other/path",
-      10,
-      "config-map-name",
-      "config-map-key")
-*/
-
     val initContainerBootstrap = mock(classOf[SparkPodInitContainerBootstrap])
     when(initContainerBootstrap.bootstrapInitContainerAndVolumes(
       any(classOf[PodWithDetachedInitContainer]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
@@ -245,40 +227,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
   test("Small-files add a secret & secret volume mount to the container") {
     val conf = baseConf.clone()
 
-    //val smallFiles = new MountSmallFilesBootstrapImpl("secret1", "/var/secret1")
-    val smallFiles = mock(classOf[MountSmallFilesBootstrap])
-    when(smallFiles.mountSmallFilesSecret(
-      any(classOf[Pod]),
-      any(classOf[Container]))).thenAnswer(new Answer[(Pod, Container)] {
-        def answer(invocation: InvocationOnMock): (Pod, Container) = {
-          val pod = invocation.getArgumentAt(0, classOf[Pod])
-          val container = invocation.getArgumentAt(1, classOf[Container])
-          val secretName = "secret1"
-          val secretMountPath = "/var/secret1"
-          val resolvedPod = new PodBuilder(pod)
-            .editOrNewSpec()
-              .addNewVolume()
-                .withName("submitted-files")
-                .withNewSecret()
-                  .withSecretName(secretName)
-                  .endSecret()
-                .endVolume()
-              .endSpec()
-            .build()
-          val resolvedContainer = new ContainerBuilder(container)
-            .addNewEnv()
-              .withName(constants.ENV_MOUNTED_FILES_FROM_SECRET_DIR)
-              .withValue(secretMountPath)
-              .endEnv()
-            .addNewVolumeMount()
-              .withName("submitted-files")
-              .withMountPath(secretMountPath)
-              .endVolumeMount()
-            .build()
-          (resolvedPod, resolvedContainer)
-        }
-      })
-
+    val smallFiles = new MountSmallFilesBootstrapImpl("secret1", "/var/secret1")
     val factory = new ExecutorPodFactoryImpl(
       conf,
       nodeAffinityExecutorPodModifier,
@@ -304,7 +253,7 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
     assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName === "secret1")
 
     checkOwnerReferences(executor, driverPodUid)
-    checkEnv(executor, Set("SPARK_MOUNTED_FILES_FROM_SECRET_DIR"))
+    checkEnv(executor, Map("SPARK_MOUNTED_FILES_FROM_SECRET_DIR" -> "/var/secret1"))
   }
 
   test("classpath and extra java options get translated into environment variables") {
@@ -320,7 +269,10 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
-    checkEnv(executor, Set("SPARK_JAVA_OPT_0", "SPARK_EXECUTOR_EXTRA_CLASSPATH", "qux"))
+    checkEnv(executor,
+      Map("SPARK_JAVA_OPT_0" -> "foo=bar",
+          "SPARK_EXECUTOR_EXTRA_CLASSPATH" -> "bar=baz",
+          "qux" -> "quux"))
     checkOwnerReferences(executor, driverPodUid)
   }
 
@@ -332,18 +284,22 @@ class ExecutorPodFactoryImplSuite extends SparkFunSuite with BeforeAndAfter with
   }
 
   // Check that the expected environment variables are present.
-  private def checkEnv(executor: Pod, additionalEnvVars: Set[String]): Unit = {
-    val defaultEnvs = Set(constants.ENV_EXECUTOR_ID,
-      constants.ENV_DRIVER_URL, constants.ENV_EXECUTOR_CORES,
-      constants.ENV_EXECUTOR_MEMORY, constants.ENV_APPLICATION_ID,
-      constants.ENV_MOUNTED_CLASSPATH, constants.ENV_EXECUTOR_POD_IP,
-      constants.ENV_EXECUTOR_PORT) ++ additionalEnvVars
+  private def checkEnv(executor: Pod, additionalEnvVars: Map[String, String]): Unit = {
+    val defaultEnvs = Map(
+      constants.ENV_EXECUTOR_ID -> "1",
+      constants.ENV_DRIVER_URL -> "dummy",
+      constants.ENV_EXECUTOR_CORES -> "1",
+      constants.ENV_EXECUTOR_MEMORY -> "1g",
+      constants.ENV_APPLICATION_ID -> "dummy",
+      constants.ENV_MOUNTED_CLASSPATH -> "/var/spark-data/spark-jars/*",
+      constants.ENV_EXECUTOR_POD_IP -> null,
+      constants.ENV_EXECUTOR_PORT -> "10000") ++ additionalEnvVars
 
     assert(executor.getSpec.getContainers.size() === 1)
     assert(executor.getSpec.getContainers.get(0).getEnv().size() === defaultEnvs.size)
-    val setEnvs = executor.getSpec.getContainers.get(0).getEnv.asScala.map {
-      x => x.getName
-    }.toSet
-    assert(defaultEnvs === setEnvs)
+    val mapEnvs = executor.getSpec.getContainers.get(0).getEnv.asScala.map {
+      x => (x.getName, x.getValue)
+    }.toMap
+    assert(defaultEnvs === mapEnvs)
   }
 }
