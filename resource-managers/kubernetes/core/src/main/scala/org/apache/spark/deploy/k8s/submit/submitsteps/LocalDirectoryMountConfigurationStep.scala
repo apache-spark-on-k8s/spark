@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.submit
+package org.apache.spark.deploy.k8s.submit.submitsteps
 
 import java.nio.file.Paths
 import java.util.UUID
@@ -22,9 +22,7 @@ import java.util.UUID
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder, VolumeBuilder, VolumeMountBuilder}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{DriverConfigurationStep, KubernetesDriverSpec}
 
 /**
  * Configures local directories that the driver and executors should use for temporary storage.
@@ -46,7 +44,9 @@ import org.apache.spark.deploy.k8s.submit.submitsteps.{DriverConfigurationStep, 
  *   paths that have to be mounted.
  */
 private[spark] class LocalDirectoryMountConfigurationStep(
-    submissionSparkConf: SparkConf) extends DriverConfigurationStep {
+    submissionSparkConf: SparkConf,
+    randomDirProvider: () => String = () => s"spark-${UUID.randomUUID()}")
+    extends DriverConfigurationStep {
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     val configuredLocalDirs = submissionSparkConf.getOption("spark.local.dir")
@@ -60,7 +60,7 @@ private[spark] class LocalDirectoryMountConfigurationStep(
     } else {
       // If we don't use the external shuffle service, local directories should be randomized if
       // not provided.
-      configuredLocalDirs.getOrElse(s"$GENERATED_LOCAL_DIR_MOUNT_ROOT/spark-${UUID.randomUUID}")
+      configuredLocalDirs.getOrElse(s"$GENERATED_LOCAL_DIR_MOUNT_ROOT/${randomDirProvider()}")
     }
     val resolvedLocalDirs = resolvedLocalDirsSingleString.split(",")
     // It's worth noting that we always use an emptyDir volume for the directories on the driver,

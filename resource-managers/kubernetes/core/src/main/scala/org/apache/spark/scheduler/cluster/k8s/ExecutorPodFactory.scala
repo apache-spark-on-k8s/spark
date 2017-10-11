@@ -272,10 +272,10 @@ private[spark] class ExecutorPodFactoryImpl(
           // If we're not using the external shuffle manager, we should use emptyDir volumes for
           // shuffle directories since it's important for disk I/O for these directories to be
           // performant. If the user has not provided a local directory, instead of using the
-          // Java temporary directory, we create one instead. This is because we want to avoid
-          // as much as possible mounting an emptyDir which overlaps with an existing path in
-          // the Docker image, which is very likely what would happen if we tried to mount the
-          // volume at Java's temporary directory path, which is /tmp in many JDKs.
+          // Java temporary directory, we create one instead, because we want to avoid
+          // mounting an emptyDir which overlaps with an existing path in the Docker image.
+          // Java's temporary directory path is typically /tmp or a similar path, which is
+          // likely to exist in most images.
           val resolvedLocalDirs = Utils.getConfiguredLocalDirs(sparkConf)
           val localDirVolumes = resolvedLocalDirs.zipWithIndex.map { case (dir, index) =>
             new VolumeBuilder()

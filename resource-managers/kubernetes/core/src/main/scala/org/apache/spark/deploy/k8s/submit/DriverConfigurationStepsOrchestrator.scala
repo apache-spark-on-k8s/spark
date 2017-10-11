@@ -22,7 +22,7 @@ import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep}
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
-import org.apache.spark.deploy.kubernetes.submit.LocalDirectoryMountConfigurationStep
+import org.apache.spark.deploy.k8s.submit.submitsteps.LocalDirectoryMountConfigurationStep
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{SystemClock, Utils}
 
