@@ -183,7 +183,6 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     val conf = baseConf.clone()
     conf.set(KUBERNETES_SHUFFLE_LABELS, "label=value")
     conf.set(KUBERNETES_SHUFFLE_NAMESPACE, "default")
-    conf.set(KUBERNETES_SHUFFLE_DIR, "/tmp")
 
     val shuffleManager = mock(classOf[KubernetesExternalShuffleManager])
     when(shuffleManager.getExecutorShuffleDirVolumesWithMounts).thenReturn({
