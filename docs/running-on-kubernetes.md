@@ -69,7 +69,7 @@ For example, if the registry host is `registry-host` and the registry is listeni
     docker push registry-host:5000/spark-driver:latest
     docker push registry-host:5000/spark-executor:latest
     docker push registry-host:5000/spark-init:latest
-    
+
 Note that `spark-base` is the base image for the other images.  It must be built first before the other images, and then afterwards the other images can be built in any order.
 
 ## Submitting Applications to Kubernetes
@@ -198,10 +198,10 @@ is currently supported.
 
 ### Running PySpark
 
-Running PySpark on Kubernetes leverages the same spark-submit logic when launching on Yarn and Mesos. 
-Python files can be distributed by including, in the conf, `--py-files` 
+Running PySpark on Kubernetes leverages the same spark-submit logic when launching on Yarn and Mesos.
+Python files can be distributed by including, in the conf, `--py-files`
 
-Below is an example submission: 
+Below is an example submission:
 
 
 ```
@@ -264,6 +264,37 @@ application's configuration when using Kubernetes, even though it defaults to th
 other cluster managers.
 
 ## Advanced
+
+### Running in-cluster client mode applications
+
+While Spark on Kubernetes does not support client mode applications, such as the PySpark shell, when launched from outside Kubernetes, Spark on Kubernetes does support client mode applications launched from within the cluster. This _in-cluster_ client mode bypasses some of the networking and dependency issues inherent to running a client from outside of a cluster while allowing much of the same functionality in terms of interactive use cases, such as the PySpark shell and Jupyter notebooks.
+
+In order to run in client mode, use `kubectl attach` to attach to an existing driver pod on the cluster, or the following to run a new driver:
+
+    kubectl run -it --image=<driver image> --restart=Never -- /bin/bash
+
+This will open up a shell into the specified driver pod from which you can run client mode applications. In order to appropriately configure
+these in-cluster applications, be sure to set the following configuration value for all applications, as in the following `spark-submit` example,
+which tells the cluster manager to refer back to the current driver pod as the driver for any applications you submit:
+
+    spark.kubernetes.driver.pod.name=$HOSTNAME
+
+With that set, you should be able to run the following example from within the pod:
+
+    bin/spark-submit \
+      --deploy-mode client \
+      --class org.apache.spark.examples.SparkPi \
+      --master k8s://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT \
+      --kubernetes-namespace default \
+      --conf spark.app.name=spark-pi \
+      --conf spark.kubernetes.driver.pod.name=$HOSTNAME \
+      --conf spark.kubernetes.driver.docker.image=kubespark/spark-driver:latest \
+      --conf spark.kubernetes.executor.docker.image=kubespark/spark-executor:latest \
+      --conf spark.dynamicAllocation.enabled=true \
+      --conf spark.shuffle.service.enabled=true \
+      --conf spark.kubernetes.shuffle.namespace=default \
+      --conf spark.kubernetes.shuffle.labels="app=spark-shuffle-service,spark-version=2.1.0" \
+      local:///opt/spark/examples/jars/spark_examples_2.11-2.2.0.jar 10
 
 ### Securing the Resource Staging Server with TLS
 
@@ -742,17 +773,17 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
-  <td><code>spark.kubernetes.node.selector.[labelKey]</code></td> 
+  <td><code>spark.kubernetes.node.selector.[labelKey]</code></td>
   <td>(none)</td>
   <td>
-    Adds to the node selector of the driver pod and executor pods, with key <code>labelKey</code> and the value as the 
+    Adds to the node selector of the driver pod and executor pods, with key <code>labelKey</code> and the value as the
     configuration's value. For example, setting <code>spark.kubernetes.node.selector.identifier</code> to <code>myIdentifier</code>
-    will result in the driver pod and executors having a node selector with key <code>identifier</code> and value 
+    will result in the driver pod and executors having a node selector with key <code>identifier</code> and value
     <code>myIdentifier</code>. Multiple node selector keys can be added by setting multiple configurations with this prefix.
   </td>
 </tr>
 <tr>
-  <td><code>spark.executorEnv.[EnvironmentVariableName]</code></td> 
+  <td><code>spark.executorEnv.[EnvironmentVariableName]</code></td>
   <td>(none)</td>
   <td>
     Add the environment variable specified by <code>EnvironmentVariableName</code> to
@@ -760,7 +791,7 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
-  <td><code>spark.kubernetes.driverEnv.[EnvironmentVariableName]</code></td> 
+  <td><code>spark.kubernetes.driverEnv.[EnvironmentVariableName]</code></td>
   <td>(none)</td>
   <td>
     Add the environment variable specified by <code>EnvironmentVariableName</code> to
