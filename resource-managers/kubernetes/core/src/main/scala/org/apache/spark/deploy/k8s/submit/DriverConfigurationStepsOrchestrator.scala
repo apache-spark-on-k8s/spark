@@ -22,6 +22,7 @@ import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
+import org.apache.spark.deploy.k8s.submit.submitsteps.LocalDirectoryMountConfigurationStep
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{SystemClock, Utils}
 
@@ -110,6 +111,9 @@ private[spark] class DriverConfigurationStepsOrchestrator(
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
         submissionSparkConf, kubernetesResourceNamePrefix)
 
+    val localDirectoryMountConfigurationStep = new LocalDirectoryMountConfigurationStep(
+        submissionSparkConf)
+
     val resourceStep = mainAppResource match {
       case PythonMainAppResource(mainPyResource) =>
         Option(new PythonStep(mainPyResource, additionalPythonFiles, filesDownloadPath))
@@ -189,7 +193,8 @@ private[spark] class DriverConfigurationStepsOrchestrator(
       initialSubmissionStep,
       driverAddressStep,
       kubernetesCredentialsStep,
-      dependencyResolutionStep) ++
+      dependencyResolutionStep,
+      localDirectoryMountConfigurationStep) ++
       submittedDependenciesBootstrapSteps ++
       resourceStep.toSeq ++
       mountSecretsStep.toSeq
