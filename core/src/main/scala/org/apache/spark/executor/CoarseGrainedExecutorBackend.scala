@@ -181,7 +181,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cores: Int,
       appId: String,
       workerUrl: Option[String],
-      userClassPath: Seq[URL]) {
+      userClassPath: Seq[URL],
+      metricsNamespace: String) {
 
     Utils.initDaemon(log)
 
@@ -201,7 +202,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         clientMode = true)
       val driver = fetcher.setupEndpointRefByURI(driverUrl)
       val cfg = driver.askSync[SparkAppConfig](RetrieveSparkAppConfig(executorId))
-      val props = cfg.sparkProperties ++ Seq[(String, String)](("spark.app.id", appId))
+      val props = cfg.sparkProperties ++ Seq[(String, String)](("spark.app.id", appId),
+        ("spark.metrics.namespace", metricsNamespace))
       fetcher.shutdown()
 
       // Create SparkEnv using properties we fetched from the driver.
@@ -239,6 +241,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var hostname: String = null
     var cores: Int = 0
     var appId: String = null
+    var metricsNameSpace: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new mutable.ListBuffer[URL]()
 
@@ -267,6 +270,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         case ("--user-class-path") :: value :: tail =>
           userClassPath += new URL(value)
           argv = tail
+        case ("--metrics-namespace") :: value :: tail =>
+          metricsNameSpace = value
+          argv = tail
         case Nil =>
         case tail =>
           // scalastyle:off println
@@ -281,7 +287,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       printUsageAndExit()
     }
 
-    run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath)
+    run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath, metricsNameSpace)
     System.exit(0)
   }
 
@@ -297,6 +303,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --hostname <hostname>
       |   --cores <cores>
       |   --app-id <appid>
+      |   --metrics-namespace <metrics_namespace>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>
       |""".stripMargin)

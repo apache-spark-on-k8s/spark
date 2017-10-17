@@ -79,7 +79,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
@@ -119,7 +119,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
         None,
         executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
@@ -140,7 +140,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
@@ -174,7 +174,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
@@ -205,7 +205,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
     assert(executor.getSpec.getVolumes.size === 1)
     assert(executor.getSpec.getVolumes.contains(localDirVolume))
     assert(executor.getSpec.getContainers.size() === 1)
@@ -226,7 +226,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
@@ -259,7 +259,8 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
         None,
         executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"), driverPod, Map[String, Int]())
+      "1", "dummy", "default", "dummy", Seq[(String, String)]("qux" -> "quux"),
+      driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))

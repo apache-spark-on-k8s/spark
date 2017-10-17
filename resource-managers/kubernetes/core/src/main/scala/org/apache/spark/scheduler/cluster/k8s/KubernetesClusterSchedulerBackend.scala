@@ -194,6 +194,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   }
 
   override def applicationId(): String = conf.get("spark.app.id", super.applicationId())
+  def metricsNameSpace(): String = conf.get("spark.metrics.namespace", applicationId())
 
   override def sufficientResourcesRegistered(): Boolean = {
     totalRegisteredExecutors.get() >= initialExecutors * minRegisteredRatio
@@ -285,6 +286,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
     val executorPod = executorPodFactory.createExecutorPod(
         executorId,
         applicationId(),
+        metricsNameSpace(),
         driverUrl,
         conf.getExecutorEnv,
         driverPod,

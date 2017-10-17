@@ -32,6 +32,7 @@ private[spark] trait ExecutorPodFactory {
   def createExecutorPod(
       executorId: String,
       applicationId: String,
+      metricsNameSpace: String,
       driverUrl: String,
       executorEnvs: Seq[(String, String)],
       driverPod: Pod,
@@ -105,6 +106,7 @@ private[spark] class ExecutorPodFactoryImpl(
   override def createExecutorPod(
       executorId: String,
       applicationId: String,
+      metricsNameSpace: String,
       driverUrl: String,
       executorEnvs: Seq[(String, String)],
       driverPod: Pod,
@@ -151,6 +153,7 @@ private[spark] class ExecutorPodFactoryImpl(
       (ENV_EXECUTOR_CORES, math.ceil(executorCores).toInt.toString),
       (ENV_EXECUTOR_MEMORY, executorMemoryString),
       (ENV_APPLICATION_ID, applicationId),
+      (ENV_METRICS_NAMESPACE, metricsNameSpace),
       (ENV_EXECUTOR_ID, executorId),
       (ENV_MOUNTED_CLASSPATH, s"$executorJarsDownloadDir/*")) ++ executorEnvs)
       .map(env => new EnvVarBuilder()

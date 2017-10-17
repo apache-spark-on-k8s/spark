@@ -147,6 +147,8 @@ private[spark] class MetricsSystem private (
         }
         defaultName
       }
+    } else if (instance == "shuffleService") {
+      MetricRegistry.name(metricsNamespace.getOrElse(""), defaultName)
     } else { defaultName }
   }
 
