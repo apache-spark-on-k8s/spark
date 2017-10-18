@@ -74,7 +74,6 @@ package object constants {
   private[spark] val ENV_MOUNTED_FILES_FROM_SECRET_DIR = "SPARK_MOUNTED_FILES_FROM_SECRET_DIR"
 
   // Bootstrapping dependencies with the init-container
-  private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH =
     "/mnt/secrets/spark-init"
   private[spark] val INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY =

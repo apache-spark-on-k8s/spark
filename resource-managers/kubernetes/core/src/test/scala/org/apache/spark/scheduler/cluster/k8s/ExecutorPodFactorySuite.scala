@@ -179,8 +179,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
-    assert(executor.getMetadata.getAnnotations.size() === 1)
-    assert(executor.getMetadata.getAnnotations.containsKey(INIT_CONTAINER_ANNOTATION))
+    assert(executor.getSpec.getInitContainers.size() === 1)
     checkOwnerReferences(executor, driverPodUid)
   }
 
