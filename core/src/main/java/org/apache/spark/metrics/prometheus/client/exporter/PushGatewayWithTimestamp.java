@@ -34,9 +34,11 @@ import java.io.OutputStreamWriter;
 /**
  * Export metrics via the Prometheus Pushgateway.
  * <p>
- * The Prometheus Pushgateway exists to allow ephemeral and batch jobs to expose their metrics to Prometheus.
- * Since these kinds of jobs may not exist long enough to be scraped, they can instead push their metrics
- * to a Pushgateway. This class allows pushing the contents of a {@link CollectorRegistry} to
+ * The Prometheus Pushgateway exists to allow ephemeral and
+ * batch jobs to expose their metrics to Prometheus.
+ * Since these kinds of jobs may not exist long enough to be scraped,
+ * they can instead push their metrics to a Pushgateway.
+ * This class allows pushing the contents of a {@link CollectorRegistry} to
  * a Pushgateway.
  * <p>
  * Example usage:
@@ -45,7 +47,9 @@ import java.io.OutputStreamWriter;
  *   void executeBatchJob() throws Exception {
  *     CollectorRegistry registry = new CollectorRegistry();
  *     Gauge duration = Gauge.build()
- *         .name("my_batch_job_duration_seconds").help("Duration of my batch job in seconds.").register(registry);
+ *         .name("my_batch_job_duration_seconds")
+ *         .help("Duration of my batch job in seconds.")
+ *         .register(registry);
  *     Gauge.Timer durationTimer = duration.startTimer();
  *     try {
  *       // Your code here.
@@ -53,7 +57,9 @@ import java.io.OutputStreamWriter;
  *       // This is only added to the registry after success,
  *       // so that a previous success in the Pushgateway isn't overwritten on failure.
  *       Gauge lastSuccess = Gauge.build()
- *           .name("my_batch_job_last_success").help("Last time my batch job succeeded, in unixtime.").register(registry);
+ *           .name("my_batch_job_last_success")
+ *           .help("Last time my batch job succeeded, in unixtime.")
+ *           .register(registry);
  *       lastSuccess.setToCurrentTime();
  *     } finally {
  *       durationTimer.setDuration();
@@ -64,7 +70,8 @@ import java.io.OutputStreamWriter;
  * }
  * </pre>
  * <p>
- * See <a href="https://github.com/prometheus/pushgateway">https://github.com/prometheus/pushgateway</a>
+ * See <a href="https://github.com/prometheus/pushgateway">
+ *     https://github.com/prometheus/pushgateway</a>
  */
 public class PushGatewayWithTimestamp {
 
@@ -81,7 +88,8 @@ public class PushGatewayWithTimestamp {
     }
 
     /**
-     * Pushes all metrics in a registry, replacing all those with the same job and no grouping key.
+     * Pushes all metrics in a registry,
+     * replacing all those with the same job and no grouping key.
      * <p>
      * This uses the PUT HTTP method.
      */
@@ -90,7 +98,8 @@ public class PushGatewayWithTimestamp {
     }
 
     /**
-     * Pushes all metrics in a Collector, replacing all those with the same job and no grouping key.
+     * Pushes all metrics in a Collector,
+     * replacing all those with the same job and no grouping key.
      * <p>
      * This is useful for pushing a single Gauge.
      * <p>
@@ -103,11 +112,13 @@ public class PushGatewayWithTimestamp {
     }
 
     /**
-     * Pushes all metrics in a registry, replacing all those with the same job and grouping key.
+     * Pushes all metrics in a registry,
+     * replacing all those with the same job and grouping key.
      * <p>
      * This uses the PUT HTTP method.
      */
-    public void push(CollectorRegistry registry, String job, Map<String, String> groupingKey) throws IOException {
+    public void push(CollectorRegistry registry,
+                     String job, Map<String, String> groupingKey) throws IOException {
         doRequest(registry, job, groupingKey, "PUT", null);
     }
 
@@ -118,23 +129,27 @@ public class PushGatewayWithTimestamp {
      * <p>
      * This uses the PUT HTTP method.
      */
-    public void push(Collector collector, String job, Map<String, String> groupingKey) throws IOException {
+    public void push(Collector collector,
+                     String job, Map<String, String> groupingKey) throws IOException {
         CollectorRegistry registry = new CollectorRegistry();
         collector.register(registry);
         push(registry, job, groupingKey);
     }
 
     /**
-     * Pushes all metrics in a registry, replacing only previously pushed metrics of the same name and job and no grouping key.
+     * Pushes all metrics in a registry,
+     * replacing only previously pushed metrics of the same name and job and no grouping key.
      * <p>
      * This uses the POST HTTP method.
      */
-    public void pushAdd(CollectorRegistry registry, String job, String timestamp) throws IOException {
+    public void pushAdd(CollectorRegistry registry,
+                        String job, String timestamp) throws IOException {
         doRequest(registry, job, null, "POST", timestamp);
     }
 
     /**
-     * Pushes all metrics in a Collector, replacing only previously pushed metrics of the same name and job and no grouping key.
+     * Pushes all metrics in a Collector,
+     * replacing only previously pushed metrics of the same name and job and no grouping key.
      * <p>
      * This is useful for pushing a single Gauge.
      * <p>
@@ -147,22 +162,26 @@ public class PushGatewayWithTimestamp {
     }
 
     /**
-     * Pushes all metrics in a registry, replacing only previously pushed metrics of the same name, job and grouping key.
+     * Pushes all metrics in a registry,
+     * replacing only previously pushed metrics of the same name, job and grouping key.
      * <p>
      * This uses the POST HTTP method.
      */
-    public void pushAdd(CollectorRegistry registry, String job, Map<String, String> groupingKey, String timestamp) throws IOException {
+    public void pushAdd(CollectorRegistry registry,String job,
+                        Map<String, String> groupingKey, String timestamp) throws IOException {
         doRequest(registry, job, groupingKey, "POST", timestamp);
     }
 
     /**
-     * Pushes all metrics in a Collector, replacing only previously pushed metrics of the same name, job and grouping key.
+     * Pushes all metrics in a Collector,
+     * replacing only previously pushed metrics of the same name, job and grouping key.
      * <p>
      * This is useful for pushing a single Gauge.
      * <p>
      * This uses the POST HTTP method.
      */
-    public void pushAdd(Collector collector, String job, Map<String, String> groupingKey) throws IOException {
+    public void pushAdd(Collector collector, String job,
+                        Map<String, String> groupingKey) throws IOException {
         CollectorRegistry registry = new CollectorRegistry();
         collector.register(registry);
         pushAdd(registry, job, groupingKey, null);
@@ -215,7 +234,8 @@ public class PushGatewayWithTimestamp {
     }
 
     /**
-     * Pushes all metrics in a Collector, replacing only previously pushed metrics of the same name.
+     * Pushes all metrics in a Collector,
+     * replacing only previously pushed metrics of the same name.
      * <p>
      * This is useful for pushing a single Gauge.
      * <p>
@@ -238,7 +258,8 @@ public class PushGatewayWithTimestamp {
         delete(job, Collections.singletonMap("instance", instance));
     }
 
-    void doRequest(CollectorRegistry registry, String job, Map<String, String> groupingKey, String method, String timestamp) throws IOException {
+    void doRequest(CollectorRegistry registry, String job, Map<String,
+            String> groupingKey, String method, String timestamp) throws IOException {
         String url = "http://" + address + "/metrics/job/" + URLEncoder.encode(job, "UTF-8");
         if (groupingKey != null) {
             for (Map.Entry<String, String> entry: groupingKey.entrySet()) {
@@ -261,8 +282,11 @@ public class PushGatewayWithTimestamp {
 
         try {
             if (!method.equals("DELETE")) {
-                BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(connection.getOutputStream(), "UTF-8"));
-                TextFormatWithTimestamp.write004(writer, registry.metricFamilySamples(), timestamp);
+                BufferedWriter writer =
+                        new BufferedWriter(
+                                new OutputStreamWriter(connection.getOutputStream(), "UTF-8"));
+                TextFormatWithTimestamp.write004(writer,
+                                                registry.metricFamilySamples(), timestamp);
                 writer.flush();
                 writer.close();
             }

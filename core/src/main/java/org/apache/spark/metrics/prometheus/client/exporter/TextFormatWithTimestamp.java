@@ -27,79 +27,81 @@ public class TextFormatWithTimestamp {
     /**
      * Content-type for text version 0.0.4.
      */
-    public final static String CONTENT_TYPE_004 = "text/plain; version=0.0.4; charset=utf-8";
-    
+    public static final String CONTENT_TYPE_004 = "text/plain; version=0.0.4; charset=utf-8";
+
     private static StringBuilder jsonMessageLogBuilder = new StringBuilder();
 
-    public static void write004(Writer writer, Enumeration<Collector.MetricFamilySamples> mfs)throws IOException {
+    public static void write004(Writer writer,
+                                Enumeration<Collector.MetricFamilySamples> mfs)throws IOException {
         write004(writer, mfs, null);
     }
 
     /**
      * Write out the text version 0.0.4 of the given MetricFamilySamples.
      */
-    public static void write004(Writer writer, Enumeration<Collector.MetricFamilySamples> mfs, String timestamp) throws IOException {
+    public static void write004(Writer writer,Enumeration<Collector.MetricFamilySamples> mfs,
+                                String timestamp) throws IOException {
     /* See http://prometheus.io/docs/instrumenting/exposition_formats/
      * for the output format specification. */
-        while(mfs.hasMoreElements()) {
-            Collector.MetricFamilySamples metricFamilySamples = mfs.nextElement();
+    while(mfs.hasMoreElements()) {
+        Collector.MetricFamilySamples metricFamilySamples = mfs.nextElement();
 
-            logger.debug("Metrics data");
-            logger.debug(metricFamilySamples.toString());
-            logger.debug("Logging metrics as a json format:");
+        logger.debug("Metrics data");
+        logger.debug(metricFamilySamples.toString());
+        logger.debug("Logging metrics as a json format:");
 
 
-            writer.write("# HELP ");
-            appendToJsonMessageLogBuilder("# HELP ");
-            writer.write(metricFamilySamples.name);
-            appendToJsonMessageLogBuilder(metricFamilySamples.name);
-            writer.write(' ');
-            appendToJsonMessageLogBuilder(' ');
-            writeEscapedHelp(writer, metricFamilySamples.help);
-            writer.write('\n');
-            appendToJsonMessageLogBuilder('\n');
+        writer.write("# HELP ");
+        appendToJsonMessageLogBuilder("# HELP ");
+        writer.write(metricFamilySamples.name);
+        appendToJsonMessageLogBuilder(metricFamilySamples.name);
+        writer.write(' ');
+        appendToJsonMessageLogBuilder(' ');
+        writeEscapedHelp(writer, metricFamilySamples.help);
+        writer.write('\n');
+        appendToJsonMessageLogBuilder('\n');
 
-            writer.write("# TYPE ");
-            appendToJsonMessageLogBuilder("# TYPE ");
-            writer.write(metricFamilySamples.name);
-            appendToJsonMessageLogBuilder(metricFamilySamples.name);
-            writer.write(' ');
-            appendToJsonMessageLogBuilder(' ');
-            writer.write(typeString(metricFamilySamples.type));
-            appendToJsonMessageLogBuilder(typeString(metricFamilySamples.type));
-            writer.write('\n');
-            appendToJsonMessageLogBuilder('\n');
+        writer.write("# TYPE ");
+        appendToJsonMessageLogBuilder("# TYPE ");
+        writer.write(metricFamilySamples.name);
+        appendToJsonMessageLogBuilder(metricFamilySamples.name);
+        writer.write(' ');
+        appendToJsonMessageLogBuilder(' ');
+        writer.write(typeString(metricFamilySamples.type));
+        appendToJsonMessageLogBuilder(typeString(metricFamilySamples.type));
+        writer.write('\n');
+        appendToJsonMessageLogBuilder('\n');
 
-            for (Collector.MetricFamilySamples.Sample sample: metricFamilySamples.samples) {
-                writer.write(sample.name);
-                appendToJsonMessageLogBuilder(sample.name);
-                if (sample.labelNames.size() > 0) {
-                    writer.write('{');
-                    appendToJsonMessageLogBuilder('{');
-                    for (int i = 0; i < sample.labelNames.size(); ++i) {
-                        writer.write(sample.labelNames.get(i));
-                        appendToJsonMessageLogBuilder(sample.labelNames.get(i));
-                        writer.write("=\"");
-                        appendToJsonMessageLogBuilder("=\"");
-                        writeEscapedLabelValue(writer, sample.labelValues.get(i));
-                        writer.write("\",");
-                        appendToJsonMessageLogBuilder("\",");
-                    }
-                    writer.write('}');
-                    appendToJsonMessageLogBuilder('}');
+        for (Collector.MetricFamilySamples.Sample sample: metricFamilySamples.samples) {
+            writer.write(sample.name);
+            appendToJsonMessageLogBuilder(sample.name);
+            if (sample.labelNames.size() > 0) {
+                writer.write('{');
+                appendToJsonMessageLogBuilder('{');
+                for (int i = 0; i < sample.labelNames.size(); ++i) {
+                    writer.write(sample.labelNames.get(i));
+                    appendToJsonMessageLogBuilder(sample.labelNames.get(i));
+                    writer.write("=\"");
+                    appendToJsonMessageLogBuilder("=\"");
+                    writeEscapedLabelValue(writer, sample.labelValues.get(i));
+                    writer.write("\",");
+                    appendToJsonMessageLogBuilder("\",");
                 }
-                writer.write(' ');
-                appendToJsonMessageLogBuilder(' ');
-                writer.write(Collector.doubleToGoString(sample.value));
-                appendToJsonMessageLogBuilder(Collector.doubleToGoString(sample.value));
-                if(timestamp != null && !timestamp.isEmpty()) {
-                    writer.write(" " + timestamp);
-                    appendToJsonMessageLogBuilder(" " + timestamp);
-                }
-                writer.write('\n');
-                appendToJsonMessageLogBuilder('\n');
+                writer.write('}');
+                appendToJsonMessageLogBuilder('}');
             }
-            logger.debug("JSON: "+ jsonMessageLogBuilder);
+            writer.write(' ');
+            appendToJsonMessageLogBuilder(' ');
+            writer.write(Collector.doubleToGoString(sample.value));
+            appendToJsonMessageLogBuilder(Collector.doubleToGoString(sample.value));
+            if(timestamp != null && !timestamp.isEmpty()) {
+                writer.write(" " + timestamp);
+                appendToJsonMessageLogBuilder(" " + timestamp);
+            }
+            writer.write('\n');
+            appendToJsonMessageLogBuilder('\n');
+        }
+        logger.debug("JSON: "+ jsonMessageLogBuilder);
         }
     }
 
@@ -160,15 +162,17 @@ public class TextFormatWithTimestamp {
                 return "untyped";
         }
     }
-    
+
     private static void appendToJsonMessageLogBuilder(String msg) {
-        if (logger.isDebugEnabled())
+        if (logger.isDebugEnabled()) {
             jsonMessageLogBuilder.append(msg);
+        }
     }
 
     private static void appendToJsonMessageLogBuilder(char c) {
-        if (logger.isDebugEnabled())
+        if (logger.isDebugEnabled()) {
             jsonMessageLogBuilder.append(c);
+        }
     }
 }
 
