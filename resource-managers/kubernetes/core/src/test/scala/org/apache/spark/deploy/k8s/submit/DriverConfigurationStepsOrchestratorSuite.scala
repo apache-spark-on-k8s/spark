@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s.submit
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.k8s.config._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, LocalDirectoryMountConfigurationStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
+import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep, InitContainerBootstrapStep, LocalDirectoryMountConfigurationStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 
 private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunSuite {
 
@@ -50,7 +50,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
-        classOf[DriverAddressConfigurationStep],
+        classOf[DriverServiceBootstrapStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[LocalDirectoryMountConfigurationStep])
@@ -74,7 +74,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
-        classOf[DriverAddressConfigurationStep],
+        classOf[DriverServiceBootstrapStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[LocalDirectoryMountConfigurationStep],
@@ -97,7 +97,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
-        classOf[DriverAddressConfigurationStep],
+        classOf[DriverServiceBootstrapStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[LocalDirectoryMountConfigurationStep],
@@ -120,7 +120,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
       orchestrator,
       classOf[BaseDriverConfigurationStep],
-      classOf[DriverAddressConfigurationStep],
+      classOf[DriverServiceBootstrapStep],
       classOf[DriverKubernetesCredentialsStep],
       classOf[DependencyResolutionStep],
       classOf[LocalDirectoryMountConfigurationStep],
@@ -144,7 +144,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
         orchestrator,
         classOf[BaseDriverConfigurationStep],
-        classOf[DriverAddressConfigurationStep],
+        classOf[DriverServiceBootstrapStep],
         classOf[DriverKubernetesCredentialsStep],
         classOf[DependencyResolutionStep],
         classOf[LocalDirectoryMountConfigurationStep],
@@ -169,7 +169,7 @@ private[spark] class DriverConfigurationStepsOrchestratorSuite extends SparkFunS
     validateStepTypes(
       orchestrator,
       classOf[BaseDriverConfigurationStep],
-      classOf[DriverAddressConfigurationStep],
+      classOf[DriverServiceBootstrapStep],
       classOf[DriverKubernetesCredentialsStep],
       classOf[DependencyResolutionStep],
       classOf[LocalDirectoryMountConfigurationStep],

@@ -75,7 +75,7 @@ private[spark] class BaseDriverConfigurationStepSuite extends SparkFunSuite {
         .asScala
         .map(env => (env.getName, env.getValue))
         .toMap
-    assert(envs.size === 6)
+    assert(envs.size === 7)
     assert(envs(ENV_SUBMIT_EXTRA_CLASSPATH) === "/opt/spark/spark-examples.jar")
     assert(envs(ENV_DRIVER_MEMORY) === "256M")
     assert(envs(ENV_DRIVER_MAIN_CLASS) === MAIN_CLASS)

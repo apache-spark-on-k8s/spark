@@ -54,6 +54,7 @@ package object constants {
   // Environment Variables
   private[spark] val ENV_EXECUTOR_PORT = "SPARK_EXECUTOR_PORT"
   private[spark] val ENV_DRIVER_URL = "SPARK_DRIVER_URL"
+  private[spark] val ENV_DRIVER_BIND_ADDRESS = "SPARK_DRIVER_BIND_ADDRESS"
   private[spark] val ENV_EXECUTOR_CORES = "SPARK_EXECUTOR_CORES"
   private[spark] val ENV_EXECUTOR_MEMORY = "SPARK_EXECUTOR_MEMORY"
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"

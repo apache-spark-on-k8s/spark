@@ -20,7 +20,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.ConfigurationUtils
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverAddressConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
+import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
 import org.apache.spark.deploy.k8s.submit.submitsteps.LocalDirectoryMountConfigurationStep
 import org.apache.spark.launcher.SparkLauncher
@@ -103,7 +103,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
         mainClass,
         appArgs,
         submissionSparkConf)
-    val driverAddressStep = new DriverAddressConfigurationStep(
+    val driverAddressStep = new DriverServiceBootstrapStep(
         kubernetesResourceNamePrefix,
         allDriverLabels,
         submissionSparkConf,
