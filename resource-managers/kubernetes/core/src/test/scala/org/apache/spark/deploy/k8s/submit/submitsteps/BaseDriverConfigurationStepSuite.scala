@@ -84,13 +84,10 @@ private[spark] class BaseDriverConfigurationStepSuite extends SparkFunSuite {
     assert(envs(DRIVER_CUSTOM_ENV_KEY1) === "customDriverEnv1")
     assert(envs(DRIVER_CUSTOM_ENV_KEY2) === "customDriverEnv2")
 
-    val envDriverBindAddress = preparedDriverSpec.driverContainer
-      .getEnv
-      .asScala
-      .filter(envVar => envVar.getName.equals(ENV_DRIVER_BIND_ADDRESS))
-      .head
-    assert(envDriverBindAddress.getValueFrom.getFieldRef.getApiVersion.equals("v1"))
-    assert(envDriverBindAddress.getValueFrom.getFieldRef.getFieldPath.equals("status.podIP"))
+    assert(preparedDriverSpec.driverContainer.getEnv.asScala.exists(envVar =>
+      envVar.getName.equals(ENV_DRIVER_BIND_ADDRESS) &&
+        envVar.getValueFrom.getFieldRef.getApiVersion.equals("v1") &&
+        envVar.getValueFrom.getFieldRef.getFieldPath.equals("status.podIP")))
 
     val resourceRequirements = preparedDriverSpec.driverContainer.getResources
     val requests = resourceRequirements.getRequests.asScala
