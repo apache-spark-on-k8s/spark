@@ -136,8 +136,8 @@ private[spark] class DriverServiceBootstrapStepSuite
       case e: Throwable =>
         assert(e.getMessage ===
           s"requirement failed: ${DriverServiceBootstrapStep.DRIVER_BIND_ADDRESS_KEY} is" +
-            s" not supported in Kubernetes mode, as the driver's hostname will be managed via" +
-            s" a Kubernetes service.")
+            s" not supported in Kubernetes mode, as the the driver's bind address is managed" +
+            s" and set to the driver pod's IP address.")
     }
     sparkConf.remove(org.apache.spark.internal.config.DRIVER_BIND_ADDRESS)
     sparkConf.set(org.apache.spark.internal.config.DRIVER_HOST_ADDRESS, "host")
