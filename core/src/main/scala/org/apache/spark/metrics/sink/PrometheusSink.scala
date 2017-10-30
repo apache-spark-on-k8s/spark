@@ -105,10 +105,12 @@ private[spark] class PrometheusSink(
   val DEFAULT_PUSH_PERIOD: Int = 10
   val DEFAULT_PUSH_PERIOD_UNIT: TimeUnit = TimeUnit.SECONDS
   val DEFAULT_PUSHGATEWAY_ADDRESS: String = "127.0.0.1:9091"
+  val DEFAULT_PUSHGATEWAY_ADDRESS_PROTOCOL: String = "http"
 
   val KEY_PUSH_PERIOD = "period"
   val KEY_PUSH_PERIOD_UNIT = "unit"
   val KEY_PUSHGATEWAY_ADDRESS = "pushgateway-address"
+  val KEY_PUSHGATEWAY_ADDRESS_PROTOCOL = "pushgateway-address-protocol"
 
 
   val pollPeriod: Int =
@@ -125,18 +127,24 @@ private[spark] class PrometheusSink(
     Option(property.getProperty(KEY_PUSHGATEWAY_ADDRESS))
       .getOrElse(DEFAULT_PUSHGATEWAY_ADDRESS)
 
+  val pushGatewayAddressProtocol =
+    Option(property.getProperty(KEY_PUSHGATEWAY_ADDRESS_PROTOCOL))
+      .getOrElse(DEFAULT_PUSHGATEWAY_ADDRESS_PROTOCOL)
+
   // validate pushgateway host:port
-  Try(new URI(s"http://$pushGatewayAddress")).get
+  Try(new URI(s"$pushGatewayAddressProtocol://$pushGatewayAddress")).get
 
   MetricsSystem.checkMinimalPollingPeriod(pollUnit, pollPeriod)
 
   logInfo("Initializing Prometheus Sink...")
   logInfo(s"Metrics polling period -> $pollPeriod $pollUnit")
   logInfo(s"$KEY_PUSHGATEWAY_ADDRESS -> $pushGatewayAddress")
+  logInfo(s"$KEY_PUSHGATEWAY_ADDRESS_PROTOCOL -> $pushGatewayAddressProtocol")
 
   val pushRegistry: CollectorRegistry = new CollectorRegistry()
   val sparkMetricExports: DropwizardExports = new DropwizardExports(registry)
-  val pushGateway: PushGatewayWithTimestamp = new PushGatewayWithTimestamp(pushGatewayAddress)
+  val pushGateway: PushGatewayWithTimestamp =
+    new PushGatewayWithTimestamp(s"$pushGatewayAddressProtocol://$pushGatewayAddress")
 
   val reporter = new Reporter(registry)
 

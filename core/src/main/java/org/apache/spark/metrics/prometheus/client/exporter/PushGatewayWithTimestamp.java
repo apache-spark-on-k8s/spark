@@ -260,7 +260,7 @@ public class PushGatewayWithTimestamp {
 
     void doRequest(CollectorRegistry registry, String job, Map<String,
             String> groupingKey, String method, String timestamp) throws IOException {
-        String url = "http://" + address + "/metrics/job/" + URLEncoder.encode(job, "UTF-8");
+        String url = address + "/metrics/job/" + URLEncoder.encode(job, "UTF-8");
         if (groupingKey != null) {
             for (Map.Entry<String, String> entry: groupingKey.entrySet()) {
                 url += "/" + entry.getKey() + "/" + URLEncoder.encode(entry.getValue(), "UTF-8");
