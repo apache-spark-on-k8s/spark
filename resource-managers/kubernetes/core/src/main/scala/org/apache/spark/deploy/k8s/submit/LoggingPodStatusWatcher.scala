@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s.submit
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import io.fabric8.kubernetes.api.model.{ContainerStateRunning, ContainerStateTerminated, ContainerStateWaiting, ContainerStatus, Pod}
+import io.fabric8.kubernetes.api.model.{ContainerStateRunning, ContainerStateTerminated, ContainerStateWaiting, ContainerStatus, Pod, Time}
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import scala.collection.JavaConverters._
@@ -109,7 +109,7 @@ private[k8s] class LoggingPodStatusWatcherImpl(
       ("namespace", pod.getMetadata.getNamespace()),
       ("labels", pod.getMetadata.getLabels().asScala.mkString(", ")),
       ("pod uid", pod.getMetadata.getUid),
-      ("creation time", pod.getMetadata.getCreationTimestamp()),
+      ("creation time", formatTime(pod.getMetadata.getCreationTimestamp)),
 
       // spec details
       ("service account name", pod.getSpec.getServiceAccountName()),
@@ -117,7 +117,7 @@ private[k8s] class LoggingPodStatusWatcherImpl(
       ("node name", pod.getSpec.getNodeName()),
 
       // status
-      ("start time", pod.getStatus.getStartTime),
+      ("start time", formatTime(pod.getStatus.getStartTime)),
       ("container images",
         pod.getStatus.getContainerStatuses()
           .asScala
@@ -162,7 +162,7 @@ private[k8s] class LoggingPodStatusWatcherImpl(
           case running: ContainerStateRunning =>
             Seq(
               ("Container state", "Running"),
-              ("Container started at", running.getStartedAt))
+              ("Container started at", formatTime(running.getStartedAt)))
           case waiting: ContainerStateWaiting =>
             Seq(
               ("Container state", "Waiting"),
@@ -174,5 +174,9 @@ private[k8s] class LoggingPodStatusWatcherImpl(
           case unknown =>
             throw new SparkException(s"Unexpected container status type ${unknown.getClass}.")
         }.getOrElse(Seq(("Container state", "N/A")))
+  }
+
+  private def formatTime(time: Time): String = {
+    if (time != null) time.getTime else "N/A"
   }
 }

@@ -60,9 +60,9 @@ private[spark] object Minikube extends Logging {
   def getMinikubeStatus: MinikubeStatus.Value = synchronized {
     assert(MINIKUBE_EXECUTABLE_DEST.exists(), EXPECTED_DOWNLOADED_MINIKUBE_MESSAGE)
     val statusString = executeMinikube("status")
-      .filter(_.contains("minikubeVM: "))
+      .filter(_.contains("minikube: "))
       .head
-      .replaceFirst("minikubeVM: ", "")
+      .replaceFirst("minikube: ", "")
     MinikubeStatus.unapply(statusString)
         .getOrElse(throw new IllegalStateException(s"Unknown status $statusString"))
   }
@@ -78,7 +78,7 @@ private[spark] object Minikube extends Logging {
 
   def deleteMinikube(): Unit = synchronized {
     assert(MINIKUBE_EXECUTABLE_DEST.exists, EXPECTED_DOWNLOADED_MINIKUBE_MESSAGE)
-    if (getMinikubeStatus != MinikubeStatus.DOES_NOT_EXIST) {
+    if (getMinikubeStatus != MinikubeStatus.NONE) {
       executeMinikube("delete")
     } else {
       logInfo("Minikube was already not running.")
@@ -115,10 +115,17 @@ private[spark] object Minikube extends Logging {
 
 private[spark] object MinikubeStatus extends Enumeration {
 
+  // The following states are listed according to
+  // https://github.com/docker/machine/blob/master/libmachine/state/state.go.
+  val STARTING = status("Starting")
   val RUNNING = status("Running")
+  val PAUSED = status("Paused")
+  val STOPPING = status("Stopping")
   val STOPPED = status("Stopped")
-  val DOES_NOT_EXIST = status("Does Not Exist")
+  val ERROR = status("Error")
+  val TIMEOUT = status("Timeout")
   val SAVED = status("Saved")
+  val NONE = status("")
 
   def status(value: String): Value = new Val(nextId, value)
   def unapply(s: String): Option[Value] = values.find(s == _.toString)

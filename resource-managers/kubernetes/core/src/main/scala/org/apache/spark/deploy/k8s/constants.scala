@@ -54,6 +54,7 @@ package object constants {
   // Environment Variables
   private[spark] val ENV_EXECUTOR_PORT = "SPARK_EXECUTOR_PORT"
   private[spark] val ENV_DRIVER_URL = "SPARK_DRIVER_URL"
+  private[spark] val ENV_DRIVER_BIND_ADDRESS = "SPARK_DRIVER_BIND_ADDRESS"
   private[spark] val ENV_EXECUTOR_CORES = "SPARK_EXECUTOR_CORES"
   private[spark] val ENV_EXECUTOR_MEMORY = "SPARK_EXECUTOR_MEMORY"
   private[spark] val ENV_APPLICATION_ID = "SPARK_APPLICATION_ID"
@@ -75,7 +76,6 @@ package object constants {
   private[spark] val ENV_METRICS_NAMESPACE = "METRICS_NAMESPACE"
 
   // Bootstrapping dependencies with the init-container
-  private[spark] val INIT_CONTAINER_ANNOTATION = "pod.beta.kubernetes.io/init-containers"
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH =
     "/mnt/secrets/spark-init"
   private[spark] val INIT_CONTAINER_SUBMITTED_JARS_SECRET_KEY =

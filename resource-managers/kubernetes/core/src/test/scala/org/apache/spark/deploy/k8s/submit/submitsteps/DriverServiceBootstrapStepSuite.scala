@@ -27,16 +27,16 @@ import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.util.Clock
 
-private[spark] class DriverAddressConfigurationStepSuite
+private[spark] class DriverServiceBootstrapStepSuite
     extends SparkFunSuite with BeforeAndAfter {
 
   private val SHORT_RESOURCE_NAME_PREFIX =
-      "a" * (DriverAddressConfigurationStep.MAX_SERVICE_NAME_LENGTH -
-          DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX.length)
+      "a" * (DriverServiceBootstrapStep.MAX_SERVICE_NAME_LENGTH -
+          DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX.length)
 
   private val LONG_RESOURCE_NAME_PREFIX =
-      "a" * (DriverAddressConfigurationStep.MAX_SERVICE_NAME_LENGTH -
-          DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX.length + 1)
+      "a" * (DriverServiceBootstrapStep.MAX_SERVICE_NAME_LENGTH -
+          DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX.length + 1)
   private val DRIVER_LABELS = Map(
       "label1key" -> "label1value",
       "label2key" -> "label2value")
@@ -52,92 +52,92 @@ private[spark] class DriverAddressConfigurationStepSuite
   }
 
   test("Headless service has a port for the driver RPC and the block manager.") {
-    val configurationStep = new DriverAddressConfigurationStep(
-        SHORT_RESOURCE_NAME_PREFIX,
-        DRIVER_LABELS,
-        sparkConf
-            .set("spark.driver.port", "9000")
-            .set(org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, 8080),
-        clock)
+    val configurationStep = new DriverServiceBootstrapStep(
+      SHORT_RESOURCE_NAME_PREFIX,
+      DRIVER_LABELS,
+      sparkConf
+        .set("spark.driver.port", "9000")
+        .set(org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, 8080),
+      clock)
     val baseDriverSpec = KubernetesDriverSpec.initialSpec(sparkConf.clone())
     val resolvedDriverSpec = configurationStep.configureDriver(baseDriverSpec)
     assert(resolvedDriverSpec.otherKubernetesResources.size === 1)
     assert(resolvedDriverSpec.otherKubernetesResources.head.isInstanceOf[Service])
     val driverService = resolvedDriverSpec.otherKubernetesResources.head.asInstanceOf[Service]
     verifyService(
-        9000,
-        8080,
-        s"$SHORT_RESOURCE_NAME_PREFIX${DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX}",
-        driverService)
+      9000,
+      8080,
+      s"$SHORT_RESOURCE_NAME_PREFIX${DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX}",
+      driverService)
   }
 
   test("Hostname and ports are set according to the service name.") {
-    val configurationStep = new DriverAddressConfigurationStep(
-        SHORT_RESOURCE_NAME_PREFIX,
-        DRIVER_LABELS,
-        sparkConf
-            .set("spark.driver.port", "9000")
-            .set(org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, 8080)
-            .set(KUBERNETES_NAMESPACE, "my-namespace"),
-        clock)
+    val configurationStep = new DriverServiceBootstrapStep(
+      SHORT_RESOURCE_NAME_PREFIX,
+      DRIVER_LABELS,
+      sparkConf
+        .set("spark.driver.port", "9000")
+        .set(org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, 8080)
+        .set(KUBERNETES_NAMESPACE, "my-namespace"),
+      clock)
     val baseDriverSpec = KubernetesDriverSpec.initialSpec(sparkConf.clone())
     val resolvedDriverSpec = configurationStep.configureDriver(baseDriverSpec)
     val expectedServiceName = SHORT_RESOURCE_NAME_PREFIX +
-        DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX
+      DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX
     val expectedHostName = s"$expectedServiceName.my-namespace.svc.cluster.local"
     verifySparkConfHostNames(resolvedDriverSpec.driverSparkConf, expectedHostName)
   }
 
   test("Ports should resolve to defaults in SparkConf and in the service.") {
-    val configurationStep = new DriverAddressConfigurationStep(
-        SHORT_RESOURCE_NAME_PREFIX,
-        DRIVER_LABELS,
-        sparkConf,
-        clock)
+    val configurationStep = new DriverServiceBootstrapStep(
+      SHORT_RESOURCE_NAME_PREFIX,
+      DRIVER_LABELS,
+      sparkConf,
+      clock)
     val baseDriverSpec = KubernetesDriverSpec.initialSpec(sparkConf.clone())
     val resolvedDriverSpec = configurationStep.configureDriver(baseDriverSpec)
     verifyService(
-        DEFAULT_DRIVER_PORT,
-        DEFAULT_BLOCKMANAGER_PORT,
-        s"$SHORT_RESOURCE_NAME_PREFIX${DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX}",
-        resolvedDriverSpec.otherKubernetesResources.head.asInstanceOf[Service])
+      DEFAULT_DRIVER_PORT,
+      DEFAULT_BLOCKMANAGER_PORT,
+      s"$SHORT_RESOURCE_NAME_PREFIX${DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX}",
+      resolvedDriverSpec.otherKubernetesResources.head.asInstanceOf[Service])
     assert(resolvedDriverSpec.driverSparkConf.get("spark.driver.port") ===
-        DEFAULT_DRIVER_PORT.toString)
+      DEFAULT_DRIVER_PORT.toString)
     assert(resolvedDriverSpec.driverSparkConf.get(
-        org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT) === DEFAULT_BLOCKMANAGER_PORT)
+      org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT) === DEFAULT_BLOCKMANAGER_PORT)
   }
 
   test("Long prefixes should switch to using a generated name.") {
-    val configurationStep = new DriverAddressConfigurationStep(
-        LONG_RESOURCE_NAME_PREFIX,
-        DRIVER_LABELS,
-        sparkConf.set(KUBERNETES_NAMESPACE, "my-namespace"),
-        clock)
+    val configurationStep = new DriverServiceBootstrapStep(
+      LONG_RESOURCE_NAME_PREFIX,
+      DRIVER_LABELS,
+      sparkConf.set(KUBERNETES_NAMESPACE, "my-namespace"),
+      clock)
     when(clock.getTimeMillis()).thenReturn(10000)
     val baseDriverSpec = KubernetesDriverSpec.initialSpec(sparkConf.clone())
     val resolvedDriverSpec = configurationStep.configureDriver(baseDriverSpec)
     val driverService = resolvedDriverSpec.otherKubernetesResources.head.asInstanceOf[Service]
-    val expectedServiceName = s"spark-10000${DriverAddressConfigurationStep.DRIVER_SVC_POSTFIX}"
+    val expectedServiceName = s"spark-10000${DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX}"
     assert(driverService.getMetadata.getName === expectedServiceName)
     val expectedHostName = s"$expectedServiceName.my-namespace.svc.cluster.local"
     verifySparkConfHostNames(resolvedDriverSpec.driverSparkConf, expectedHostName)
   }
 
   test("Disallow bind address and driver host to be set explicitly.") {
-    val configurationStep = new DriverAddressConfigurationStep(
-        LONG_RESOURCE_NAME_PREFIX,
-        DRIVER_LABELS,
-        sparkConf.set(org.apache.spark.internal.config.DRIVER_BIND_ADDRESS, "host"),
-        clock)
+    val configurationStep = new DriverServiceBootstrapStep(
+      LONG_RESOURCE_NAME_PREFIX,
+      DRIVER_LABELS,
+      sparkConf.set(org.apache.spark.internal.config.DRIVER_BIND_ADDRESS, "host"),
+      clock)
     try {
       configurationStep.configureDriver(KubernetesDriverSpec.initialSpec(sparkConf))
       fail("The driver bind address should not be allowed.")
     } catch {
       case e: Throwable =>
         assert(e.getMessage ===
-            s"requirement failed: ${DriverAddressConfigurationStep.DRIVER_BIND_ADDRESS_KEY} is" +
-                s" not supported in Kubernetes mode, as the driver's hostname will be managed via" +
-                s" a Kubernetes service.")
+          s"requirement failed: ${DriverServiceBootstrapStep.DRIVER_BIND_ADDRESS_KEY} is" +
+            s" not supported in Kubernetes mode, as the driver's bind address is managed" +
+            s" and set to the driver pod's IP address.")
     }
     sparkConf.remove(org.apache.spark.internal.config.DRIVER_BIND_ADDRESS)
     sparkConf.set(org.apache.spark.internal.config.DRIVER_HOST_ADDRESS, "host")
@@ -147,9 +147,9 @@ private[spark] class DriverAddressConfigurationStepSuite
     } catch {
       case e: Throwable =>
         assert(e.getMessage ===
-            s"requirement failed: ${DriverAddressConfigurationStep.DRIVER_HOST_KEY} is" +
-                s" not supported in Kubernetes mode, as the driver's hostname will be managed via" +
-                s" a Kubernetes service.")
+          s"requirement failed: ${DriverServiceBootstrapStep.DRIVER_HOST_KEY} is" +
+            s" not supported in Kubernetes mode, as the driver's hostname will be managed via" +
+            s" a Kubernetes service.")
     }
   }
 
@@ -174,8 +174,6 @@ private[spark] class DriverAddressConfigurationStepSuite
   private def verifySparkConfHostNames(
       driverSparkConf: SparkConf, expectedHostName: String): Unit = {
     assert(driverSparkConf.get(
-        org.apache.spark.internal.config.DRIVER_HOST_ADDRESS) === expectedHostName)
-    assert(driverSparkConf.get(
-        org.apache.spark.internal.config.DRIVER_BIND_ADDRESS) === expectedHostName)
+      org.apache.spark.internal.config.DRIVER_HOST_ADDRESS) === expectedHostName)
   }
 }

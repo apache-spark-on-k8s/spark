@@ -16,7 +16,7 @@
  */
 package org.apache.spark.deploy.k8s.submit.submitsteps
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVarBuilder, PodBuilder, QuantityBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVarBuilder, EnvVarSourceBuilder, PodBuilder, QuantityBuilder}
 import scala.collection.JavaConverters._
 
 import org.apache.spark.SparkConf
@@ -113,6 +113,12 @@ private[spark] class BaseDriverConfigurationStep(
       .addNewEnv()
         .withName(ENV_DRIVER_ARGS)
         .withValue(appArgs.mkString(" "))
+        .endEnv()
+      .addNewEnv()
+        .withName(ENV_DRIVER_BIND_ADDRESS)
+        .withValueFrom(new EnvVarSourceBuilder()
+          .withNewFieldRef("v1", "status.podIP")
+          .build())
         .endEnv()
       .withNewResources()
         .addToRequests("cpu", driverCpuQuantity)

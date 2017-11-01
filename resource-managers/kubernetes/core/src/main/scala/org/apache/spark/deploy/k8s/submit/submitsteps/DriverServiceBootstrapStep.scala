@@ -29,20 +29,20 @@ import org.apache.spark.util.Clock
  * Allows the driver to be reachable by executor pods through a headless service. The service's
  * ports should correspond to the ports that the executor will reach the pod at for RPC.
  */
-private[spark] class DriverAddressConfigurationStep(
+private[spark] class DriverServiceBootstrapStep(
     kubernetesResourceNamePrefix: String,
     driverLabels: Map[String, String],
     submissionSparkConf: SparkConf,
     clock: Clock) extends DriverConfigurationStep with Logging {
-  import DriverAddressConfigurationStep._
+  import DriverServiceBootstrapStep._
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
     require(submissionSparkConf.getOption(DRIVER_BIND_ADDRESS_KEY).isEmpty,
-        s"$DRIVER_BIND_ADDRESS_KEY is not supported in Kubernetes mode, as the driver's hostname" +
-            s" will be managed via a Kubernetes service.")
+      s"$DRIVER_BIND_ADDRESS_KEY is not supported in Kubernetes mode, as the driver's bind" +
+        s" address is managed and set to the driver pod's IP address.")
     require(submissionSparkConf.getOption(DRIVER_HOST_KEY).isEmpty,
-        s"$DRIVER_HOST_KEY is not supported in Kubernetes mode, as the driver's hostname will be" +
-            s" managed via a Kubernetes service.")
+      s"$DRIVER_HOST_KEY is not supported in Kubernetes mode, as the driver's hostname will be" +
+        s" managed via a Kubernetes service.")
 
     val preferredServiceName = s"$kubernetesResourceNamePrefix$DRIVER_SVC_POSTFIX"
     val resolvedServiceName = if (preferredServiceName.length <= MAX_SERVICE_NAME_LENGTH) {
@@ -51,8 +51,8 @@ private[spark] class DriverAddressConfigurationStep(
       val randomServiceId = clock.getTimeMillis()
       val shorterServiceName = s"spark-$randomServiceId$DRIVER_SVC_POSTFIX"
       logWarning(s"Driver's hostname would preferably be $preferredServiceName, but this is" +
-          s" too long (must be <= 63 characters). Falling back to use $shorterServiceName" +
-              s" as the driver service's name.")
+        s" too long (must be <= 63 characters). Falling back to use $shorterServiceName" +
+        s" as the driver service's name.")
       shorterServiceName
     }
 
@@ -82,19 +82,18 @@ private[spark] class DriverAddressConfigurationStep(
     val namespace = submissionSparkConf.get(KUBERNETES_NAMESPACE)
     val driverHostname = s"${driverService.getMetadata.getName}.$namespace.svc.cluster.local"
     val resolvedSparkConf = driverSpec.driverSparkConf.clone()
-        .set(org.apache.spark.internal.config.DRIVER_BIND_ADDRESS, driverHostname)
         .set(org.apache.spark.internal.config.DRIVER_HOST_ADDRESS, driverHostname)
         .set("spark.driver.port", driverPort.toString)
         .set(
-            org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, driverBlockManagerPort)
+          org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, driverBlockManagerPort)
 
     driverSpec.copy(
-        driverSparkConf = resolvedSparkConf,
-        otherKubernetesResources = driverSpec.otherKubernetesResources ++ Seq(driverService))
+      driverSparkConf = resolvedSparkConf,
+      otherKubernetesResources = driverSpec.otherKubernetesResources ++ Seq(driverService))
   }
 }
 
-private[spark] object DriverAddressConfigurationStep {
+private[spark] object DriverServiceBootstrapStep {
   val DRIVER_BIND_ADDRESS_KEY = org.apache.spark.internal.config.DRIVER_BIND_ADDRESS.key
   val DRIVER_HOST_KEY = org.apache.spark.internal.config.DRIVER_HOST_ADDRESS.key
   val DRIVER_SVC_POSTFIX = "-driver-svc"

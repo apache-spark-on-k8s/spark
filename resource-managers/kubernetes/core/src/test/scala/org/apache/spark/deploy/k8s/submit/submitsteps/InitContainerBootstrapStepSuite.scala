@@ -31,9 +31,8 @@ import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.{InitContainerConfigurationStep, InitContainerSpec}
 import org.apache.spark.util.Utils
 
-private[spark] class initContainerBootstrapStepSuite extends SparkFunSuite {
+private[spark] class InitContainerBootstrapStepSuite extends SparkFunSuite {
 
-  private val OBJECT_MAPPER = new ObjectMapper().registerModule(DefaultScalaModule)
   private val CONFIG_MAP_NAME = "spark-init-config-map"
   private val CONFIG_MAP_KEY = "spark-init-config-map-key"
 
@@ -59,12 +58,9 @@ private[spark] class initContainerBootstrapStepSuite extends SparkFunSuite {
         FirstTestInitContainerConfigurationStep$.additionalMainContainerEnvKey)
     assert(additionalDriverEnv.head.getValue ===
         FirstTestInitContainerConfigurationStep$.additionalMainContainerEnvValue)
-    val driverAnnotations = preparedDriverSpec.driverPod.getMetadata.getAnnotations.asScala
-    assert(driverAnnotations.size === 1)
-    val initContainers = OBJECT_MAPPER.readValue(
-        driverAnnotations(INIT_CONTAINER_ANNOTATION), classOf[Array[Container]])
-    assert(initContainers.length === 1)
-    val initContainerEnv = initContainers.head.getEnv.asScala
+    val initContainers = preparedDriverSpec.driverPod.getSpec.getInitContainers
+    assert(initContainers.size() === 1)
+    val initContainerEnv = initContainers.get(0).getEnv.asScala
     assert(initContainerEnv.size === 1)
     assert(initContainerEnv.head.getName ===
         SecondTestInitContainerConfigurationStep$.additionalInitContainerEnvKey)

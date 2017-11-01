@@ -65,23 +65,30 @@ private[spark] class BaseDriverConfigurationStepSuite extends SparkFunSuite {
         driverContainer = new ContainerBuilder().build(),
         driverSparkConf = new SparkConf(false),
         otherKubernetesResources = Seq.empty[HasMetadata])
-
     val preparedDriverSpec = submissionStep.configureDriver(baseDriverSpec)
+
     assert(preparedDriverSpec.driverContainer.getName === DRIVER_CONTAINER_NAME)
     assert(preparedDriverSpec.driverContainer.getImage === "spark-driver:latest")
     assert(preparedDriverSpec.driverContainer.getImagePullPolicy === DOCKER_IMAGE_PULL_POLICY)
+
+    assert(preparedDriverSpec.driverContainer.getEnv.size === 7)
     val envs = preparedDriverSpec.driverContainer
         .getEnv
         .asScala
         .map(env => (env.getName, env.getValue))
         .toMap
-    assert(envs.size === 6)
     assert(envs(ENV_SUBMIT_EXTRA_CLASSPATH) === "/opt/spark/spark-examples.jar")
     assert(envs(ENV_DRIVER_MEMORY) === "256M")
     assert(envs(ENV_DRIVER_MAIN_CLASS) === MAIN_CLASS)
     assert(envs(ENV_DRIVER_ARGS) === "arg1 arg2")
     assert(envs(DRIVER_CUSTOM_ENV_KEY1) === "customDriverEnv1")
     assert(envs(DRIVER_CUSTOM_ENV_KEY2) === "customDriverEnv2")
+
+    assert(preparedDriverSpec.driverContainer.getEnv.asScala.exists(envVar =>
+      envVar.getName.equals(ENV_DRIVER_BIND_ADDRESS) &&
+        envVar.getValueFrom.getFieldRef.getApiVersion.equals("v1") &&
+        envVar.getValueFrom.getFieldRef.getFieldPath.equals("status.podIP")))
+
     val resourceRequirements = preparedDriverSpec.driverContainer.getResources
     val requests = resourceRequirements.getRequests.asScala
     assert(requests("cpu").getAmount === "2")
