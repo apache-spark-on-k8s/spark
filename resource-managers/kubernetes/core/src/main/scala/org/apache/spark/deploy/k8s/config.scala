@@ -110,4 +110,20 @@ package object config extends Logging {
       .createOptional
 
   private[spark] val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
+
+  private[spark] def getK8sMasterUrl(rawMasterString: String): String = {
+    if (!rawMasterString.startsWith("k8s://")) {
+      throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")
+    }
+    val masterWithoutK8sPrefix = rawMasterString.replaceFirst("k8s://", "")
+    if (masterWithoutK8sPrefix.startsWith("http://")
+      || masterWithoutK8sPrefix.startsWith("https://")) {
+      masterWithoutK8sPrefix
+    } else {
+      val resolvedURL = s"https://$masterWithoutK8sPrefix"
+      logDebug(s"No scheme specified for kubernetes master URL, so defaulting to https. Resolved" +
+        s" URL is $resolvedURL")
+      resolvedURL
+    }
+  }
 }

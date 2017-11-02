@@ -76,7 +76,8 @@ object SparkSubmit extends CommandLineUtils with Logging {
   private val STANDALONE = 2
   private val MESOS = 4
   private val LOCAL = 8
-  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | MESOS | LOCAL
+  private val KUBERNETES = 16
+  private val ALL_CLUSTER_MGRS = YARN | STANDALONE | MESOS | LOCAL | KUBERNETES
 
   // Deploy modes
   private val CLIENT = 1
@@ -296,6 +297,14 @@ object SparkSubmit extends CommandLineUtils with Logging {
       case (STANDALONE, CLUSTER) if args.isR =>
         printErrorAndExit("Cluster deploy mode is currently not supported for R " +
           "applications on standalone clusters.")
+      case (KUBERNETES, CLIENT) =>
+        printErrorAndExit("Client mode is currently not supported for Kubernetes.")
+      case (KUBERNETES, CLUSTER) if args.isPython =>
+        printErrorAndExit("Cluster deploy mode is currently not supported for python " +
+          "applications on Kubernetes clusters.")
+      case (KUBERNETES, CLUSTER) if args.isR =>
+        printErrorAndExit("Cluster deploy mode is currently not supported for R " +
+          "applications on Kubernetes clusters.")
       case (LOCAL, CLUSTER) =>
         printErrorAndExit("Cluster deploy mode is not compatible with master \"local\"")
       case (_, CLUSTER) if isShell(args.primaryResource) =>
@@ -316,6 +325,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
     val isYarnCluster = clusterManager == YARN && deployMode == CLUSTER
     val isMesosCluster = clusterManager == MESOS && deployMode == CLUSTER
     val isStandAloneCluster = clusterManager == STANDALONE && deployMode == CLUSTER
+    val isKubernetesCluster = clusterManager == KUBERNETES && deployMode == CLUSTER
 
     if (!isMesosCluster && !isStandAloneCluster) {
       // Resolve maven dependencies if there are any and add classpath to jars. Add them to py-files
@@ -555,6 +565,10 @@ object SparkSubmit extends CommandLineUtils with Logging {
       OptionAssigner(args.principal, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.principal"),
       OptionAssigner(args.keytab, YARN, ALL_DEPLOY_MODES, confKey = "spark.yarn.keytab"),
 
+      // Kubernetes only
+      OptionAssigner(args.kubernetesNamespace, KUBERNETES, ALL_DEPLOY_MODES,
+        sysProp = "spark.kubernetes.namespace"),
+
       // Other options
       OptionAssigner(args.executorCores, STANDALONE | YARN, ALL_DEPLOY_MODES,
         confKey = "spark.executor.cores"),
@@ -699,6 +713,16 @@ object SparkSubmit extends CommandLineUtils with Logging {
       }
       if (args.childArgs != null) {
         childArgs ++= args.childArgs
+      }
+    }
+
+    if (isKubernetesCluster) {
+      childMainClass = "org.apache.spark.deploy.k8s.submit.Client"
+      childArgs ++= Array("--primary-java-resource", args.primaryResource)
+      childArgs ++= Array("--main-class", args.mainClass)
+      args.childArgs.foreach { arg =>
+        childArgs += "--arg"
+        childArgs += arg
       }
     }
 
