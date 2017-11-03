@@ -26,7 +26,7 @@ import scala.collection.JavaConverters._
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{DriverConfigurationStep, KubernetesDriverSpec}
+import org.apache.spark.deploy.k8s.submit.steps.{DriverConfigurationStep, KubernetesDriverSpec}
 import org.apache.spark.deploy.k8s.SparkKubernetesClientFactory
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
@@ -40,9 +40,10 @@ private[spark] case class ClientArguments(
 private[spark] object ClientArguments {
   def fromCommandLineArgs(args: Array[String]): ClientArguments = {
     var mainAppResource: Option[MainAppResource] = None
-    var otherPyFiles = Seq.empty[String]
+    val otherPyFiles = Seq.empty[String]
     var mainClass: Option[String] = None
     val driverArgs = mutable.Buffer.empty[String]
+
     args.sliding(2, 2).toList.collect {
       case Array("--primary-java-resource", primaryJavaResource: String) =>
         mainAppResource = Some(JavaMainAppResource(primaryJavaResource))
@@ -54,14 +55,16 @@ private[spark] object ClientArguments {
         val invalid = other.mkString(" ")
         throw new RuntimeException(s"Unknown arguments: $invalid")
     }
+
     require(mainAppResource.isDefined,
-        "Main app resource must be defined by either --primary-py-file or --primary-java-resource.")
+      "Main app resource must be defined by either --primary-py-file or --primary-java-resource.")
     require(mainClass.isDefined, "Main class must be specified via --main-class")
+
     ClientArguments(
-        mainAppResource.get,
-        otherPyFiles,
-        mainClass.get,
-        driverArgs.toArray)
+      mainAppResource.get,
+      otherPyFiles,
+      mainClass.get,
+      driverArgs.toArray)
   }
 }
 
@@ -77,7 +80,7 @@ private[spark] class Client(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
 
    /**
-    * Run command that initalizes a DriverSpec that will be updated after each
+    * Run command that initializes a DriverSpec that will be updated after each
     * DriverConfigurationStep in the sequence that is passed in. The final KubernetesDriverSpec
     * will be used to build the Driver Container, Driver Pod, and Kubernetes Resources
     */
@@ -88,20 +91,22 @@ private[spark] class Client(
     for (nextStep <- submissionSteps) {
       currentDriverSpec = nextStep.configureDriver(currentDriverSpec)
     }
+
     val resolvedDriverJavaOpts = currentDriverSpec
-        .driverSparkConf
-        // We don't need this anymore since we just set the JVM options on the environment
-        .remove(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
-        .getAll
-        .map {
-          case (confKey, confValue) => s"-D$confKey=$confValue"
-        } ++ driverJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty)
+      .driverSparkConf
+      // We don't need this anymore since we just set the JVM options on the environment
+      .remove(org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
+      .getAll
+      .map {
+        case (confKey, confValue) => s"-D$confKey=$confValue"
+      } ++ driverJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty)
     val driverJavaOptsEnvs: Seq[EnvVar] = resolvedDriverJavaOpts.zipWithIndex.map {
       case (option, index) => new EnvVarBuilder()
-          .withName(s"$ENV_JAVA_OPT_PREFIX$index")
-          .withValue(option)
-          .build()
+        .withName(s"$ENV_JAVA_OPT_PREFIX$index")
+        .withValue(option)
+        .build()
     }
+
     val resolvedDriverContainer = new ContainerBuilder(currentDriverSpec.driverContainer)
       .addAllToEnv(driverJavaOptsEnvs.asJava)
       .build()
@@ -110,11 +115,12 @@ private[spark] class Client(
         .addToContainers(resolvedDriverContainer)
         .endSpec()
       .build()
+
     Utils.tryWithResource(
         kubernetesClient
-            .pods()
-            .withName(resolvedDriverPod.getMetadata.getName)
-            .watch(loggingPodStatusWatcher)) { _ =>
+          .pods()
+          .withName(resolvedDriverPod.getMetadata.getName)
+          .watch(loggingPodStatusWatcher)) { _ =>
       val createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
       try {
         if (currentDriverSpec.otherKubernetesResources.nonEmpty) {
@@ -137,6 +143,7 @@ private[spark] class Client(
           kubernetesClient.pods().delete(createdDriverPod)
           throw e
       }
+
       if (waitForAppCompletion) {
         logInfo(s"Waiting for application $appName to finish...")
         loggingPodStatusWatcher.awaitCompletion()
@@ -157,26 +164,30 @@ private[spark] object Client {
     val appName = sparkConf.getOption("spark.app.name").getOrElse("spark")
     val master = getK8sMasterUrl(sparkConf.get("spark.master"))
     val loggingInterval = Option(sparkConf.get(REPORT_INTERVAL)).filter( _ => waitForAppCompletion)
+
     val loggingPodStatusWatcher = new LoggingPodStatusWatcherImpl(
-        kubernetesAppId, loggingInterval)
+      kubernetesAppId, loggingInterval)
+
     val configurationStepsOrchestrator = new DriverConfigurationStepsOrchestrator(
-        namespace,
-        kubernetesAppId,
-        launchTime,
-        clientArguments.mainAppResource,
-        appName,
-        clientArguments.mainClass,
-        clientArguments.driverArgs,
-        clientArguments.otherPyFiles,
-        sparkConf)
+      namespace,
+      kubernetesAppId,
+      launchTime,
+      clientArguments.mainAppResource,
+      appName,
+      clientArguments.mainClass,
+      clientArguments.driverArgs,
+      clientArguments.otherPyFiles,
+      sparkConf)
+
     Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
-        master,
-        Some(namespace),
-        APISERVER_AUTH_SUBMISSION_CONF_PREFIX,
-        sparkConf,
-        None,
-        None)) { kubernetesClient =>
-      new Client(
+      master,
+      Some(namespace),
+      KUBERNETES_AUTH_SUBMISSION_CONF_PREFIX,
+      sparkConf,
+      None,
+      None)) {
+      kubernetesClient =>
+        new Client(
           configurationStepsOrchestrator.getAllConfigurationSteps(),
           sparkConf,
           kubernetesClient,

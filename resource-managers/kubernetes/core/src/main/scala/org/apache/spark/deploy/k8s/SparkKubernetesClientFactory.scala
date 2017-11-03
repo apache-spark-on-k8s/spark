@@ -61,8 +61,7 @@ private[spark] object SparkKubernetesClientFactory {
       .getOption(s"$kubernetesAuthConfPrefix.$CLIENT_KEY_FILE_CONF_SUFFIX")
     val clientCertFile = sparkConf
       .getOption(s"$kubernetesAuthConfPrefix.$CLIENT_CERT_FILE_CONF_SUFFIX")
-    val dispatcher = new Dispatcher(
-      ThreadUtils.newDaemonCachedThreadPool("kubernetes-dispatcher"))
+
     val config = new ConfigBuilder()
       .withApiVersion("v1")
       .withMasterUrl(master)
@@ -81,7 +80,10 @@ private[spark] object SparkKubernetesClientFactory {
       }.withOption(namespace) {
         (ns, configBuilder) => configBuilder.withNamespace(ns)
       }.build()
+
     val baseHttpClient = HttpClientUtils.createHttpClient(config)
+    val dispatcher = new Dispatcher(
+      ThreadUtils.newDaemonCachedThreadPool("kubernetes-dispatcher"))
     val httpClientWithCustomDispatcher = baseHttpClient.newBuilder()
       .dispatcher(dispatcher)
       .build()

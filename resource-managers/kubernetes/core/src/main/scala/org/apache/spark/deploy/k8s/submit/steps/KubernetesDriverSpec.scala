@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.k8s.submit.submitsteps
+package org.apache.spark.deploy.k8s.submit.steps
 
 import io.fabric8.kubernetes.api.model.{Container, ContainerBuilder, HasMetadata, Pod, PodBuilder}
 
@@ -37,11 +37,11 @@ private[spark] case class KubernetesDriverSpec(
 private[spark] object KubernetesDriverSpec {
   def initialSpec(initialSparkConf: SparkConf): KubernetesDriverSpec = {
     KubernetesDriverSpec(
-        // Set new metadata and a new spec so that submission steps can use
-        // PodBuilder#editMetadata() and/or PodBuilder#editSpec() safely.
-        new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build(),
-        new ContainerBuilder().build(),
-        Seq.empty[HasMetadata],
-        initialSparkConf.clone())
+      // Set new metadata and a new spec so that submission steps can use
+      // PodBuilder#editMetadata() and/or PodBuilder#editSpec() safely.
+      new PodBuilder().withNewMetadata().endMetadata().withNewSpec().endSpec().build(),
+      new ContainerBuilder().build(),
+      Seq.empty[HasMetadata],
+      initialSparkConf.clone())
   }
 }

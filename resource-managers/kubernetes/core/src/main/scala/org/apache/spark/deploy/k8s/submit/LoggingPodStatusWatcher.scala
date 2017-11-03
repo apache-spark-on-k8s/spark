@@ -35,7 +35,7 @@ private[k8s] trait LoggingPodStatusWatcher extends Watcher[Pod] {
  * A monitor for the running Kubernetes pod of a Spark application. Status logging occurs on
  * every state change and also at an interval for liveness.
  *
- * @param appId
+ * @param appId application ID.
  * @param maybeLoggingInterval ms between each state request. If provided, must be a positive
  *                             number.
  */
@@ -105,27 +105,28 @@ private[k8s] class LoggingPodStatusWatcherImpl(
     // TODO include specific container state
     val details = Seq[(String, String)](
       // pod metadata
-      ("pod name", pod.getMetadata.getName()),
-      ("namespace", pod.getMetadata.getNamespace()),
-      ("labels", pod.getMetadata.getLabels().asScala.mkString(", ")),
+      ("pod name", pod.getMetadata.getName),
+      ("namespace", pod.getMetadata.getNamespace),
+      ("labels", pod.getMetadata.getLabels.asScala.mkString(", ")),
       ("pod uid", pod.getMetadata.getUid),
       ("creation time", formatTime(pod.getMetadata.getCreationTimestamp)),
 
       // spec details
-      ("service account name", pod.getSpec.getServiceAccountName()),
-      ("volumes", pod.getSpec.getVolumes().asScala.map(_.getName).mkString(", ")),
-      ("node name", pod.getSpec.getNodeName()),
+      ("service account name", pod.getSpec.getServiceAccountName),
+      ("volumes", pod.getSpec.getVolumes.asScala.map(_.getName).mkString(", ")),
+      ("node name", pod.getSpec.getNodeName),
 
       // status
       ("start time", formatTime(pod.getStatus.getStartTime)),
       ("container images",
-        pod.getStatus.getContainerStatuses()
+        pod.getStatus.getContainerStatuses
           .asScala
           .map(_.getImage)
           .mkString(", ")),
-      ("phase", pod.getStatus.getPhase()),
-      ("status", pod.getStatus.getContainerStatuses().toString)
+      ("phase", pod.getStatus.getPhase),
+      ("status", pod.getStatus.getContainerStatuses.toString)
     )
+
     formatPairsBundle(details)
   }
 
@@ -156,23 +157,23 @@ private[k8s] class LoggingPodStatusWatcherImpl(
       containerStatus: ContainerStatus): Seq[(String, String)] = {
     val state = containerStatus.getState
     Option(state.getRunning)
-        .orElse(Option(state.getTerminated))
-        .orElse(Option(state.getWaiting))
-        .map {
-          case running: ContainerStateRunning =>
-            Seq(
-              ("Container state", "Running"),
-              ("Container started at", formatTime(running.getStartedAt)))
-          case waiting: ContainerStateWaiting =>
-            Seq(
-              ("Container state", "Waiting"),
-              ("Pending reason", waiting.getReason))
-          case terminated: ContainerStateTerminated =>
-            Seq(
-              ("Container state", "Terminated"),
-              ("Exit code", terminated.getExitCode.toString))
-          case unknown =>
-            throw new SparkException(s"Unexpected container status type ${unknown.getClass}.")
+      .orElse(Option(state.getTerminated))
+      .orElse(Option(state.getWaiting))
+      .map {
+        case running: ContainerStateRunning =>
+          Seq(
+            ("Container state", "Running"),
+            ("Container started at", formatTime(running.getStartedAt)))
+        case waiting: ContainerStateWaiting =>
+          Seq(
+            ("Container state", "Waiting"),
+            ("Pending reason", waiting.getReason))
+        case terminated: ContainerStateTerminated =>
+          Seq(
+            ("Container state", "Terminated"),
+            ("Exit code", terminated.getExitCode.toString))
+        case unknown =>
+          throw new SparkException(s"Unexpected container status type ${unknown.getClass}.")
         }.getOrElse(Seq(("Container state", "N/A")))
   }
 

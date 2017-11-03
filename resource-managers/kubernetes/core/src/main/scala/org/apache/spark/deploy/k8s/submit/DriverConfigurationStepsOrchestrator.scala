@@ -20,11 +20,8 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.ConfigurationUtils
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
-import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
-import org.apache.spark.deploy.k8s.submit.submitsteps.LocalDirectoryMountConfigurationStep
-import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.util.{SystemClock, Utils}
+import org.apache.spark.deploy.k8s.submit.steps.{BaseDriverConfigurationStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep}
+import org.apache.spark.util.SystemClock
 
 /**
  * Constructs the complete list of driver configuration steps to run to deploy the Spark driver.
@@ -51,57 +48,39 @@ private[spark] class DriverConfigurationStepsOrchestrator(
   private val dockerImagePullPolicy = submissionSparkConf.get(DOCKER_IMAGE_PULL_POLICY)
 
   def getAllConfigurationSteps(): Seq[DriverConfigurationStep] = {
-    val additionalMainAppJar = mainAppResource match {
-      case JavaMainAppResource(resource) if resource != SparkLauncher.NO_RESOURCE =>
-        Option(resource)
-      case _ => Option.empty
-    }
-    val sparkJars = submissionSparkConf.getOption("spark.jars")
-        .map(_.split(","))
-        .getOrElse(Array.empty[String]) ++
-        additionalMainAppJar.toSeq
-    val sparkFiles = submissionSparkConf.getOption("spark.files")
-        .map(_.split(","))
-        .getOrElse(Array.empty[String]) ++
-        additionalPythonFiles
     val driverCustomLabels = ConfigurationUtils.parsePrefixedKeyValuePairs(
-        submissionSparkConf,
-        KUBERNETES_DRIVER_LABEL_PREFIX,
-        "label")
+      submissionSparkConf,
+      KUBERNETES_DRIVER_LABEL_PREFIX,
+      "label")
     require(!driverCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
-        s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping" +
-        s" operations.")
+      s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping" +
+      s" operations.")
     val allDriverLabels = driverCustomLabels ++ Map(
-        SPARK_APP_ID_LABEL -> kubernetesAppId,
-        SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
+      SPARK_APP_ID_LABEL -> kubernetesAppId,
+      SPARK_ROLE_LABEL -> SPARK_POD_DRIVER_ROLE)
 
     val initialSubmissionStep = new BaseDriverConfigurationStep(
-        kubernetesAppId,
-        kubernetesResourceNamePrefix,
-        allDriverLabels,
-        dockerImagePullPolicy,
-        appName,
-        mainClass,
-        appArgs,
-        submissionSparkConf)
+      kubernetesAppId,
+      kubernetesResourceNamePrefix,
+      allDriverLabels,
+      dockerImagePullPolicy,
+      appName,
+      mainClass,
+      appArgs,
+      submissionSparkConf)
+
     val driverAddressStep = new DriverServiceBootstrapStep(
-        kubernetesResourceNamePrefix,
-        allDriverLabels,
-        submissionSparkConf,
-        new SystemClock)
+      kubernetesResourceNamePrefix,
+      allDriverLabels,
+      submissionSparkConf,
+      new SystemClock)
+
     val kubernetesCredentialsStep = new DriverKubernetesCredentialsStep(
-        submissionSparkConf, kubernetesResourceNamePrefix)
+      submissionSparkConf, kubernetesResourceNamePrefix)
 
     Seq(
       initialSubmissionStep,
       driverAddressStep,
       kubernetesCredentialsStep)
   }
-
-  private def areAnyFilesNonContainerLocal(files: Seq[String]): Boolean = {
-    files.exists { uri =>
-      Option(Utils.resolveURI(uri).getScheme).getOrElse("file") != "local"
-    }
-  }
-
 }
