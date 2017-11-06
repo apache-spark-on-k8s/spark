@@ -381,6 +381,29 @@ class SparkSubmitSuite
     sysProps("spark.ui.enabled") should be ("false")
   }
 
+  test("handles k8s cluster mode") {
+    val clArgs = Seq(
+      "--deploy-mode", "cluster",
+      "--master", "k8s://h:p",
+      "--executor-memory", "5g",
+      "--class", "org.SomeClass",
+      "--kubernetes-namespace", "foo",
+      "--driver-memory", "4g",
+      "thejar.jar",
+      "arg1")
+    val appArgs = new SparkSubmitArguments(clArgs)
+    val (childArgs, classpath, sysProps, mainClass) = prepareSubmitEnvironment(appArgs)
+    val childArgsMap = childArgs.grouped(2).map(a => a(0) -> a(1)).toMap
+    assert(childArgsMap.contains("--primary-java-resource"))
+    assert(childArgsMap.get("--main-class") ===  Some("org.SomeClass"))
+    assert(childArgsMap.get("--arg") === Some("arg1"))
+
+    mainClass should be ("org.apache.spark.deploy.k8s.submit.Client")
+    classpath should have length (0)
+    sysProps("spark.executor.memory") should be ("5g")
+    sysProps("spark.kubernetes.namespace") should be ("foo")
+  }
+
   test("handles confs with flag equivalents") {
     val clArgs = Seq(
       "--deploy-mode", "cluster",
