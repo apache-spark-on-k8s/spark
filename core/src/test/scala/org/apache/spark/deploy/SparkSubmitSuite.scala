@@ -394,9 +394,9 @@ class SparkSubmitSuite
     val appArgs = new SparkSubmitArguments(clArgs)
     val (childArgs, classpath, sysProps, mainClass) = prepareSubmitEnvironment(appArgs)
     val childArgsMap = childArgs.grouped(2).map(a => a(0) -> a(1)).toMap
-    assert(childArgsMap.contains("--primary-java-resource"))
-    assert(childArgsMap.get("--main-class") ===  Some("org.SomeClass"))
-    assert(childArgsMap.get("--arg") === Some("arg1"))
+    childArgsMap.contains("--primary-java-resource") should be (true)
+    childArgsMap.get("--main-class") should be (Some("org.SomeClass"))
+    childArgsMap.get("--arg") should be (Some("arg1"))
 
     mainClass should be ("org.apache.spark.deploy.k8s.submit.Client")
     classpath should have length (0)
