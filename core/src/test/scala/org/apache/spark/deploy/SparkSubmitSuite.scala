@@ -390,15 +390,15 @@ class SparkSubmitSuite
       "--kubernetes-namespace", "foo",
       "--driver-memory", "4g",
       "--conf", "spark.kubernetes.driver.docker.image=bar",
-      "thejar.jar",
+      "/home/thejar.jar",
       "arg1")
     val appArgs = new SparkSubmitArguments(clArgs)
     val (childArgs, classpath, sysProps, mainClass) = prepareSubmitEnvironment(appArgs)
+
     val childArgsMap = childArgs.grouped(2).map(a => a(0) -> a(1)).toMap
-    childArgsMap.contains("--primary-java-resource") should be (true)
+    childArgsMap.get("--primary-java-resource") should be (Some("file:/home/thejar.jar"))
     childArgsMap.get("--main-class") should be (Some("org.SomeClass"))
     childArgsMap.get("--arg") should be (Some("arg1"))
-
     mainClass should be ("org.apache.spark.deploy.k8s.submit.Client")
     classpath should have length (0)
     sysProps("spark.executor.memory") should be ("5g")
