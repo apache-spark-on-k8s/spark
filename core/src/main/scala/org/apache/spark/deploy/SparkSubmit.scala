@@ -567,7 +567,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
 
       // Kubernetes only
       OptionAssigner(args.kubernetesNamespace, KUBERNETES, ALL_DEPLOY_MODES,
-        sysProp = "spark.kubernetes.namespace"),
+        confKey = "spark.kubernetes.namespace"),
 
       // Other options
       OptionAssigner(args.executorCores, STANDALONE | YARN, ALL_DEPLOY_MODES,

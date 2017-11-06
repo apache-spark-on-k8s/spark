@@ -20,14 +20,14 @@ import java.util.{Collections, UUID}
 
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVar, EnvVarBuilder, HasMetadata, OwnerReferenceBuilder, Pod, PodBuilder}
 import io.fabric8.kubernetes.client.KubernetesClient
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.k8s.SparkKubernetesClientFactory
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.steps.{DriverConfigurationStep, KubernetesDriverSpec}
-import org.apache.spark.deploy.k8s.SparkKubernetesClientFactory
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
 
