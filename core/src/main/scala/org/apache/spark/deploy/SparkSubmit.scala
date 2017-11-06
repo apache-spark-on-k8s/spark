@@ -252,6 +252,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
         YARN
       case m if m.startsWith("spark") => STANDALONE
       case m if m.startsWith("mesos") => MESOS
+      case m if m.startsWith("k8s") => KUBERNETES
       case m if m.startsWith("local") => LOCAL
       case _ =>
         printErrorAndExit("Master must either be yarn or start with spark, mesos, local")
