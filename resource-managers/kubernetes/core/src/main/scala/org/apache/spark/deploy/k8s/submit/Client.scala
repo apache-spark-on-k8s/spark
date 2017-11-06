@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s.submit
 
 import java.util.{Collections, UUID}
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVar, EnvVarBuilder, OwnerReferenceBuilder, PodBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVar, EnvVarBuilder, HasMetadata, OwnerReferenceBuilder, Pod, PodBuilder}
 import io.fabric8.kubernetes.client.KubernetesClient
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -124,18 +124,8 @@ private[spark] class Client(
       val createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
       try {
         if (currentDriverSpec.otherKubernetesResources.nonEmpty) {
-          val driverPodOwnerReference = new OwnerReferenceBuilder()
-            .withName(createdDriverPod.getMetadata.getName)
-            .withApiVersion(createdDriverPod.getApiVersion)
-            .withUid(createdDriverPod.getMetadata.getUid)
-            .withKind(createdDriverPod.getKind)
-            .withController(true)
-            .build()
-          currentDriverSpec.otherKubernetesResources.foreach { resource =>
-            val originalMetadata = resource.getMetadata
-            originalMetadata.setOwnerReferences(Collections.singletonList(driverPodOwnerReference))
-          }
           val otherKubernetesResources = currentDriverSpec.otherKubernetesResources
+          addDriverOwnerReference(createdDriverPod, otherKubernetesResources)
           kubernetesClient.resourceList(otherKubernetesResources: _*).createOrReplace()
         }
       } catch {
@@ -151,6 +141,22 @@ private[spark] class Client(
       } else {
         logInfo(s"Deployed Spark application $appName into Kubernetes.")
       }
+    }
+  }
+
+  // Add a OwnerReference to the given resources making the driver pod an owner of them so when
+  // the driver pod is deleted, the resources are garbage collected.
+  private def addDriverOwnerReference(driverPod: Pod, resources: Seq[HasMetadata]): Unit = {
+    val driverPodOwnerReference = new OwnerReferenceBuilder()
+      .withName(driverPod.getMetadata.getName)
+      .withApiVersion(driverPod.getApiVersion)
+      .withUid(driverPod.getMetadata.getUid)
+      .withKind(driverPod.getKind)
+      .withController(true)
+      .build()
+    resources.foreach { resource =>
+      val originalMetadata = resource.getMetadata
+      originalMetadata.setOwnerReferences(Collections.singletonList(driverPodOwnerReference))
     }
   }
 }
