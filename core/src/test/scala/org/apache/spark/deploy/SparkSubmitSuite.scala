@@ -389,6 +389,7 @@ class SparkSubmitSuite
       "--class", "org.SomeClass",
       "--kubernetes-namespace", "foo",
       "--driver-memory", "4g",
+      "--conf", "spark.kubernetes.driver.docker.image=bar",
       "thejar.jar",
       "arg1")
     val appArgs = new SparkSubmitArguments(clArgs)
@@ -401,7 +402,9 @@ class SparkSubmitSuite
     mainClass should be ("org.apache.spark.deploy.k8s.submit.Client")
     classpath should have length (0)
     sysProps("spark.executor.memory") should be ("5g")
+    sysProps("spark.driver.memory") should be ("4g")
     sysProps("spark.kubernetes.namespace") should be ("foo")
+    sysProps("spark.kubernetes.driver.docker.image") should be ("bar")
   }
 
   test("handles confs with flag equivalents") {
