@@ -374,7 +374,6 @@ private[spark] class KubernetesClusterSchedulerBackendSuite
     when(executorPodFactory.createExecutorPod(
         executorId.toString,
         APP_ID,
-        APP_ID,
         DRIVER_URL,
         sparkConf.getExecutorEnv,
         driverPod,

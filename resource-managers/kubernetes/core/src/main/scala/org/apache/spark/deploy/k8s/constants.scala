@@ -73,7 +73,6 @@ package object constants {
   private[spark] val ENV_R_FILE = "R_FILE"
   private[spark] val ENV_JAVA_OPT_PREFIX = "SPARK_JAVA_OPT_"
   private[spark] val ENV_MOUNTED_FILES_FROM_SECRET_DIR = "SPARK_MOUNTED_FILES_FROM_SECRET_DIR"
-  private[spark] val ENV_METRICS_NAMESPACE = "METRICS_NAMESPACE"
 
   // Bootstrapping dependencies with the init-container
   private[spark] val INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH =
