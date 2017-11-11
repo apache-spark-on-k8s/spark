@@ -29,7 +29,7 @@ import com.codahale.metrics._
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.dropwizard.DropwizardExports
 
-import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.{SecurityManager, SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.METRICS_NAMESPACE
 import org.apache.spark.metrics.MetricsSystem
@@ -49,21 +49,8 @@ private[spark] class PrometheusSink(
       MetricFilter.ALL,
       TimeUnit.SECONDS,
       TimeUnit.MILLISECONDS) {
-    val sparkConf: SparkConf = new SparkConf
 
-    private[this] lazy val metricsNamespace: Option[String] =
-      sparkConf.get(METRICS_NAMESPACE)
-      .orElse(Option(sparkConf.getenv("METRICS_NAMESPACE")))
-
-    private[this] lazy val sparkAppId: Option[String] =
-      sparkConf.getOption("spark.app.id")
-      .orElse(Option(sparkConf.getenv("SPARK_APPLICATION_ID")))
-
-    private[this] lazy val executorId: Option[String] =
-      Option(sparkConf.getenv("SPARK_EXECUTOR_ID"))
-      .orElse(sparkConf.getOption("spark.executor.id"))
-
-
+    val defaultSparkConf: SparkConf = new SparkConf(true)
 
     override def report(
                          gauges: util.SortedMap[String, Gauge[_]],
@@ -72,11 +59,19 @@ private[spark] class PrometheusSink(
                          meters: util.SortedMap[String, Meter],
                          timers: util.SortedMap[String, Timer]): Unit = {
 
+      // SparkEnv may become available only after metrics sink creation thus retrieving
+      // SparkConf from spark env here and not during the creation/initialisation of PrometheusSink.
+      val sparkConf: SparkConf = Option(SparkEnv.get).map(_.conf).getOrElse(defaultSparkConf)
+
+      val metricsNamespace: Option[String] = sparkConf.get(METRICS_NAMESPACE)
+      val sparkAppId: Option[String] = sparkConf.getOption("spark.app.id")
+      val executorId: Option[String] = sparkConf.getOption("spark.executor.id")
+
       logInfo(s"metricsNamespace=$metricsNamespace, sparkAppId=$sparkAppId, " +
         s"executorId=$executorId")
 
       val role: String = (sparkAppId, executorId) match {
-        case (Some(_), None) => "driver"
+        case (Some(_), Some(SparkContext.DRIVER_IDENTIFIER)) => "driver"
         case (Some(_), Some(_)) => "executor"
         case _ => "shuffle"
       }
