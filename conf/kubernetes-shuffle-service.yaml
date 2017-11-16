@@ -38,7 +38,7 @@ spec:
           # This is an official image that is built
           # from the dockerfiles/shuffle directory
           # in the spark distribution.
-          image: kubespark/spark-shuffle:v2.2.0-kubernetes-0.4.0
+          image: kubespark/spark-shuffle:v2.2.0-kubernetes-0.5.0
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: '/tmp/spark-local'
