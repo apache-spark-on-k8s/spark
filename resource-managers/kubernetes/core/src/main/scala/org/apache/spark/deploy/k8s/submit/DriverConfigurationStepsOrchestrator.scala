@@ -131,21 +131,27 @@ private[spark] class DriverConfigurationStepsOrchestrator(
           submissionSparkConf.get(RESOURCE_STAGING_SERVER_URI).map { _ =>
             (filesDownloadPath, sparkFiles, Option.empty[DriverConfigurationStep])
           }.getOrElse {
-            // Else - use a small files bootstrap that submits the local files via a secret.
-            // Then, indicate to the outer block that the init-container should not handle
-            // those local files simply by filtering them out.
-            val sparkFilesWithoutLocal = KubernetesFileUtils.getNonSubmitterLocalFiles(sparkFiles)
-            val smallFilesSecretName = s"$kubernetesAppId-submitted-files"
-            val mountSmallFilesBootstrap = new MountSmallFilesBootstrapImpl(
+            // Otherwise, if there are any submitter local files, use a small files bootstrap that
+            // submits the local files via a secret. If this is the case, indicate to the outer
+            // block that the init-container should not handle those local files simply by filtering
+            // them out.
+            val submitterLocalFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
+            if (submitterLocalFiles.nonEmpty) {
+              val nonSubmitterLocalFiles = KubernetesFileUtils.getNonSubmitterLocalFiles(sparkFiles)
+              val smallFilesSecretName = s"$kubernetesAppId-submitted-files"
+              val mountSmallFilesBootstrap = new MountSmallFilesBootstrapImpl(
                 smallFilesSecretName, MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH)
-            val mountSmallLocalFilesStep = new MountSmallLocalFilesStep(
-              sparkFiles,
-              smallFilesSecretName,
-              MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH,
-              mountSmallFilesBootstrap)
-            (MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH,
-              sparkFilesWithoutLocal.toArray,
-              Some(mountSmallLocalFilesStep))
+              val mountSmallLocalFilesStep = new MountSmallLocalFilesStep(
+                submitterLocalFiles.toSeq,
+                smallFilesSecretName,
+                MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH,
+                mountSmallFilesBootstrap)
+              (MOUNTED_SMALL_FILES_SECRET_MOUNT_PATH,
+                nonSubmitterLocalFiles.toArray,
+                Some(mountSmallLocalFilesStep))
+            } else {
+              (filesDownloadPath, sparkFiles, Option.empty[DriverConfigurationStep])
+            }
           }
 
         val initContainerBootstrapStep =
@@ -169,6 +175,7 @@ private[spark] class DriverConfigurationStepsOrchestrator(
               initContainerConfigMapName,
               INIT_CONTAINER_CONFIG_MAP_KEY))
         } else Option.empty[DriverConfigurationStep]
+
         (submittedLocalFilesDownloadPath,
           mountSmallFilesWithoutInitContainerStep.toSeq ++
             initContainerBootstrapStep.toSeq)

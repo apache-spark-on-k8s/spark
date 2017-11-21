@@ -27,15 +27,16 @@ import org.apache.spark.deploy.k8s.submit.{KubernetesFileUtils, MountSmallFilesB
 import org.apache.spark.util.Utils
 
 private[spark] class MountSmallLocalFilesStep(
-    sparkFiles: Seq[String],
+    submitterLocalFiles: Seq[String],
     smallFilesSecretName: String,
     smallFilesSecretMountPath: String,
     mountSmallFilesBootstrap: MountSmallFilesBootstrap) extends DriverConfigurationStep {
 
   import MountSmallLocalFilesStep._
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
-    val localFiles = KubernetesFileUtils.getOnlySubmitterLocalFiles(sparkFiles)
-        .map(localFileUri => new File(Utils.resolveURI(localFileUri).getPath))
+    val localFiles = submitterLocalFiles.map { localFileUri =>
+      new File(Utils.resolveURI(localFileUri).getPath)
+    }
     val totalSizeBytes = localFiles.map(_.length()).sum
     val totalSizeBytesString = Utils.bytesToString(totalSizeBytes)
     require(totalSizeBytes < MAX_SECRET_BUNDLE_SIZE_BYTES,

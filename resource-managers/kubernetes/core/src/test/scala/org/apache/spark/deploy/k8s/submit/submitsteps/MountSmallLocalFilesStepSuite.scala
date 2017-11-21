@@ -38,7 +38,6 @@ private[spark] class MountSmallLocalFilesStepSuite extends SparkFunSuite with Be
   private val SECOND_TEMP_FILE_NAME = "file2.txt"
   private val FIRST_TEMP_FILE_CONTENTS = "123"
   private val SECOND_TEMP_FILE_CONTENTS = "456"
-  private val REMOTE_FILE_URI = "hdfs://localhost:9000/file3.txt"
   private val SECRET_NAME = "secret"
 
   private var tempFolder: File = _
@@ -61,8 +60,7 @@ private[spark] class MountSmallLocalFilesStepSuite extends SparkFunSuite with Be
         tempFolder, SECOND_TEMP_FILE_NAME, SECOND_TEMP_FILE_CONTENTS)
     val sparkFiles = Seq(
         s"file://${firstTempFile.getAbsolutePath}",
-        secondTempFile.getAbsolutePath,
-        REMOTE_FILE_URI)
+        secondTempFile.getAbsolutePath)
     val configurationStep = new MountSmallLocalFilesStep(
         sparkFiles,
         SECRET_NAME,
