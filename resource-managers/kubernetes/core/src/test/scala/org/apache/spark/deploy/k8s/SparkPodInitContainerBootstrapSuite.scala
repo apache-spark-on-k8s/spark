@@ -16,14 +16,17 @@
  */
 package org.apache.spark.deploy.k8s
 
-import io.fabric8.kubernetes.api.model._
-import org.scalatest.BeforeAndAfter
 import scala.collection.JavaConverters._
 
+import io.fabric8.kubernetes.api.model._
+import org.scalatest.BeforeAndAfter
+
+import org.apache.spark.{SparkConf, SparkFunSuite}
+import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.SparkFunSuite
 
 class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAfter {
+
   private val INIT_CONTAINER_IMAGE = "spark-init:latest"
   private val DOCKER_IMAGE_PULL_POLICY = "IfNotPresent"
   private val JARS_DOWNLOAD_PATH = "/var/data/spark-jars"
@@ -40,7 +43,8 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     FILES_DOWNLOAD_PATH,
     DOWNLOAD_TIMEOUT_MINUTES,
     INIT_CONTAINER_CONFIG_MAP_NAME,
-    INIT_CONTAINER_CONFIG_MAP_KEY)
+    INIT_CONTAINER_CONFIG_MAP_KEY,
+    new SparkConf())
   private val expectedSharedVolumeMap = Map(
     JARS_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_JARS_VOLUME_NAME,
     FILES_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_FILES_VOLUME_NAME)
@@ -60,6 +64,7 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     assert(initContainer.getImagePullPolicy === DOCKER_IMAGE_PULL_POLICY)
     assert(initContainer.getArgs.asScala.head === INIT_CONTAINER_PROPERTIES_FILE_PATH)
   }
+
   test("Main: Volume mounts and env") {
     val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
       PodWithDetachedInitContainer(
@@ -73,6 +78,7 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     assert(mainContainer.getEnv.asScala.map(e => (e.getName, e.getValue)).toMap ===
       Map(ENV_MOUNTED_FILES_DIR -> FILES_DOWNLOAD_PATH))
   }
+
   test("Pod: Volume Mounts") {
     val returnedPodWithCont = sparkPodInit.bootstrapInitContainerAndVolumes(
       PodWithDetachedInitContainer(
@@ -91,6 +97,37 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     assert(volumes(1).getEmptyDir === new EmptyDirVolumeSource())
     assert(volumes(2).getName === INIT_CONTAINER_DOWNLOAD_FILES_VOLUME_NAME)
     assert(volumes(2).getEmptyDir === new EmptyDirVolumeSource())
+  }
+
+  test("InitContainer: custom environment variables") {
+    val sparkConf = new SparkConf()
+      .set(s"${KUBERNETES_INITCONTAINER_ENV_KEY}env1", "val1")
+      .set(s"${KUBERNETES_INITCONTAINER_ENV_KEY}env2", "val2")
+    val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
+      INIT_CONTAINER_IMAGE,
+      DOCKER_IMAGE_PULL_POLICY,
+      JARS_DOWNLOAD_PATH,
+      FILES_DOWNLOAD_PATH,
+      DOWNLOAD_TIMEOUT_MINUTES,
+      INIT_CONTAINER_CONFIG_MAP_NAME,
+      INIT_CONTAINER_CONFIG_MAP_KEY,
+      sparkConf)
+
+    val returnedPod = initContainerBootstrap.bootstrapInitContainerAndVolumes(
+      PodWithDetachedInitContainer(
+        pod = basePod().build(),
+        initContainer = new Container(),
+        mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build()))
+    val initContainer: Container = returnedPod.initContainer
+
+    assert(initContainer.getEnv.size() == 2)
+    val envVars = initContainer
+      .getEnv
+      .asScala
+      .map(env => (env.getName, env.getValue))
+      .toMap
+    assert(envVars("env1") == "val1")
+    assert(envVars("env2") == "val2")
   }
 
   private def basePod(): PodBuilder = {

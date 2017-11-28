@@ -16,8 +16,12 @@
  */
 package org.apache.spark.deploy.k8s
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, EmptyDirVolumeSource, PodBuilder, VolumeMount, VolumeMountBuilder}
+import scala.collection.JavaConverters._
 
+import io.fabric8.kubernetes.api.model._
+
+import org.apache.spark.SparkConf
+import org.apache.spark.deploy.k8s.config.KUBERNETES_INITCONTAINER_ENV_KEY
 import org.apache.spark.deploy.k8s.constants._
 
 /**
@@ -47,7 +51,8 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
     filesDownloadPath: String,
     downloadTimeoutMinutes: Long,
     initContainerConfigMapName: String,
-    initContainerConfigMapKey: String)
+    initContainerConfigMapKey: String,
+    sparkConf: SparkConf)
   extends SparkPodInitContainerBootstrap {
 
   override def bootstrapInitContainerAndVolumes(
@@ -62,10 +67,18 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
         .withMountPath(filesDownloadPath)
         .build())
 
+    val initContainerCustomEnvVars = sparkConf.getAllWithPrefix(KUBERNETES_INITCONTAINER_ENV_KEY)
+      .toSeq
+      .map(env =>
+        new EnvVarBuilder()
+          .withName(env._1)
+          .withValue(env._2)
+          .build())
     val initContainer = new ContainerBuilder(podWithDetachedInitContainer.initContainer)
       .withName(s"spark-init")
       .withImage(initContainerImage)
       .withImagePullPolicy(dockerImagePullPolicy)
+      .addAllToEnv(initContainerCustomEnvVars.asJava)
       .addNewVolumeMount()
         .withName(INIT_CONTAINER_PROPERTIES_FILE_VOLUME)
         .withMountPath(INIT_CONTAINER_PROPERTIES_FILE_DIR)
@@ -73,6 +86,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
       .addToVolumeMounts(sharedVolumeMounts: _*)
       .addToArgs(INIT_CONTAINER_PROPERTIES_FILE_PATH)
       .build()
+
     val podWithBasicVolumes = new PodBuilder(podWithDetachedInitContainer.pod)
       .editSpec()
         .addNewVolume()
@@ -95,6 +109,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
           .endVolume()
         .endSpec()
       .build()
+
     val mainContainerWithMountedFiles = new ContainerBuilder(
       podWithDetachedInitContainer.mainContainer)
         .addToVolumeMounts(sharedVolumeMounts: _*)
@@ -103,6 +118,7 @@ private[spark] class SparkPodInitContainerBootstrapImpl(
           .withValue(filesDownloadPath)
           .endEnv()
         .build()
+
     PodWithDetachedInitContainer(
       podWithBasicVolumes,
       initContainer,

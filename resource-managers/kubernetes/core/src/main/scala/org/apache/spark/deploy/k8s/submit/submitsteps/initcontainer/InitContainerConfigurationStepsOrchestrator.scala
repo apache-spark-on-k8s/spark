@@ -43,7 +43,7 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
   private val submittedResourcesSecretName = s"$kubernetesResourceNamePrefix-init-secret"
   private val resourceStagingServerUri = submissionSparkConf.get(RESOURCE_STAGING_SERVER_URI)
   private val resourceStagingServerInternalUri =
-      submissionSparkConf.get(RESOURCE_STAGING_SERVER_INTERNAL_URI)
+    submissionSparkConf.get(RESOURCE_STAGING_SERVER_INTERNAL_URI)
   private val initContainerImage = submissionSparkConf.get(INIT_CONTAINER_DOCKER_IMAGE)
   private val downloadTimeoutMinutes = submissionSparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT)
   private val maybeResourceStagingServerInternalTrustStore =
@@ -92,46 +92,48 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
 
   def getAllConfigurationSteps(): Seq[InitContainerConfigurationStep] = {
     val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
-        initContainerImage,
-        dockerImagePullPolicy,
-        jarsDownloadPath,
-        filesDownloadPath,
-        downloadTimeoutMinutes,
-        initContainerConfigMapName,
-        initContainerConfigMapKey)
+      initContainerImage,
+      dockerImagePullPolicy,
+      jarsDownloadPath,
+      filesDownloadPath,
+      downloadTimeoutMinutes,
+      initContainerConfigMapName,
+      initContainerConfigMapKey,
+      submissionSparkConf)
     val baseInitContainerStep = new BaseInitContainerConfigurationStep(
+      sparkJars,
+      sparkFiles,
+      jarsDownloadPath,
+      filesDownloadPath,
+      initContainerConfigMapName,
+      initContainerConfigMapKey,
+      initContainerBootstrap)
+
+    val submittedResourcesInitContainerStep = resourceStagingServerUri.map { stagingServerUri =>
+      val mountSecretPlugin = new InitContainerResourceStagingServerSecretPluginImpl(
+        submittedResourcesSecretName,
+        INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH)
+      val submittedDependencyUploader = new SubmittedDependencyUploaderImpl(
+        driverLabels,
+        namespace,
+        stagingServerUri,
         sparkJars,
         sparkFiles,
-        jarsDownloadPath,
-        filesDownloadPath,
-        initContainerConfigMapName,
-        initContainerConfigMapKey,
-        initContainerBootstrap)
-    val submittedResourcesInitContainerStep = resourceStagingServerUri.map {
-        stagingServerUri =>
-      val mountSecretPlugin = new InitContainerResourceStagingServerSecretPluginImpl(
-          submittedResourcesSecretName,
-          INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH)
-      val submittedDependencyUploader = new SubmittedDependencyUploaderImpl(
-          driverLabels,
-          namespace,
-          stagingServerUri,
-          sparkJars,
-          sparkFiles,
-          new ResourceStagingServerSslOptionsProviderImpl(submissionSparkConf).getSslOptions,
-          RetrofitClientFactoryImpl)
+        new ResourceStagingServerSslOptionsProviderImpl(submissionSparkConf).getSslOptions,
+        RetrofitClientFactoryImpl)
       new SubmittedResourcesInitContainerConfigurationStep(
-          submittedResourcesSecretName,
-          resourceStagingServerInternalUri.getOrElse(stagingServerUri),
-          INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,
-          resourceStagingServerInternalSslEnabled,
-          maybeResourceStagingServerInternalTrustStore,
-          maybeResourceStagingServerInternalClientCert,
-          maybeResourceStagingServerInternalTrustStorePassword,
-          maybeResourceStagingServerInternalTrustStoreType,
-          submittedDependencyUploader,
-          mountSecretPlugin)
+        submittedResourcesSecretName,
+        resourceStagingServerInternalUri.getOrElse(stagingServerUri),
+        INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,
+        resourceStagingServerInternalSslEnabled,
+        maybeResourceStagingServerInternalTrustStore,
+        maybeResourceStagingServerInternalClientCert,
+        maybeResourceStagingServerInternalTrustStorePassword,
+        maybeResourceStagingServerInternalTrustStoreType,
+        submittedDependencyUploader,
+        mountSecretPlugin)
     }
+
     Seq(baseInitContainerStep) ++ submittedResourcesInitContainerStep.toSeq
   }
 }
