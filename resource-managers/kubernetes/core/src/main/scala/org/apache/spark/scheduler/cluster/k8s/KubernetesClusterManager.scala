@@ -79,6 +79,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         sparkConf.get(INIT_CONTAINER_MOUNT_TIMEOUT),
         configMap,
         configMapKey,
+        SPARK_POD_EXECUTOR_ROLE,
         sparkConf)
     }
 

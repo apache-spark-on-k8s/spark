@@ -44,6 +44,7 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     DOWNLOAD_TIMEOUT_MINUTES,
     INIT_CONTAINER_CONFIG_MAP_NAME,
     INIT_CONTAINER_CONFIG_MAP_KEY,
+    SPARK_POD_DRIVER_ROLE,
     new SparkConf())
   private val expectedSharedVolumeMap = Map(
     JARS_DOWNLOAD_PATH -> INIT_CONTAINER_DOWNLOAD_JARS_VOLUME_NAME,
@@ -99,10 +100,10 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
     assert(volumes(2).getEmptyDir === new EmptyDirVolumeSource())
   }
 
-  test("InitContainer: custom environment variables") {
+  test("InitContainer: driver custom environment variables") {
     val sparkConf = new SparkConf()
-      .set(s"${KUBERNETES_INITCONTAINER_ENV_KEY}env1", "val1")
-      .set(s"${KUBERNETES_INITCONTAINER_ENV_KEY}env2", "val2")
+      .set(s"${KUBERNETES_DRIVER_ENV_KEY}env1", "val1")
+      .set(s"${KUBERNETES_DRIVER_ENV_KEY}env2", "val2")
     val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
       INIT_CONTAINER_IMAGE,
       DOCKER_IMAGE_PULL_POLICY,
@@ -111,6 +112,39 @@ class SparkPodInitContainerBootstrapSuite extends SparkFunSuite with BeforeAndAf
       DOWNLOAD_TIMEOUT_MINUTES,
       INIT_CONTAINER_CONFIG_MAP_NAME,
       INIT_CONTAINER_CONFIG_MAP_KEY,
+      SPARK_POD_DRIVER_ROLE,
+      sparkConf)
+
+    val returnedPod = initContainerBootstrap.bootstrapInitContainerAndVolumes(
+      PodWithDetachedInitContainer(
+        pod = basePod().build(),
+        initContainer = new Container(),
+        mainContainer = new ContainerBuilder().withName(MAIN_CONTAINER_NAME).build()))
+    val initContainer: Container = returnedPod.initContainer
+
+    assert(initContainer.getEnv.size() == 2)
+    val envVars = initContainer
+      .getEnv
+      .asScala
+      .map(env => (env.getName, env.getValue))
+      .toMap
+    assert(envVars("env1") == "val1")
+    assert(envVars("env2") == "val2")
+  }
+
+  test("InitContainer: executor custom environment variables") {
+    val sparkConf = new SparkConf()
+      .set(s"spark.executorEnv.env1", "val1")
+      .set(s"spark.executorEnv.env2", "val2")
+    val initContainerBootstrap = new SparkPodInitContainerBootstrapImpl(
+      INIT_CONTAINER_IMAGE,
+      DOCKER_IMAGE_PULL_POLICY,
+      JARS_DOWNLOAD_PATH,
+      FILES_DOWNLOAD_PATH,
+      DOWNLOAD_TIMEOUT_MINUTES,
+      INIT_CONTAINER_CONFIG_MAP_NAME,
+      INIT_CONTAINER_CONFIG_MAP_KEY,
+      SPARK_POD_EXECUTOR_ROLE,
       sparkConf)
 
     val returnedPod = initContainerBootstrap.bootstrapInitContainerAndVolumes(

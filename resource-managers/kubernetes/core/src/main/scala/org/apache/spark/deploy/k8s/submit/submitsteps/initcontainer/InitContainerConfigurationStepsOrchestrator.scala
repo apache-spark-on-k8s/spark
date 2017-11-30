@@ -99,6 +99,7 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
       downloadTimeoutMinutes,
       initContainerConfigMapName,
       initContainerConfigMapKey,
+      SPARK_POD_DRIVER_ROLE,
       submissionSparkConf)
     val baseInitContainerStep = new BaseInitContainerConfigurationStep(
       sparkJars,
