@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s
 
 import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, EmptyDirVolumeSource, EnvVarBuilder, PodBuilder, VolumeMount, VolumeMountBuilder}
 
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.k8s.config._
