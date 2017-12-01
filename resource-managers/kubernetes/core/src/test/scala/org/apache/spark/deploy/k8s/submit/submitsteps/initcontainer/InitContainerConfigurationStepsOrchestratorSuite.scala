@@ -43,6 +43,9 @@ class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
   private val INIT_CONTAINER_CONFIG_MAP_NAME = "spark-init-config-map"
   private val INIT_CONTAINER_CONFIG_MAP_KEY = "spark-init-config-map-key"
   private val STAGING_SERVER_URI = "http://localhost:8000"
+  private val SECRET_FOO = "foo"
+  private val SECRET_BAR = "bar"
+  private val SECRET_MOUNT_PATH = "/etc/secrets/init-container"
 
   test ("error thrown if local jars provided without resource staging server") {
     val sparkConf = new SparkConf(true)
@@ -159,5 +162,28 @@ class InitContainerConfigurationStepsOrchestratorSuite extends SparkFunSuite {
         orchestrator.getAllConfigurationSteps()
     assert(initSteps.length === 1)
     assert(initSteps.head.isInstanceOf[BaseInitContainerConfigurationStep])
+  }
+
+  test("including step to mount user-specified secrets") {
+    val sparkConf = new SparkConf(false)
+      .set(s"$KUBERNETES_DRIVER_SECRETS_PREFIX$SECRET_FOO", SECRET_MOUNT_PATH)
+      .set(s"$KUBERNETES_DRIVER_SECRETS_PREFIX$SECRET_BAR", SECRET_MOUNT_PATH)
+    val orchestrator = new InitContainerConfigurationStepsOrchestrator(
+      NAMESPACE,
+      APP_RESOURCE_PREFIX,
+      SPARK_JARS.take(1),
+      SPARK_FILES,
+      JARS_DOWNLOAD_PATH,
+      FILES_DOWNLOAD_PATH,
+      DOCKER_IMAGE_PULL_POLICY,
+      DRIVER_LABELS,
+      INIT_CONTAINER_CONFIG_MAP_NAME,
+      INIT_CONTAINER_CONFIG_MAP_KEY,
+      sparkConf)
+    val initSteps : Seq[InitContainerConfigurationStep] =
+      orchestrator.getAllConfigurationSteps()
+    assert(initSteps.length === 2)
+    assert(initSteps.head.isInstanceOf[BaseInitContainerConfigurationStep])
+    assert(initSteps(1).isInstanceOf[InitContainerMountSecretsStep])
   }
 }

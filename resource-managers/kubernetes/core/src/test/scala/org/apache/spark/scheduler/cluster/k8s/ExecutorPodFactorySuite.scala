@@ -77,6 +77,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       None,
       None,
+      None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
@@ -111,13 +112,14 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       "loremipsumdolorsitametvimatelitrefficiendisuscipianturvixlegeresple")
 
     val factory = new ExecutorPodFactoryImpl(
-        conf,
-        nodeAffinityExecutorPodModifier,
-        None,
-        None,
-        None,
-        None,
-        executorLocalDirVolumeProvider)
+      conf,
+      nodeAffinityExecutorPodModifier,
+      None,
+      None,
+      None,
+      None,
+      None,
+      executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
 
@@ -135,6 +137,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       conf,
       nodeAffinityExecutorPodModifier,
       Some(secretsBootstrap),
+      None,
       None,
       None,
       None,
@@ -172,6 +175,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       Some(initContainerBootstrap),
       None,
+      None,
       executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
@@ -180,6 +184,38 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
     assert(executor.getSpec.getInitContainers.size() === 1)
+
+    checkOwnerReferences(executor, driverPodUid)
+  }
+
+  test("init-container with secrets mount bootstrap") {
+    val conf = baseConf.clone()
+    val initContainerBootstrap = mock(classOf[SparkPodInitContainerBootstrap])
+    when(initContainerBootstrap.bootstrapInitContainerAndVolumes(
+      any(classOf[PodWithDetachedInitContainer]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
+    val secretsBootstrap = new MountSecretsBootstrapImpl(Map("secret1" -> "/var/secret1"))
+
+    val factory = new ExecutorPodFactoryImpl(
+      conf,
+      nodeAffinityExecutorPodModifier,
+      None,
+      None,
+      Some(initContainerBootstrap),
+      Some(secretsBootstrap),
+      None,
+      executorLocalDirVolumeProvider)
+    val executor = factory.createExecutorPod(
+      "1", "dummy", "dummy", Seq[(String, String)](), driverPod, Map[String, Int]())
+
+    verify(nodeAffinityExecutorPodModifier, times(1))
+      .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
+
+    assert(executor.getSpec.getInitContainers.size() === 1)
+    assert(executor.getSpec.getInitContainers.get(0).getVolumeMounts.get(0).getName
+      === "secret1-volume")
+    assert(executor.getSpec.getInitContainers.get(0).getVolumeMounts.get(0)
+      .getMountPath === "/var/secret1")
+
     checkOwnerReferences(executor, driverPodUid)
   }
 
@@ -198,6 +234,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     val factory = new ExecutorPodFactoryImpl(
       baseConf,
       nodeAffinityExecutorPodModifier,
+      None,
       None,
       None,
       None,
@@ -221,6 +258,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       nodeAffinityExecutorPodModifier,
       None,
       Some(smallFiles),
+      None,
       None,
       None,
       executorLocalDirVolumeProvider)
@@ -250,13 +288,14 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     conf.set(org.apache.spark.internal.config.EXECUTOR_CLASS_PATH, "bar=baz")
 
     val factory = new ExecutorPodFactoryImpl(
-        conf,
-        nodeAffinityExecutorPodModifier,
-        None,
-        None,
-        None,
-        None,
-        executorLocalDirVolumeProvider)
+      conf,
+      nodeAffinityExecutorPodModifier,
+      None,
+      None,
+      None,
+      None,
+      None,
+      executorLocalDirVolumeProvider)
     val executor = factory.createExecutorPod(
       "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"), driverPod, Map[String, Int]())
 

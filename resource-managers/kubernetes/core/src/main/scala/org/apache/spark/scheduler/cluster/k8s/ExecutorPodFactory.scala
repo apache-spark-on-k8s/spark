@@ -16,10 +16,10 @@
  */
 package org.apache.spark.scheduler.cluster.k8s
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder, VolumeBuilder, VolumeMountBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 import scala.collection.JavaConverters._
 
-import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.{ConfigurationUtils, InitContainerResourceStagingServerSecretPlugin, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
@@ -44,6 +44,7 @@ private[spark] class ExecutorPodFactoryImpl(
     mountSecretsBootstrap: Option[MountSecretsBootstrap],
     mountSmallFilesBootstrap: Option[MountSmallFilesBootstrap],
     executorInitContainerBootstrap: Option[SparkPodInitContainerBootstrap],
+    executorInitContainerMountSecretsBootstrap: Option[MountSecretsBootstrap],
     executorMountInitContainerSecretPlugin: Option[InitContainerResourceStagingServerSecretPlugin],
     executorLocalDirVolumeProvider: ExecutorLocalDirVolumeProvider)
   extends ExecutorPodFactory {
@@ -82,9 +83,6 @@ private[spark] class ExecutorPodFactoryImpl(
   private val executorPort = sparkConf.getInt("spark.executor.port", DEFAULT_STATIC_PORT)
   private val blockmanagerPort = sparkConf
       .getInt("spark.blockmanager.port", DEFAULT_BLOCKMANAGER_PORT)
-  private val kubernetesDriverPodName = sparkConf
-      .get(KUBERNETES_DRIVER_POD_NAME)
-      .getOrElse(throw new SparkException("Must specify the driver pod name"))
 
   private val executorPodNamePrefix = sparkConf.get(KUBERNETES_EXECUTOR_POD_NAME_PREFIX)
 
@@ -234,6 +232,7 @@ private[spark] class ExecutorPodFactoryImpl(
         bootstrap.mountSmallFilesSecret(
           withMaybeSecretsMountedPod, withMaybeSecretsMountedContainer)
       }.getOrElse((withMaybeSecretsMountedPod, withMaybeSecretsMountedContainer))
+
     val (executorPodWithInitContainer, initBootstrappedExecutorContainer) =
       executorInitContainerBootstrap.map { bootstrap =>
         val podWithDetachedInitContainer = bootstrap.bootstrapInitContainerAndVolumes(
@@ -247,8 +246,13 @@ private[spark] class ExecutorPodFactoryImpl(
               podWithDetachedInitContainer.initContainer)
         }.getOrElse(podWithDetachedInitContainer.initContainer)
 
+        val (mayBePodWithSecretsMountedToInitContainer, mayBeInitContainerWithSecretsMounted) =
+          executorInitContainerMountSecretsBootstrap.map { bootstrap =>
+            bootstrap.mountSecrets(podWithDetachedInitContainer.pod, resolvedInitContainer)
+        }.getOrElse(podWithDetachedInitContainer.pod, resolvedInitContainer)
+
         val podWithAttachedInitContainer = InitContainerUtil.appendInitContainer(
-            podWithDetachedInitContainer.pod, resolvedInitContainer)
+          mayBePodWithSecretsMountedToInitContainer, mayBeInitContainerWithSecretsMounted)
 
         val resolvedPodWithMountedSecret = executorMountInitContainerSecretPlugin.map { plugin =>
           plugin.addResourceStagingServerSecretVolumeToPod(podWithAttachedInitContainer)

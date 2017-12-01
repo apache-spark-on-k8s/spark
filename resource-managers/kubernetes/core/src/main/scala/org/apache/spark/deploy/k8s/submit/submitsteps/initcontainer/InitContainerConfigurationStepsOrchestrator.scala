@@ -17,10 +17,10 @@
 package org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer
 
 import org.apache.spark.SparkConf
-import org.apache.spark.deploy.k8s.{InitContainerResourceStagingServerSecretPluginImpl, OptionRequirements, SparkPodInitContainerBootstrapImpl}
+import org.apache.spark.deploy.k8s.{ConfigurationUtils, InitContainerResourceStagingServerSecretPluginImpl, OptionRequirements, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.{KubernetesFileUtils, SubmittedDependencyUploaderImpl}
+import org.apache.spark.deploy.k8s.submit.{KubernetesFileUtils, MountSecretsBootstrapImpl, SubmittedDependencyUploaderImpl}
 import org.apache.spark.deploy.rest.k8s.{ResourceStagingServerSslOptionsProviderImpl, RetrofitClientFactoryImpl}
 import org.apache.spark.util.Utils
 
@@ -135,6 +135,19 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
         mountSecretPlugin)
     }
 
-    Seq(baseInitContainerStep) ++ submittedResourcesInitContainerStep.toSeq
+    val driverSecretNamesToMountPaths = ConfigurationUtils.parsePrefixedKeyValuePairs(
+      submissionSparkConf,
+      KUBERNETES_DRIVER_SECRETS_PREFIX,
+      "driver secrets")
+    val mountSecretsStep = if (driverSecretNamesToMountPaths.nonEmpty) {
+      val mountSecretsBootstrap = new MountSecretsBootstrapImpl(driverSecretNamesToMountPaths)
+      Some(new InitContainerMountSecretsStep(mountSecretsBootstrap))
+    } else {
+      None
+    }
+
+    Seq(baseInitContainerStep) ++
+      submittedResourcesInitContainerStep.toSeq ++
+      mountSecretsStep.toSeq
   }
 }

@@ -97,6 +97,11 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     } else {
       None
     }
+    val executorInitContainerMountSecretsBootstrap = if (executorSecretNamesToMountPaths.nonEmpty) {
+      Some(new MountSecretsBootstrapImpl(executorSecretNamesToMountPaths))
+    } else {
+      None
+    }
 
     if (maybeInitContainerConfigMap.isEmpty) {
       logWarning("The executor's init-container config map was not specified. Executors will" +
@@ -135,6 +140,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         mountSecretBootstrap,
         mountSmallFilesBootstrap,
         executorInitContainerBootstrap,
+        executorInitContainerMountSecretsBootstrap,
         executorInitContainerSecretVolumePlugin,
         executorLocalDirVolumeProvider)
     val allocatorExecutor = ThreadUtils

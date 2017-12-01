@@ -121,8 +121,6 @@ package object config extends Logging {
 
   private[spark] val KUBERNETES_DRIVER_ENV_KEY = "spark.kubernetes.driverEnv."
 
-  private[spark] val KUBERNETES_INITCONTAINER_ENV_KEY = "spark.kubernetes.initContainerEnv."
-
   private[spark] val KUBERNETES_DRIVER_SECRETS_PREFIX = "spark.kubernetes.driver.secrets."
   private[spark] val KUBERNETES_EXECUTOR_SECRETS_PREFIX = "spark.kubernetes.executor.secrets."
 
