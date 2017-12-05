@@ -16,30 +16,45 @@
  */
 package org.apache.spark.deploy.k8s.integrationtest.backend.minikube
 
+import java.util.UUID
+
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
+import org.apache.spark.deploy.k8s.config.KUBERNETES_TEST_DOCKER_TAG_SYSTEM_PROPERTY
 import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend
-import org.apache.spark.deploy.k8s.integrationtest.constants.MINIKUBE_TEST_BACKEND
-import org.apache.spark.deploy.k8s.integrationtest.docker.SparkDockerImageBuilder
+import org.apache.spark.deploy.k8s.integrationtest.docker.KubernetesSuiteDockerManager
 
-private[spark] class MinikubeTestBackend extends IntegrationTestBackend {
+private[spark] object MinikubeTestBackend extends IntegrationTestBackend {
+
   private var defaultClient: DefaultKubernetesClient = _
+  private val userProvidedDockerImageTag = Option(
+      System.getProperty(KUBERNETES_TEST_DOCKER_TAG_SYSTEM_PROPERTY))
+  private val resolvedDockerImageTag =
+      userProvidedDockerImageTag.getOrElse(UUID.randomUUID().toString.replaceAll("-", ""))
+  private val dockerManager = new KubernetesSuiteDockerManager(
+      Minikube.getDockerEnv, resolvedDockerImageTag)
 
   override def initialize(): Unit = {
-    Minikube.startMinikube()
-    new SparkDockerImageBuilder(Minikube.getDockerEnv).buildSparkDockerImages()
+    val minikubeStatus = Minikube.getMinikubeStatus
+    require(minikubeStatus == MinikubeStatus.RUNNING,
+        s"Minikube must be running before integration tests can execute. Current status" +
+            s" is: $minikubeStatus")
+    if (userProvidedDockerImageTag.isEmpty) {
+       dockerManager.buildSparkDockerImages()
+    }
     defaultClient = Minikube.getKubernetesClient
+  }
+
+  override def cleanUp(): Unit = {
+    super.cleanUp()
+    if (userProvidedDockerImageTag.isEmpty) {
+      dockerManager.deleteImages()
+    }
   }
 
   override def getKubernetesClient(): DefaultKubernetesClient = {
     defaultClient
   }
 
-  override def cleanUp(): Unit = {
-    if (!System.getProperty("spark.docker.test.persistMinikube", "false").toBoolean) {
-      Minikube.deleteMinikube()
-    }
-  }
-
-  override def name(): String = MINIKUBE_TEST_BACKEND
+  override def dockerImageTag(): String = resolvedDockerImageTag
 }

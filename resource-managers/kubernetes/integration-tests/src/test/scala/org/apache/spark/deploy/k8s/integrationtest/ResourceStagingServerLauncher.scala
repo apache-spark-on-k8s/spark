@@ -32,7 +32,8 @@ import org.apache.spark.util.Utils
 /**
  * Launches a pod that runs the resource staging server, exposing it over a NodePort.
  */
-private[spark] class ResourceStagingServerLauncher(kubernetesClient: KubernetesClient) {
+private[spark] class ResourceStagingServerLauncher(
+    kubernetesClient: KubernetesClient, dockerImageTag: String) {
 
   private val SECRETS_ROOT_DIR = "/mnt/secrets/spark-staging"
   private val KEYSTORE_SECRET_KEY = "keyStore"
@@ -123,7 +124,7 @@ private[spark] class ResourceStagingServerLauncher(kubernetesClient: KubernetesC
           .endVolume()
         .addNewContainer()
           .withName("staging-server-container")
-          .withImage("spark-resource-staging-server:latest")
+          .withImage(s"spark-resource-staging-server:$dockerImageTag")
           .withImagePullPolicy("IfNotPresent")
           .withNewReadinessProbe()
             .withHttpGet(probePingHttpGet)

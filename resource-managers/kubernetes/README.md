@@ -42,9 +42,11 @@ Below is a list of the submodules for this cluster manager and what they do.
 
 # Running the Kubernetes Integration Tests
 
-Note that the integration test framework is currently being heavily revised and is subject to change.
-
 Note that currently the integration tests only run with Java 8.
+
+Integration tests firstly require installing [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) on
+your machine, and for the `Minikube` binary to be on your `PATH`.. Refer to the Minikube documentation for instructions
+on how to install it. It is recommended to allocate at least 8 CPUs and 8GB of memory to the Minikube cluster.
 
 Running any of the integration tests requires including `kubernetes-integration-tests` profile in the build command. In
 order to prepare the environment for running the integration tests, the `pre-integration-test` step must be run in Maven

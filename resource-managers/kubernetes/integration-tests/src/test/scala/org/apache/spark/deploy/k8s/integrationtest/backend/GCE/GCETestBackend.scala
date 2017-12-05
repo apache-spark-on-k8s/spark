@@ -18,9 +18,8 @@ package org.apache.spark.deploy.k8s.integrationtest.backend.GCE
 
 import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient}
 
-import org.apache.spark.deploy.k8s.config.resolveK8sMaster
+import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend
-import org.apache.spark.deploy.k8s.integrationtest.constants.GCE_TEST_BACKEND
 
 private[spark] class GCETestBackend(val master: String) extends IntegrationTestBackend {
   private var defaultClient: DefaultKubernetesClient = _
@@ -36,5 +35,7 @@ private[spark] class GCETestBackend(val master: String) extends IntegrationTestB
     defaultClient
   }
 
-  override def name(): String = GCE_TEST_BACKEND
+  override def dockerImageTag(): String = {
+    return System.getProperty(KUBERNETES_TEST_DOCKER_TAG_SYSTEM_PROPERTY, "latest")
+  }
 }

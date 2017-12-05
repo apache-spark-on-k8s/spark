@@ -21,12 +21,12 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import org.apache.spark.deploy.k8s.integrationtest.backend.GCE.GCETestBackend
 import org.apache.spark.deploy.k8s.integrationtest.backend.minikube.{Minikube, MinikubeTestBackend}
-import org.apache.spark.deploy.k8s.integrationtest.docker.SparkDockerImageBuilder
+import org.apache.spark.deploy.k8s.integrationtest.docker.KubernetesSuiteDockerManager
 
 private[spark] trait IntegrationTestBackend {
-  def name(): String
   def initialize(): Unit
   def getKubernetesClient(): DefaultKubernetesClient
+  def dockerImageTag(): String
   def cleanUp(): Unit = {}
 }
 
@@ -34,6 +34,6 @@ private[spark] object IntegrationTestBackendFactory {
   def getTestBackend(): IntegrationTestBackend = {
     Option(System.getProperty("spark.kubernetes.test.master"))
       .map(new GCETestBackend(_))
-      .getOrElse(new MinikubeTestBackend())
+      .getOrElse(MinikubeTestBackend)
   }
 }

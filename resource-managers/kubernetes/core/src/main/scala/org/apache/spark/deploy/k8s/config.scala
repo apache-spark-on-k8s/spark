@@ -496,6 +496,9 @@ package object config extends Logging {
 
   private[spark] val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
 
+  private[spark] val KUBERNETES_TEST_DOCKER_TAG_SYSTEM_PROPERTY =
+      "spark.kubernetes.test.imageDockerTag"
+
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {
       throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")

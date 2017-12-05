@@ -25,7 +25,8 @@ import org.apache.spark.util.Utils
  * Launches a simple HTTP server which provides jars that can be downloaded by Spark applications
  * in integration tests.
  */
-private[spark] class StaticAssetServerLauncher(kubernetesClient: KubernetesClient) {
+private[spark] class StaticAssetServerLauncher(
+    kubernetesClient: KubernetesClient, dockerImageTag: String) {
 
   // Returns the HTTP Base URI of the server.
   def launchStaticAssetServer(): String = {
@@ -46,7 +47,7 @@ private[spark] class StaticAssetServerLauncher(kubernetesClient: KubernetesClien
         .withNewSpec()
           .addNewContainer()
             .withName("static-asset-server-container")
-            .withImage("spark-integration-test-asset-server:latest")
+            .withImage(s"spark-integration-test-asset-server:$dockerImageTag")
             .withImagePullPolicy("IfNotPresent")
             .withNewReadinessProbe()
               .withHttpGet(probePingHttpGet)

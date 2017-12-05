@@ -340,37 +340,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>com.googlecode.maven-download-plugin</groupId>
-        <artifactId>download-maven-plugin</artifactId>
-        <version>1.3.0</version>
-        <executions>
-          <execution>
-            <id>download-minikube-linux</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>wget</goal>
-            </goals>
-            <configuration>
-              <url>https://storage.googleapis.com/minikube/releases/v0.22.0/minikube-linux-amd64</url>
-              <outputDirectory>${project.build.directory}/minikube-bin/linux-amd64</outputDirectory>
-              <outputFileName>minikube</outputFileName>
-            </configuration>
-          </execution>
-          <execution>
-            <id>download-minikube-darwin</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>wget</goal>
-            </goals>
-            <configuration>
-              <url>https://storage.googleapis.com/minikube/releases/v0.22.0/minikube-darwin-amd64</url>
-              <outputDirectory>${project.build.directory}/minikube-bin/darwin-amd64</outputDirectory>
-              <outputFileName>minikube</outputFileName>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <!-- Triggers scalatest plugin in the integration-test phase instead of
              the test phase, so that test jobs are copied over beforehand.
              See copy-test-spark-jobs execution of maven-dependency-plugin above. -->

@@ -32,8 +32,7 @@ import org.apache.spark.{SparkConf, SparkFunSuite, SSLOptions}
 import org.apache.spark.deploy.k8s.SSLUtils
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackendFactory
-import org.apache.spark.deploy.k8s.integrationtest.backend.minikube.Minikube
-import org.apache.spark.deploy.k8s.integrationtest.constants.MINIKUBE_TEST_BACKEND
+import org.apache.spark.deploy.k8s.integrationtest.backend.minikube.{Minikube, MinikubeTestBackend}
 import org.apache.spark.deploy.k8s.submit.{Client, ClientArguments, JavaMainAppResource, KeyAndCertPem, MainAppResource, PythonMainAppResource, RMainAppResource}
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
@@ -51,9 +50,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     testBackend.initialize()
     kubernetesTestComponents = new KubernetesTestComponents(testBackend.getKubernetesClient)
     resourceStagingServerLauncher = new ResourceStagingServerLauncher(
-      kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
+        kubernetesTestComponents
+            .kubernetesClient
+            .inNamespace(kubernetesTestComponents.namespace), testBackend.dockerImageTag())
     staticAssetServerLauncher = new StaticAssetServerLauncher(
-      kubernetesTestComponents.kubernetesClient.inNamespace(kubernetesTestComponents.namespace))
+        kubernetesTestComponents
+            .kubernetesClient
+            .inNamespace(kubernetesTestComponents.namespace), testBackend.dockerImageTag())
   }
 
   override def afterAll(): Unit = {
@@ -62,8 +65,9 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
   before {
     sparkConf = kubernetesTestComponents.newSparkConf()
-      .set(INIT_CONTAINER_DOCKER_IMAGE, s"spark-init:latest")
-      .set(DRIVER_DOCKER_IMAGE, s"spark-driver:latest")
+      .set(INIT_CONTAINER_DOCKER_IMAGE, tagImage("spark-init"))
+      .set(DRIVER_DOCKER_IMAGE, tagImage("spark-driver"))
+      .set(EXECUTOR_DOCKER_IMAGE, tagImage("spark-executor"))
       .set(s"${KUBERNETES_DRIVER_LABEL_PREFIX}spark-app-locator", APP_LOCATOR_LABEL)
     kubernetesTestComponents.createNamespace()
   }
@@ -73,14 +77,13 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Run PySpark Job on file from SUBMITTER with --py-files") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     launchStagingServer(SSLOptions(), None)
     sparkConf
-      .set(DRIVER_DOCKER_IMAGE,
-        System.getProperty("spark.docker.test.driverImage", "spark-driver-py:latest"))
-      .set(EXECUTOR_DOCKER_IMAGE,
-        System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
+      .set(DRIVER_DOCKER_IMAGE, tagImage("spark-driver-py"))
+      .set(EXECUTOR_DOCKER_IMAGE, tagImage("spark-executor-py"))
+
 
     runPySparkPiAndVerifyCompletion(
       PYSPARK_PI_SUBMITTER_LOCAL_FILE_LOCATION,
@@ -89,20 +92,18 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Run PySpark Job on file from CONTAINER with spark.jar defined") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     sparkConf
-      .set(DRIVER_DOCKER_IMAGE,
-      System.getProperty("spark.docker.test.driverImage", "spark-driver-py:latest"))
-      .set(EXECUTOR_DOCKER_IMAGE,
-      System.getProperty("spark.docker.test.executorImage", "spark-executor-py:latest"))
+      .set(DRIVER_DOCKER_IMAGE, tagImage("spark-driver-py"))
+      .set(EXECUTOR_DOCKER_IMAGE, tagImage("spark-executor-py"))
 
     runPySparkPiAndVerifyCompletion(PYSPARK_PI_CONTAINER_LOCAL_FILE_LOCATION, Seq.empty[String])
   }
 
   test("Run SparkR Job on file locally") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     launchStagingServer(SSLOptions(), None)
     sparkConf
@@ -115,7 +116,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Run SparkR Job on file from SUBMITTER") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     sparkConf
@@ -128,14 +129,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Simple submission test with the resource staging server.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     launchStagingServer(SSLOptions(), None)
     runSparkPiAndVerifyCompletion(SUBMITTER_LOCAL_MAIN_APP_RESOURCE)
   }
 
   test("Enable SSL on the resource staging server") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     val keyStoreAndTrustStore = SSLUtils.generateKeyStoreTrustStorePair(
       ipAddress = Minikube.getMinikubeIp,
@@ -162,14 +163,14 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Use container-local resources without the resource staging server") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
   }
 
   test("Dynamic executor scaling basic test") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     launchStagingServer(SSLOptions(), None)
     createShuffleServiceDaemonSet()
@@ -190,7 +191,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Use remote resources without the resource staging server.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     val assetServerUri = staticAssetServerLauncher.launchStaticAssetServer()
     sparkConf.setJars(Seq(
       s"$assetServerUri/${EXAMPLES_JAR_FILE.getName}",
@@ -200,7 +201,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Mix remote resources with submitted ones.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     launchStagingServer(SSLOptions(), None)
     val assetServerUri = staticAssetServerLauncher.launchStaticAssetServer()
     sparkConf.setJars(Seq(
@@ -210,7 +211,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Use key and certificate PEM files for TLS.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     val keyAndCertificate = SSLUtils.generateKeyCertPemPair(Minikube.getMinikubeIp)
     launchStagingServer(
         SSLOptions(enabled = true),
@@ -222,7 +223,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Use client key and client cert file when requesting executors") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     sparkConf.setJars(Seq(
         CONTAINER_LOCAL_MAIN_APP_RESOURCE,
         CONTAINER_LOCAL_HELPER_JAR_PATH))
@@ -239,7 +240,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Added files should be placed in the driver's working directory.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     launchStagingServer(SSLOptions(), None)
     val testExistenceFileTempDir = Utils.createTempDir(namePrefix = "test-existence-file-temp-dir")
     val testExistenceFile = new File(testExistenceFileTempDir, "input.txt")
@@ -257,7 +258,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Setting JVM options on the driver and executors with spaces.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     launchStagingServer(SSLOptions(), None)
     val driverJvmOptionsFile = storeJvmOptionsInTempFile(
         Map("simpleDriverConf" -> "simpleDriverConfValue",
@@ -287,7 +288,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Submit small local files without the resource staging server.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH))
     val testExistenceFileTempDir = Utils.createTempDir(namePrefix = "test-existence-file-temp-dir")
     val testExistenceFile = new File(testExistenceFileTempDir, "input.txt")
@@ -305,7 +306,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   }
 
   test("Use a very long application name.") {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     sparkConf.setJars(Seq(CONTAINER_LOCAL_HELPER_JAR_PATH)).setAppName("long" * 40)
     runSparkPiAndVerifyCompletion(CONTAINER_LOCAL_MAIN_APP_RESOURCE)
@@ -313,7 +314,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
 
   private def launchStagingServer(
       resourceStagingServerSslOptions: SSLOptions, keyAndCertPem: Option[KeyAndCertPem]): Unit = {
-    assume(testBackend.name == MINIKUBE_TEST_BACKEND)
+    assume(testBackend == MinikubeTestBackend)
 
     val resourceStagingServerPort = resourceStagingServerLauncher.launchStagingServer(
       resourceStagingServerSslOptions, keyAndCertPem)
@@ -405,7 +406,7 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
             .endVolume()
             .addNewContainer()
               .withName("shuffle")
-              .withImage("spark-shuffle:latest")
+              .withImage(s"spark-shuffle:${testBackend.dockerImageTag()}")
               .withImagePullPolicy("IfNotPresent")
               .addNewVolumeMount()
                 .withName("shuffle-dir")
@@ -441,6 +442,8 @@ private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
     }
     propertiesFile
   }
+
+  private def tagImage(image: String): String = s"$image:${testBackend.dockerImageTag()}"
 }
 
 private[spark] object KubernetesSuite {
