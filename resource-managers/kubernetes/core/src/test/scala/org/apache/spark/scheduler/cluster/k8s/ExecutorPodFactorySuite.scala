@@ -331,7 +331,8 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       None,
       None)
     val executor = factory.createExecutorPod(
-      "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"), driverPod, Map[String, Int]())
+      "1", "dummy", "dummy", Seq[(String, String)]("qux" -> "quux"),
+      driverPod, Map[String, Int]())
 
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))

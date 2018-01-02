@@ -268,4 +268,35 @@ class MetricsSystemSuite extends SparkFunSuite with BeforeAndAfter with PrivateM
     assert(metricName === source.sourceName)
   }
 
+  test("MetricsSystem with shuffleService instance with custom namespace") {
+    val source = new Source {
+      override val sourceName = "dummySource"
+      override val metricRegistry = new MetricRegistry()
+    }
+
+    val metricsNamespace = "testMetricsNamespace"
+    conf.set(METRICS_NAMESPACE, metricsNamespace)
+
+    val instanceName = "shuffleService"
+    val driverMetricsSystem = MetricsSystem.createMetricsSystem(instanceName, conf, securityMgr)
+
+    val metricName = driverMetricsSystem.buildRegistryName(source)
+
+    assert(metricName === s"$metricsNamespace.${source.sourceName}")
+  }
+
+  test("MetricsSystem with shuffleService instance with no custom namespace") {
+    val source = new Source {
+      override val sourceName = "dummySource"
+      override val metricRegistry = new MetricRegistry()
+    }
+
+    val instanceName = "shuffleService"
+    val driverMetricsSystem = MetricsSystem.createMetricsSystem(instanceName, conf, securityMgr)
+
+    val metricName = driverMetricsSystem.buildRegistryName(source)
+
+    assert(metricName === s"${source.sourceName}")
+  }
+
 }
