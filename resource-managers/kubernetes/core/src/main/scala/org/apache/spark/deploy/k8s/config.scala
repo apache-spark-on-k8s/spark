@@ -34,6 +34,14 @@ package object config extends Logging {
       .stringConf
       .createWithDefault("default")
 
+  private[spark] val KUBERNETES_DNS_ZONE =
+    ConfigBuilder("spark.kubernetes.dnsZone")
+      .doc("The DNS zone that Kubernetes cluster uses. When using" +
+        " spark-submit in cluster mode, this can also be passed to spark-submit via the" +
+        " --kubernetes-dns-zone command line argument.")
+      .stringConf
+      .createWithDefault("cluster.local")
+
   private[spark] val DRIVER_DOCKER_IMAGE =
     ConfigBuilder("spark.kubernetes.driver.docker.image")
       .doc("Docker image to use for the driver. Specify this using the standard Docker tag format.")

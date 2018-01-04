@@ -73,6 +73,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
 
   // Kubernetes only
   var kubernetesNamespace: String = null
+  var kubernetesDnsZone: String = null
 
   // Standalone cluster mode only
   var supervise: Boolean = false
@@ -198,6 +199,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     principal = Option(principal).orElse(sparkProperties.get("spark.yarn.principal")).orNull
     kubernetesNamespace = Option(kubernetesNamespace)
       .orElse(sparkProperties.get("spark.kubernetes.namespace"))
+      .orNull
+    kubernetesDnsZone = Option(kubernetesDnsZone)
+      .orElse(sparkProperties.get("spark.kubernetes.dnsZone"))
       .orNull
 
     // Try to set main class from JAR if no --class argument is given
@@ -439,6 +443,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
 
       case KUBERNETES_NAMESPACE =>
         kubernetesNamespace = value
+
+      case KUBERNETES_DNS_ZONE =>
+        kubernetesDnsZone = value
 
       case HELP =>
         printUsageAndExit(0)

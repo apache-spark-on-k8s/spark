@@ -388,6 +388,7 @@ class SparkSubmitSuite
       "--executor-memory", "5g",
       "--class", "org.SomeClass",
       "--kubernetes-namespace", "foo",
+      "--kubernetes-dns-zone", "my.domain",
       "--driver-memory", "4g",
       "--conf", "spark.kubernetes.driver.docker.image=bar",
       "/home/thejar.jar",
@@ -404,6 +405,7 @@ class SparkSubmitSuite
     sysProps("spark.executor.memory") should be ("5g")
     sysProps("spark.driver.memory") should be ("4g")
     sysProps("spark.kubernetes.namespace") should be ("foo")
+    sysProps("spark.kubernetes.dnsZone") should be ("my.domain")
     sysProps("spark.kubernetes.driver.docker.image") should be ("bar")
   }
 

@@ -78,13 +78,14 @@ private[spark] class DriverServiceBootstrapStepSuite
       sparkConf
         .set("spark.driver.port", "9000")
         .set(org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT, 8080)
-        .set(KUBERNETES_NAMESPACE, "my-namespace"),
+        .set(KUBERNETES_NAMESPACE, "my-namespace")
+        .set(KUBERNETES_DNS_ZONE, "my.domain"),
       clock)
     val baseDriverSpec = KubernetesDriverSpec.initialSpec(sparkConf.clone())
     val resolvedDriverSpec = configurationStep.configureDriver(baseDriverSpec)
     val expectedServiceName = SHORT_RESOURCE_NAME_PREFIX +
       DriverServiceBootstrapStep.DRIVER_SVC_POSTFIX
-    val expectedHostName = s"$expectedServiceName.my-namespace.svc.cluster.local"
+    val expectedHostName = s"$expectedServiceName.my-namespace.svc.my.domain"
     verifySparkConfHostNames(resolvedDriverSpec.driverSparkConf, expectedHostName)
   }
 

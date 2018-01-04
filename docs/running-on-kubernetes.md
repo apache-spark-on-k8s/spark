@@ -362,6 +362,15 @@ from the other deployment modes. See the [configuration page](configuration.html
   </td>
 </tr>
 <tr>
+  <td><code>spark.kubernetes.dnsZone</code></td>
+  <td><code>cluster.local</code></td>
+  <td>
+    The DNS zone that Kubernetes cluster uses. When using <code>spark-submit</code> in cluster mode,
+    this can also be passed to <code>spark-submit</code> via the
+    <code>--kubernetes-dns-zone</code> command line argument.
+  </td>
+</tr>
+<tr>
   <td><code>spark.kubernetes.driver.docker.image</code></td>
   <td><code>spark-driver:2.2.0</code></td>
   <td>

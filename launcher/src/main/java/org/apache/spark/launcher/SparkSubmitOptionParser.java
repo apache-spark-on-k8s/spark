@@ -78,6 +78,7 @@ class SparkSubmitOptionParser {
 
   // Kubernetes-only options.
   protected final String KUBERNETES_NAMESPACE = "--kubernetes-namespace";
+  protected final String KUBERNETES_DNS_ZONE = "--kubernetes-dns-zone";
 
   /**
    * This is the canonical list of spark-submit options. Each entry in the array contains the
@@ -118,7 +119,8 @@ class SparkSubmitOptionParser {
     { REPOSITORIES },
     { STATUS },
     { TOTAL_EXECUTOR_CORES },
-    { KUBERNETES_NAMESPACE }
+    { KUBERNETES_NAMESPACE },
+    { KUBERNETES_DNS_ZONE }
   };
 
   /**
