@@ -481,6 +481,8 @@ object SparkSubmit extends CommandLineUtils {
 
       OptionAssigner(args.kubernetesNamespace, KUBERNETES, ALL_DEPLOY_MODES,
         sysProp = "spark.kubernetes.namespace"),
+      OptionAssigner(args.kubernetesDnsZone, KUBERNETES, ALL_DEPLOY_MODES,
+        sysProp = "spark.kubernetes.dnsZone"),
 
         // Other options
       OptionAssigner(args.executorCores, STANDALONE | YARN | KUBERNETES, ALL_DEPLOY_MODES,

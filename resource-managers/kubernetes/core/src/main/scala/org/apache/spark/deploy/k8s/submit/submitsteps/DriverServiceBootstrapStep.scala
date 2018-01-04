@@ -80,7 +80,8 @@ private[spark] class DriverServiceBootstrapStep(
       .build()
 
     val namespace = submissionSparkConf.get(KUBERNETES_NAMESPACE)
-    val driverHostname = s"${driverService.getMetadata.getName}.$namespace.svc.cluster.local"
+    val dns_zone = submissionSparkConf.get(KUBERNETES_DNS_ZONE)
+    val driverHostname = s"${driverService.getMetadata.getName}.$namespace.svc.$dns_zone"
     val resolvedSparkConf = driverSpec.driverSparkConf.clone()
         .set(org.apache.spark.internal.config.DRIVER_HOST_ADDRESS, driverHostname)
         .set("spark.driver.port", driverPort.toString)
