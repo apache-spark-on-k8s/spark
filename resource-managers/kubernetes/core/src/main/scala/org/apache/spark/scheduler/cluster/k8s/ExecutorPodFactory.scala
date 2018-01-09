@@ -18,9 +18,9 @@ package org.apache.spark.scheduler.cluster.k8s
 
 import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder, VolumeBuilder, VolumeMountBuilder}
+import io.fabric8.kubernetes.api.model.{ContainerBuilder, ContainerPortBuilder, EnvVar, EnvVarBuilder, EnvVarSourceBuilder, Pod, PodBuilder, QuantityBuilder}
 
-import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.{ConfigurationUtils, HadoopConfBootstrap, HadoopConfSparkUserBootstrap, InitContainerResourceStagingServerSecretPlugin, KerberosTokenConfBootstrap, PodWithDetachedInitContainer, PodWithMainContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
@@ -235,7 +235,8 @@ private[spark] class ExecutorPodFactoryImpl(
 
     val (withMaybeSecretsMountedPod, withMaybeSecretsMountedContainer) =
       mountSecretsBootstrap.map {bootstrap =>
-        bootstrap.mountSecrets(executorPod, containerWithExecutorLimitCores)
+        (bootstrap.addSecretVolumes(executorPod),
+          bootstrap.mountSecrets(containerWithExecutorLimitCores))
       }.getOrElse((executorPod, containerWithExecutorLimitCores))
     val (withMaybeSmallFilesMountedPod, withMaybeSmallFilesMountedContainer) =
       mountSmallFilesBootstrap.map { bootstrap =>
@@ -258,7 +259,7 @@ private[spark] class ExecutorPodFactoryImpl(
 
         val (mayBePodWithSecretsMountedToInitContainer, mayBeInitContainerWithSecretsMounted) =
           executorInitContainerMountSecretsBootstrap.map { bootstrap =>
-            bootstrap.mountSecrets(podWithDetachedInitContainer.pod, resolvedInitContainer)
+            (podWithDetachedInitContainer.pod, bootstrap.mountSecrets(resolvedInitContainer))
         }.getOrElse(podWithDetachedInitContainer.pod, resolvedInitContainer)
 
         val podWithAttachedInitContainer = InitContainerUtil.appendInitContainer(

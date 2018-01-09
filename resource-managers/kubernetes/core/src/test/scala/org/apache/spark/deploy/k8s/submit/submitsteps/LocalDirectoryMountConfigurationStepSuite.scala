@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.submit.submitsteps
+package org.apache.spark.deploy.k8s.submit.submitsteps
 
 import java.nio.file.Paths
 
@@ -22,7 +22,6 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{KubernetesDriverSpec, LocalDirectoryMountConfigurationStep}
 
 private[spark] class LocalDirectoryMountConfigurationStepSuite extends SparkFunSuite {
 

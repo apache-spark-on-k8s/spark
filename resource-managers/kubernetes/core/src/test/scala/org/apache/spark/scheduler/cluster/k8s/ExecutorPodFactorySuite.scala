@@ -35,7 +35,7 @@ import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.k8s.{HadoopConfBootstrapImpl, HadoopConfSparkUserBootstrapImpl, HadoopUGIUtilImpl, KerberosTokenConfBootstrapImpl, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrap, MountSmallFilesBootstrapImpl}
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrap, MountSmallFilesBootstrap, MountSmallFilesBootstrapImpl}
 import org.apache.spark.util.Utils
 
 class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with BeforeAndAfterEach {
@@ -149,7 +149,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
   test("secrets get mounted") {
     val conf = baseConf.clone()
 
-    val secretsBootstrap = new MountSecretsBootstrapImpl(Map("secret1" -> "/var/secret1"))
+    val secretsBootstrap = new MountSecretsBootstrap(Map("secret1" -> "/var/secret1"))
     val factory = new ExecutorPodFactoryImpl(
       conf,
       nodeAffinityExecutorPodModifier,
@@ -216,7 +216,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     val initContainerBootstrap = mock(classOf[SparkPodInitContainerBootstrap])
     when(initContainerBootstrap.bootstrapInitContainerAndVolumes(
       any(classOf[PodWithDetachedInitContainer]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
-    val secretsBootstrap = new MountSecretsBootstrapImpl(Map("secret1" -> "/var/secret1"))
+    val secretsBootstrap = new MountSecretsBootstrap(Map("secret1" -> "/var/secret1"))
 
     val factory = new ExecutorPodFactoryImpl(
       conf,

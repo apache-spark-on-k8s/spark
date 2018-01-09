@@ -24,7 +24,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.deploy.k8s.{ConfigurationUtils, HadoopConfBootstrapImpl, HadoopConfSparkUserBootstrapImpl, HadoopConfUtils, HadoopUGIUtilImpl, InitContainerResourceStagingServerSecretPluginImpl, KerberosTokenConfBootstrapImpl, SparkKubernetesClientFactory, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, MountSmallFilesBootstrapImpl}
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrap, MountSmallFilesBootstrapImpl}
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.kubernetes.KubernetesExternalShuffleClientImpl
@@ -125,12 +125,12 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
     val executorSecretNamesToMountPaths = ConfigurationUtils.parsePrefixedKeyValuePairs(sparkConf,
       KUBERNETES_EXECUTOR_SECRETS_PREFIX, "executor secrets")
     val mountSecretBootstrap = if (executorSecretNamesToMountPaths.nonEmpty) {
-      Some(new MountSecretsBootstrapImpl(executorSecretNamesToMountPaths))
+      Some(new MountSecretsBootstrap(executorSecretNamesToMountPaths))
     } else {
       None
     }
     val executorInitContainerMountSecretsBootstrap = if (executorSecretNamesToMountPaths.nonEmpty) {
-      Some(new MountSecretsBootstrapImpl(executorSecretNamesToMountPaths))
+      Some(new MountSecretsBootstrap(executorSecretNamesToMountPaths))
     } else {
       None
     }

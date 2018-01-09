@@ -22,19 +22,15 @@ import org.apache.spark.deploy.k8s.submit.MountSecretsBootstrap
  * An init-container configuration step for mounting user-specified secrets onto user-specified
  * paths.
  *
- * @param mountSecretsBootstrap a utility actually handling mounting of the secrets.
+ * @param bootstrap a utility actually handling mounting of the secrets.
  */
 private[spark] class InitContainerMountSecretsStep(
-    mountSecretsBootstrap: MountSecretsBootstrap) extends InitContainerConfigurationStep {
+    bootstrap: MountSecretsBootstrap) extends InitContainerConfigurationStep {
 
-  override def configureInitContainer(initContainerSpec: InitContainerSpec) : InitContainerSpec = {
-    val (podWithSecretsMounted, initContainerWithSecretsMounted) =
-      mountSecretsBootstrap.mountSecrets(
-        initContainerSpec.podToInitialize,
-        initContainerSpec.initContainer)
-    initContainerSpec.copy(
-      podToInitialize = podWithSecretsMounted,
-      initContainer = initContainerWithSecretsMounted
-    )
+  override def configureInitContainer(spec: InitContainerSpec) : InitContainerSpec = {
+    // Mount the secret volumes given that the volumes have already been added to the driver pod
+    // when mounting the secrets into the main driver container.
+    val initContainer = bootstrap.mountSecrets(spec.initContainer)
+    spec.copy(initContainer = initContainer)
   }
 }

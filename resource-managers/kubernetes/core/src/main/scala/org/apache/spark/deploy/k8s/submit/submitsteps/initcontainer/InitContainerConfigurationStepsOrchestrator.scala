@@ -20,7 +20,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.{ConfigurationUtils, InitContainerResourceStagingServerSecretPluginImpl, OptionRequirements, SparkPodInitContainerBootstrapImpl}
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.{KubernetesFileUtils, MountSecretsBootstrapImpl, SubmittedDependencyUploaderImpl}
+import org.apache.spark.deploy.k8s.submit.{KubernetesFileUtils, MountSecretsBootstrap, SubmittedDependencyUploaderImpl}
 import org.apache.spark.deploy.rest.k8s.{ResourceStagingServerSslOptionsProviderImpl, RetrofitClientFactoryImpl}
 import org.apache.spark.util.Utils
 
@@ -140,7 +140,7 @@ private[spark] class InitContainerConfigurationStepsOrchestrator(
       KUBERNETES_DRIVER_SECRETS_PREFIX,
       "driver secrets")
     val mountSecretsStep = if (driverSecretNamesToMountPaths.nonEmpty) {
-      val mountSecretsBootstrap = new MountSecretsBootstrapImpl(driverSecretNamesToMountPaths)
+      val mountSecretsBootstrap = new MountSecretsBootstrap(driverSecretNamesToMountPaths)
       Some(new InitContainerMountSecretsStep(mountSecretsBootstrap))
     } else {
       None

@@ -21,17 +21,17 @@ import org.apache.spark.deploy.k8s.submit.MountSecretsBootstrap
 /**
  * A driver configuration step for mounting user-specified secrets onto user-specified paths.
  *
- * @param mountSecretsBootstrap a utility actually handling mounting of the secrets.
+ * @param bootstrap a utility actually handling mounting of the secrets.
  */
 private[spark] class MountSecretsStep(
-    mountSecretsBootstrap: MountSecretsBootstrap) extends DriverConfigurationStep {
+    bootstrap: MountSecretsBootstrap) extends DriverConfigurationStep {
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
-    val (driverPodWithSecretsMounted, driverContainerWithSecretsMounted) =
-      mountSecretsBootstrap.mountSecrets(driverSpec.driverPod, driverSpec.driverContainer)
+    val pod = bootstrap.addSecretVolumes(driverSpec.driverPod)
+    val container = bootstrap.mountSecrets(driverSpec.driverContainer)
     driverSpec.copy(
-      driverPod = driverPodWithSecretsMounted,
-      driverContainer = driverContainerWithSecretsMounted
+      driverPod = pod,
+      driverContainer = container
     )
   }
 }

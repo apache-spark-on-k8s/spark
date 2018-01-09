@@ -20,10 +20,9 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.ConfigurationUtils
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep, HadoopConfigBootstrapStep, InitContainerBootstrapStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
+import org.apache.spark.deploy.k8s.submit.submitsteps.{BaseDriverConfigurationStep, DependencyResolutionStep, DriverConfigurationStep, DriverKubernetesCredentialsStep, DriverServiceBootstrapStep, HadoopConfigBootstrapStep, InitContainerBootstrapStep, LocalDirectoryMountConfigurationStep, MountSecretsStep, MountSmallLocalFilesStep, PythonStep, RStep}
 import org.apache.spark.deploy.k8s.submit.submitsteps.hadoopsteps.HadoopStepsOrchestrator
 import org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer.InitContainerConfigurationStepsOrchestrator
-import org.apache.spark.deploy.k8s.submit.submitsteps.LocalDirectoryMountConfigurationStep
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{SystemClock, Utils}
 
@@ -117,6 +116,13 @@ private[spark] class DriverConfigurationStepsOrchestrator(
     val localDirectoryMountConfigurationStep = new LocalDirectoryMountConfigurationStep(
         submissionSparkConf)
 
+    val mountSecretsStep = if (driverSecretNamesToMountPaths.nonEmpty) {
+      val mountSecretsBootstrap = new MountSecretsBootstrap(driverSecretNamesToMountPaths)
+      Some(new MountSecretsStep(mountSecretsBootstrap))
+    } else {
+      None
+    }
+
     val hadoopConfigSteps =
       hadoopConfDir.map { conf =>
         val hadoopStepsOrchestrator =
@@ -204,23 +210,16 @@ private[spark] class DriverConfigurationStepsOrchestrator(
       jarsDownloadPath,
       localFilesDownloadPath)
 
-    val mountSecretsStep = if (driverSecretNamesToMountPaths.nonEmpty) {
-      val mountSecretsBootstrap = new MountSecretsBootstrapImpl(driverSecretNamesToMountPaths)
-      Some(new MountSecretsStep(mountSecretsBootstrap))
-    } else {
-      None
-    }
-
     Seq(
       initialSubmissionStep,
       driverAddressStep,
       kubernetesCredentialsStep,
       dependencyResolutionStep,
       localDirectoryMountConfigurationStep) ++
+      mountSecretsStep.toSeq ++
       submittedDependenciesBootstrapSteps ++
       hadoopConfigSteps.toSeq ++
-      resourceStep.toSeq ++
-      mountSecretsStep.toSeq
+      resourceStep.toSeq
   }
 
   private def areAnyFilesNonContainerLocal(files: Seq[String]): Boolean = {

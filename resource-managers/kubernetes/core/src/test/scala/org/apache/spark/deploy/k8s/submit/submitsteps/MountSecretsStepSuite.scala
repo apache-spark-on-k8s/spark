@@ -17,7 +17,8 @@
 package org.apache.spark.deploy.k8s.submit.submitsteps
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, SecretVolumeUtils}
+import org.apache.spark.deploy.k8s.SecretVolumeUtils
+import org.apache.spark.deploy.k8s.submit.MountSecretsBootstrap
 
 private[spark] class MountSecretsStepSuite extends SparkFunSuite {
 
@@ -31,7 +32,7 @@ private[spark] class MountSecretsStepSuite extends SparkFunSuite {
       SECRET_FOO -> SECRET_MOUNT_PATH,
       SECRET_BAR -> SECRET_MOUNT_PATH)
 
-    val mountSecretsBootstrap = new MountSecretsBootstrapImpl(secretNamesToMountPaths)
+    val mountSecretsBootstrap = new MountSecretsBootstrap(secretNamesToMountPaths)
     val mountSecretsStep = new MountSecretsStep(mountSecretsBootstrap)
     val configuredDriverSpec = mountSecretsStep.configureDriver(baseDriverSpec)
     val driverPodWithSecretsMounted = configuredDriverSpec.driverPod

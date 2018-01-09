@@ -18,27 +18,17 @@ package org.apache.spark.deploy.k8s.submit
 
 import io.fabric8.kubernetes.api.model.{Container, ContainerBuilder, Pod, PodBuilder}
 
-/**
- * Bootstraps a driver or executor pod with needed secrets mounted.
- */
-private[spark] trait MountSecretsBootstrap {
+private[spark] class MountSecretsBootstrap(secretNamesToMountPaths: Map[String, String]) {
 
   /**
-   * Mounts Kubernetes secrets as secret volumes into the given container in the given pod.
+   * Add new secret volumes for the secrets specified in secretNamesToMountPaths into the given pod.
    *
    * @param pod the pod into which the secret volumes are being added.
-   * @param container the container into which the secret volumes are being mounted.
-   * @return the updated pod and container with the secrets mounted.
+   * @return the updated pod with the secret volumes added.
    */
-  def mountSecrets(pod: Pod, container: Container): (Pod, Container)
-}
-
-private[spark] class MountSecretsBootstrapImpl(
-    secretNamesToMountPaths: Map[String, String]) extends MountSecretsBootstrap {
-
-  override def mountSecrets(pod: Pod, container: Container): (Pod, Container) = {
+  def addSecretVolumes(pod: Pod): Pod = {
     var podBuilder = new PodBuilder(pod)
-    secretNamesToMountPaths.keys.foreach(name =>
+    secretNamesToMountPaths.keys.foreach { name =>
       podBuilder = podBuilder
         .editOrNewSpec()
           .addNewVolume()
@@ -47,18 +37,30 @@ private[spark] class MountSecretsBootstrapImpl(
               .withSecretName(name)
               .endSecret()
             .endVolume()
-          .endSpec())
+          .endSpec()
+    }
 
+    podBuilder.build()
+  }
+
+  /**
+   * Mounts Kubernetes secret volumes of the secrets specified in secretNamesToMountPaths into the
+   * given container.
+   *
+   * @param container the container into which the secret volumes are being mounted.
+   * @return the updated container with the secrets mounted.
+   */
+  def mountSecrets(container: Container): Container = {
     var containerBuilder = new ContainerBuilder(container)
-    secretNamesToMountPaths.foreach(namePath =>
+    secretNamesToMountPaths.foreach { case (name, path) =>
       containerBuilder = containerBuilder
         .addNewVolumeMount()
-          .withName(secretVolumeName(namePath._1))
-          .withMountPath(namePath._2)
+          .withName(secretVolumeName(name))
+          .withMountPath(path)
           .endVolumeMount()
-    )
+    }
 
-    (podBuilder.build(), containerBuilder.build())
+    containerBuilder.build()
   }
 
   private def secretVolumeName(secretName: String): String = {

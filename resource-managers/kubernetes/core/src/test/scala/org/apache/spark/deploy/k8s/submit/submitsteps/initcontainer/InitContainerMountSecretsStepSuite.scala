@@ -19,7 +19,8 @@ package org.apache.spark.deploy.k8s.submit.submitsteps.initcontainer
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder}
 
 import org.apache.spark.SparkFunSuite
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrapImpl, SecretVolumeUtils}
+import org.apache.spark.deploy.k8s.SecretVolumeUtils
+import org.apache.spark.deploy.k8s.submit.MountSecretsBootstrap
 
 class InitContainerMountSecretsStepSuite extends SparkFunSuite {
 
@@ -39,16 +40,12 @@ class InitContainerMountSecretsStepSuite extends SparkFunSuite {
       SECRET_FOO -> SECRET_MOUNT_PATH,
       SECRET_BAR -> SECRET_MOUNT_PATH)
 
-    val mountSecretsBootstrap = new MountSecretsBootstrapImpl(secretNamesToMountPaths)
+    val mountSecretsBootstrap = new MountSecretsBootstrap(secretNamesToMountPaths)
     val initContainerMountSecretsStep = new InitContainerMountSecretsStep(mountSecretsBootstrap)
     val configuredInitContainerSpec = initContainerMountSecretsStep.configureInitContainer(
       baseInitContainerSpec)
 
-    val podWithSecretsMounted = configuredInitContainerSpec.podToInitialize
     val initContainerWithSecretsMounted = configuredInitContainerSpec.initContainer
-
-    Seq(s"$SECRET_FOO-volume", s"$SECRET_BAR-volume").foreach(volumeName =>
-      assert(SecretVolumeUtils.podHasVolume(podWithSecretsMounted, volumeName)))
     Seq(s"$SECRET_FOO-volume", s"$SECRET_BAR-volume").foreach(volumeName =>
       assert(SecretVolumeUtils.containerHasVolume(
         initContainerWithSecretsMounted, volumeName, SECRET_MOUNT_PATH)))

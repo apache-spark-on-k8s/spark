@@ -19,6 +19,7 @@ package org.apache.spark.deploy.k8s.submit
 import io.fabric8.kubernetes.api.model.{ContainerBuilder, PodBuilder}
 
 import org.apache.spark.SparkFunSuite
+import org.apache.spark.deploy.k8s.SecretVolumeUtils
 
 private[spark] class MountSecretsBootstrapSuite extends SparkFunSuite {
 
@@ -34,9 +35,9 @@ private[spark] class MountSecretsBootstrapSuite extends SparkFunSuite {
     val driverContainer = new ContainerBuilder().build()
     val driverPod = new PodBuilder().build()
 
-    val mountSecretsBootstrap = new MountSecretsBootstrapImpl(secretNamesToMountPaths)
+    val bootstrap = new MountSecretsBootstrap(secretNamesToMountPaths)
     val (driverPodWithSecretsMounted, driverContainerWithSecretsMounted) =
-      mountSecretsBootstrap.mountSecrets(driverPod, driverContainer)
+      (bootstrap.addSecretVolumes(driverPod), bootstrap.mountSecrets(driverContainer))
     Seq(s"$SECRET_FOO-volume", s"$SECRET_BAR-volume").foreach(volumeName =>
       assert(SecretVolumeUtils.podHasVolume(driverPodWithSecretsMounted, volumeName)))
     Seq(s"$SECRET_FOO-volume", s"$SECRET_BAR-volume").foreach(volumeName =>
