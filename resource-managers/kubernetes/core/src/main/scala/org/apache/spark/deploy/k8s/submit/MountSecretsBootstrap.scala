@@ -31,6 +31,14 @@ private[spark] trait MountSecretsBootstrap {
    * @return the updated pod and container with the secrets mounted.
    */
   def mountSecrets(pod: Pod, container: Container): (Pod, Container)
+  /**
+   * Mounts Kubernetes secrets as secret volumes into the given container. Make sure that
+   * the secret volumes are being added to its pod spec.
+   *
+   * @param container the container into which the secret volumes are being mounted.
+   * @return the updated pod and container with the secrets mounted.
+   */
+  def mountSecrets(container: Container): (Container)
 }
 
 private[spark] class MountSecretsBootstrapImpl(
@@ -49,16 +57,20 @@ private[spark] class MountSecretsBootstrapImpl(
             .endVolume()
           .endSpec())
 
+    (podBuilder.build(), mountSecrets(container))
+  }
+
+  override def mountSecrets(container: Container): (Container) = {
     var containerBuilder = new ContainerBuilder(container)
     secretNamesToMountPaths.foreach(namePath =>
       containerBuilder = containerBuilder
         .addNewVolumeMount()
-          .withName(secretVolumeName(namePath._1))
-          .withMountPath(namePath._2)
-          .endVolumeMount()
+        .withName(secretVolumeName(namePath._1))
+        .withMountPath(namePath._2)
+        .endVolumeMount()
     )
 
-    (podBuilder.build(), containerBuilder.build())
+    containerBuilder.build()
   }
 
   private def secretVolumeName(secretName: String): String = {

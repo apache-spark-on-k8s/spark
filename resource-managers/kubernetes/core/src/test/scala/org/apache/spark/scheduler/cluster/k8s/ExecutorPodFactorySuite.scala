@@ -221,7 +221,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     val factory = new ExecutorPodFactoryImpl(
       conf,
       nodeAffinityExecutorPodModifier,
-      None,
+      Some(secretsBootstrap),
       None,
       Some(initContainerBootstrap),
       Some(secretsBootstrap),
@@ -241,6 +241,10 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       === "secret1-volume")
     assert(executor.getSpec.getInitContainers.get(0).getVolumeMounts.get(0)
       .getMountPath === "/var/secret1")
+
+    // check volume mounted.
+    assert(executor.getSpec.getVolumes.size() === 1)
+    assert(executor.getSpec.getVolumes.get(0).getSecret.getSecretName === "secret1")
 
     checkOwnerReferences(executor, driverPodUid)
   }

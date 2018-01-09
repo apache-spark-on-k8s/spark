@@ -28,12 +28,9 @@ private[spark] class InitContainerMountSecretsStep(
     mountSecretsBootstrap: MountSecretsBootstrap) extends InitContainerConfigurationStep {
 
   override def configureInitContainer(initContainerSpec: InitContainerSpec) : InitContainerSpec = {
-    val (podWithSecretsMounted, initContainerWithSecretsMounted) =
-      mountSecretsBootstrap.mountSecrets(
-        initContainerSpec.podToInitialize,
-        initContainerSpec.initContainer)
+    val initContainerWithSecretsMounted =
+      mountSecretsBootstrap.mountSecrets(initContainerSpec.initContainer)
     initContainerSpec.copy(
-      podToInitialize = podWithSecretsMounted,
       initContainer = initContainerWithSecretsMounted
     )
   }

@@ -256,13 +256,13 @@ private[spark] class ExecutorPodFactoryImpl(
               podWithDetachedInitContainer.initContainer)
         }.getOrElse(podWithDetachedInitContainer.initContainer)
 
-        val (mayBePodWithSecretsMountedToInitContainer, mayBeInitContainerWithSecretsMounted) =
+        val mayBeInitContainerWithSecretsMounted =
           executorInitContainerMountSecretsBootstrap.map { bootstrap =>
-            bootstrap.mountSecrets(podWithDetachedInitContainer.pod, resolvedInitContainer)
-        }.getOrElse(podWithDetachedInitContainer.pod, resolvedInitContainer)
+            bootstrap.mountSecrets(resolvedInitContainer)
+          }.getOrElse(resolvedInitContainer)
 
         val podWithAttachedInitContainer = InitContainerUtil.appendInitContainer(
-          mayBePodWithSecretsMountedToInitContainer, mayBeInitContainerWithSecretsMounted)
+          podWithDetachedInitContainer.pod, mayBeInitContainerWithSecretsMounted)
 
         val resolvedPodWithMountedSecret = executorMountInitContainerSecretPlugin.map { plugin =>
           plugin.addResourceStagingServerSecretVolumeToPod(podWithAttachedInitContainer)
