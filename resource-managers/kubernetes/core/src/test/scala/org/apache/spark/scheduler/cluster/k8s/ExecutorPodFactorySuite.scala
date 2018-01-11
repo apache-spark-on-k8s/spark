@@ -25,23 +25,22 @@ import com.google.common.base.Charsets
 import com.google.common.io.Files
 import io.fabric8.kubernetes.api.model.{Pod, PodBuilder, VolumeBuilder, VolumeMountBuilder}
 import io.fabric8.kubernetes.api.model.KeyToPathBuilder
-import io.fabric8.kubernetes.client.KubernetesClient
 import org.mockito.{AdditionalAnswers, Mock, Mockito, MockitoAnnotations}
 import org.mockito.Matchers.any
 import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.k8s.{HadoopConfBootstrapImpl, HadoopConfSparkUserBootstrapImpl, HadoopUGIUtilImpl, KerberosTokenConfBootstrapImpl, PodWithDetachedInitContainer, SparkPodInitContainerBootstrap}
+import org.apache.spark.deploy.k8s._
 import org.apache.spark.deploy.k8s.config._
 import org.apache.spark.deploy.k8s.constants._
-import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrap, MountSmallFilesBootstrap, MountSmallFilesBootstrapImpl}
+import org.apache.spark.deploy.k8s.submit.{MountSecretsBootstrap, MountSmallFilesBootstrapImpl}
 import org.apache.spark.util.Utils
 
 class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with BeforeAndAfterEach {
+
   private val driverPodName: String = "driver-pod"
   private val driverPodUid: String = "driver-uid"
-  private val driverUrl: String = "driver-url"
   private val executorPrefix: String = "base"
   private val executorImage: String = "executor-image"
   private val driverPod = new PodBuilder()
@@ -78,7 +77,6 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       any(classOf[Map[String, Int]]))).thenAnswer(AdditionalAnswers.returnsFirstArg())
     when(executorLocalDirVolumeProvider.getExecutorLocalDirVolumesWithMounts).thenReturn(Seq.empty)
   }
-  private var kubernetesClient: KubernetesClient = _
 
   test("basic executor pod has reasonable defaults") {
     val factory = new ExecutorPodFactoryImpl(
@@ -221,7 +219,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     val factory = new ExecutorPodFactoryImpl(
       conf,
       nodeAffinityExecutorPodModifier,
-      None,
+      Some(secretsBootstrap),
       None,
       Some(initContainerBootstrap),
       Some(secretsBootstrap),
@@ -236,6 +234,10 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     verify(nodeAffinityExecutorPodModifier, times(1))
       .addNodeAffinityAnnotationIfUseful(any(classOf[Pod]), any(classOf[Map[String, Int]]))
 
+    assert(executor.getSpec.getVolumes.size() === 1)
+    assert(SecretVolumeUtils.podHasVolume(executor, "secret1-volume"))
+    assert(SecretVolumeUtils.containerHasVolume(
+      executor.getSpec.getContainers.get(0), "secret1-volume", "/var/secret1"))
     assert(executor.getSpec.getInitContainers.size() === 1)
     assert(executor.getSpec.getInitContainers.get(0).getVolumeMounts.get(0).getName
       === "secret1-volume")
@@ -486,7 +488,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
       ENV_EXECUTOR_PORT -> "10000") ++ additionalEnvVars
 
     assert(executor.getSpec.getContainers.size() === 1)
-    assert(executor.getSpec.getContainers.get(0).getEnv().size() === defaultEnvs.size)
+    assert(executor.getSpec.getContainers.get(0).getEnv.size() === defaultEnvs.size)
     val mapEnvs = executor.getSpec.getContainers.get(0).getEnv.asScala.map {
       x => (x.getName, x.getValue)
     }.toMap
