@@ -539,6 +539,13 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_HADOOP_CONF_CONFIGMAP_NAME =
+    ConfigBuilder("spark.kubernetes.hadoop.conf.configmap.name")
+      .doc("Specify the configmap name of the config where the hadoop conf exist." +
+        "It will be mounted to spark pods.")
+      .stringConf
+      .createOptional
+
   private[spark] def resolveK8sMaster(rawMasterString: String): String = {
     if (!rawMasterString.startsWith("k8s://")) {
       throw new IllegalArgumentException("Master URL should start with k8s:// in Kubernetes mode.")

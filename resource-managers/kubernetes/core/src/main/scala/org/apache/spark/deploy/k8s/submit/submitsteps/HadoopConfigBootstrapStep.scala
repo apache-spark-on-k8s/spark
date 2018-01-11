@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s.submit.submitsteps
 
 import scala.collection.JavaConverters._
 
-import io.fabric8.kubernetes.api.model.ConfigMapBuilder
+import io.fabric8.kubernetes.api.model.{ConfigMapBuilder, HasMetadata}
 
 import org.apache.spark.deploy.k8s.constants._
 import org.apache.spark.deploy.k8s.submit.submitsteps.hadoopsteps.{HadoopConfigSpec, HadoopConfigurationStep}
@@ -31,7 +31,8 @@ import org.apache.spark.deploy.k8s.submit.submitsteps.hadoopsteps.{HadoopConfigS
   */
 private[spark] class HadoopConfigBootstrapStep(
   hadoopConfigurationSteps: Seq[HadoopConfigurationStep],
-  hadoopConfigMapName: String )
+  hadoopConfigMapName: String,
+  noNeedUploadHadoopConf: Boolean = false)
   extends DriverConfigurationStep {
 
   override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {
@@ -46,13 +47,16 @@ private[spark] class HadoopConfigBootstrapStep(
     for (nextStep <- hadoopConfigurationSteps) {
       currentHadoopSpec = nextStep.configureContainers(currentHadoopSpec)
     }
-    val configMap =
-      new ConfigMapBuilder()
+    val configMap = if (noNeedUploadHadoopConf) {
+      Option.empty[HasMetadata]
+    } else {
+      Some(new ConfigMapBuilder()
         .withNewMetadata()
-          .withName(hadoopConfigMapName)
-          .endMetadata()
+        .withName(hadoopConfigMapName)
+        .endMetadata()
         .addToData(currentHadoopSpec.configMapProperties.asJava)
-      .build()
+        .build())
+    }
     val driverSparkConfWithExecutorSetup = driverSpec.driverSparkConf.clone()
       .set(HADOOP_CONFIG_MAP_SPARK_CONF_NAME, hadoopConfigMapName)
       .setAll(currentHadoopSpec.additionalDriverSparkConf)
@@ -62,7 +66,7 @@ private[spark] class HadoopConfigBootstrapStep(
       driverSparkConf = driverSparkConfWithExecutorSetup,
       otherKubernetesResources =
         driverSpec.otherKubernetesResources ++
-        Seq(configMap) ++ currentHadoopSpec.dtSecret.toSeq
+        configMap.toSeq ++ currentHadoopSpec.dtSecret.toSeq
       )
   }
 }

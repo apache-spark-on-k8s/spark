@@ -34,7 +34,6 @@ import org.apache.spark.util.Utils
 private[spark] class HadoopConfBootstrapSuite extends SparkFunSuite with BeforeAndAfter{
   private val CONFIG_MAP_NAME = "config-map"
   private val TEMP_HADOOP_FILE = createTempFile("core-site.xml")
-  private val HADOOP_FILES = Seq(TEMP_HADOOP_FILE)
   private val SPARK_USER_VALUE = "sparkUser"
 
   before {
@@ -42,21 +41,13 @@ private[spark] class HadoopConfBootstrapSuite extends SparkFunSuite with BeforeA
   }
 
   test("Test of bootstrapping hadoop_conf_dir files") {
-    val hadoopConfStep = new HadoopConfBootstrapImpl(
-      CONFIG_MAP_NAME,
-      HADOOP_FILES)
-    val expectedKeyPaths = Seq(
-      new KeyToPathBuilder()
-        .withKey(TEMP_HADOOP_FILE.toPath.getFileName.toString)
-        .withPath(TEMP_HADOOP_FILE.toPath.getFileName.toString)
-        .build())
+    val hadoopConfStep = new HadoopConfBootstrapImpl(CONFIG_MAP_NAME)
     val expectedPod = new PodBuilder()
       .editOrNewSpec()
           .addNewVolume()
             .withName(HADOOP_FILE_VOLUME)
             .withNewConfigMap()
               .withName(CONFIG_MAP_NAME)
-              .withItems(expectedKeyPaths.asJava)
               .endConfigMap()
             .endVolume()
           .endSpec()

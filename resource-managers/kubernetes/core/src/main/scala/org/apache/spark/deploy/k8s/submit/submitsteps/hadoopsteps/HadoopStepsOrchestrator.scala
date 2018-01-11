@@ -32,7 +32,8 @@ private[spark] class HadoopStepsOrchestrator(
    namespace: String,
    hadoopConfigMapName: String,
    submissionSparkConf: SparkConf,
-   hadoopConfDir: String) extends Logging {
+   hadoopConfDir: Option[String],
+   noNeedUploadHadoopConf: Boolean = false) extends Logging {
 
    private val isKerberosEnabled = submissionSparkConf.get(KUBERNETES_KERBEROS_SUPPORT)
    private val maybePrincipal = submissionSparkConf.get(KUBERNETES_KERBEROS_PRINCIPAL)
@@ -43,7 +44,8 @@ private[spark] class HadoopStepsOrchestrator(
      submissionSparkConf.get(KUBERNETES_KERBEROS_DT_SECRET_ITEM_KEY)
    private val maybeRenewerPrincipal =
      submissionSparkConf.get(KUBERNETES_KERBEROS_RENEWER_PRINCIPAL)
-   private val hadoopConfigurationFiles = HadoopConfUtils.getHadoopConfFiles(hadoopConfDir)
+   private val hadoopConfigurationFiles = hadoopConfDir.map(HadoopConfUtils.getHadoopConfFiles)
+     .getOrElse(Seq.empty[File])
    private val hadoopUGI = new HadoopUGIUtilImpl
    logInfo(s"Hadoop Conf directory: $hadoopConfDir")
 
@@ -68,14 +70,13 @@ private[spark] class HadoopStepsOrchestrator(
        " you must also specify the name of the secret")
 
   def getHadoopSteps(): Seq[HadoopConfigurationStep] = {
-    val hadoopConfBootstrapImpl = new HadoopConfBootstrapImpl(
-      hadoopConfigMapName,
-      hadoopConfigurationFiles)
+    val hadoopConfBootstrapImpl = new HadoopConfBootstrapImpl(hadoopConfigMapName)
     val hadoopConfMounterStep = new HadoopConfMounterStep(
       hadoopConfigMapName,
       hadoopConfigurationFiles,
       hadoopConfBootstrapImpl,
-      hadoopConfDir)
+      hadoopConfDir,
+      noNeedUploadHadoopConf)
     val maybeKerberosStep =
       if (isKerberosEnabled) {
         maybeExistingSecret.map(existingSecretName => Some(new HadoopKerberosSecretResolverStep(

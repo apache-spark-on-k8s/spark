@@ -39,25 +39,18 @@ private[spark] trait HadoopConfBootstrap {
 }
 
 private[spark] class HadoopConfBootstrapImpl(
-  hadoopConfConfigMapName: String,
-  hadoopConfigFiles: Seq[File]) extends HadoopConfBootstrap with Logging {
+  hadoopConfConfigMapName: String) extends HadoopConfBootstrap with Logging {
 
   override def bootstrapMainContainerAndVolumes(originalPodWithMainContainer: PodWithMainContainer)
     : PodWithMainContainer = {
-    logInfo("HADOOP_CONF_DIR defined. Mounting Hadoop specific files")
-    val keyPaths = hadoopConfigFiles.map { file =>
-      val fileStringPath = file.toPath.getFileName.toString
-      new KeyToPathBuilder()
-        .withKey(fileStringPath)
-        .withPath(fileStringPath)
-      .build() }
+    logInfo("HADOOP_CONF_DIR or spark.kubernetes.hadoop.conf.configmap.name defined. " +
+      "Mounting Hadoop specific files")
     val hadoopSupportedPod = new PodBuilder(originalPodWithMainContainer.pod)
       .editSpec()
         .addNewVolume()
           .withName(HADOOP_FILE_VOLUME)
           .withNewConfigMap()
             .withName(hadoopConfConfigMapName)
-            .withItems(keyPaths.asJava)
             .endConfigMap()
           .endVolume()
         .endSpec()

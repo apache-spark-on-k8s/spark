@@ -838,6 +838,15 @@ from the other deployment modes. See the [configuration page](configuration.html
     in the executor Pods. The user can specify multiple instances of this for multiple secrets.
   </td>
 </tr>
+<tr>
+  <td><code>spark.kubernetes.hadoop.conf.configmap.name</code></td>
+  <td>(none)</td>
+  <td>
+    If this is specified, will not create new configmap to store hadoop conf file and reuse the
+    exist configmap. The configmap will be mounted into driver/executor pod and
+    <code>HADOOP_CONF_DIR</code> will be set.
+  </td>
+</tr>
 </table>
 
 
