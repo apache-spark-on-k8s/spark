@@ -51,7 +51,23 @@ class Checkpoint(ssc: StreamingContext, val checkpointTime: Time)
       "spark.yarn.app.id",
       "spark.yarn.app.attemptId",
       "spark.driver.host",
+      "spark.driver.bindAddress",
       "spark.driver.port",
+      "spark.kubernetes.driver.pod.name",
+      "spark.kubernetes.executor.podNamePrefix",
+      "spark.kubernetes.initcontainer.executor.configmapname",
+      "spark.kubernetes.initcontainer.executor.configmapkey",
+      "spark.kubernetes.initcontainer.downloadJarsResourceIdentifier",
+      "spark.kubernetes.initcontainer.downloadJarsSecretLocation",
+      "spark.kubernetes.initcontainer.downloadFilesResourceIdentifier",
+      "spark.kubernetes.initcontainer.downloadFilesSecretLocation",
+      "spark.kubernetes.initcontainer.remoteJars",
+      "spark.kubernetes.initcontainer.remoteFiles",
+      "spark.kubernetes.mountdependencies.jarsDownloadDir",
+      "spark.kubernetes.mountdependencies.filesDownloadDir",
+      "spark.kubernetes.initcontainer.executor.stagingServerSecret.name",
+      "spark.kubernetes.initcontainer.executor.stagingServerSecret.mountDir",
+      "spark.kubernetes.executor.limit.cores",
       "spark.master",
       "spark.yarn.keytab",
       "spark.yarn.principal",
@@ -62,6 +78,8 @@ class Checkpoint(ssc: StreamingContext, val checkpointTime: Time)
 
     val newSparkConf = new SparkConf(loadDefaults = false).setAll(sparkConfPairs)
       .remove("spark.driver.host")
+      .remove("spark.driver.bindAddress")
+      .remove("spark.kubernetes.driver.pod.name")
       .remove("spark.driver.port")
     val newReloadConf = new SparkConf(loadDefaults = true)
     propertiesToReload.foreach { prop =>
