@@ -29,6 +29,7 @@ RUN apk add --no-cache R R-dev
 ENV R_HOME /usr/lib/R
 
 CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/*" && \
+    source "${SPARK_HOME}/bin/load-spark-env.sh" && \
     env | grep SPARK_JAVA_OPT_ | sed 's/[^=]*=\(.*\)/\1/g' > /tmp/java_opts.txt && \
     readarray -t SPARK_EXECUTOR_JAVA_OPTS < /tmp/java_opts.txt && \
     if ! [ -z ${SPARK_MOUNTED_CLASSPATH}+x} ]; then SPARK_CLASSPATH="$SPARK_MOUNTED_CLASSPATH:$SPARK_CLASSPATH"; fi && \
