@@ -5,5 +5,9 @@ Please consider whether your issue can be submitted against the Apache Spark pro
 and submit there as an Apache Spark JRIA, if possible.
 
 If you have any questions about whether an issue should be submitted upstream or against this fork,
-please feel free to ask on the Big Data SIG [slack channel](https://kubernetes.slack.com/),
-or at the regular Big Data SIG [meetings](https://github.com/kubernetes/community/tree/master/sig-big-data).
+please feel free to reach out on the following channels:
+
+* Apache Spark developer mailing list: dev@spark.apache.org
+* Apache Spark [JIRA](https://issues.apache.org/jira/)
+* Big Data SIG [slack channel](https://kubernetes.slack.com/)
+* Regular Big Data SIG [meetings](https://github.com/kubernetes/community/tree/master/sig-big-data)
