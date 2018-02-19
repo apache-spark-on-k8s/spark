@@ -154,6 +154,16 @@ private[spark] class Client(
       if (waitForAppCompletion) {
         logInfo(s"Waiting for application $appName to finish...")
         loggingPodStatusWatcher.awaitCompletion()
+        try {
+          // When the submission client sees that the application finished, it deletes all
+          // Kubernetes resources the application depends on instead of relying on Kubernetes
+          // garbage collection to kick in on the resources, which only happens when the driver
+          // pod gets explicitly deleted.
+          val otherKubernetesResources = currentDriverSpec.otherKubernetesResources
+          kubernetesClient.resourceList(otherKubernetesResources: _*).delete()
+        } catch {
+          case e: Throwable => logWarning("Failed to clean up Kubernetes resources", e)
+        }
         logInfo(s"Application $appName finished.")
       } else {
         logInfo(s"Deployed Spark application $appName into Kubernetes.")
