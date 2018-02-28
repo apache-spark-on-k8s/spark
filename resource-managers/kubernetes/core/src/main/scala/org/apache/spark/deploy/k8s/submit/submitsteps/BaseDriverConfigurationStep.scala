@@ -96,10 +96,23 @@ private[spark] class BaseDriverConfigurationStep(
     val maybeCpuLimitQuantity = driverLimitCores.map { limitCores =>
       ("cpu", new QuantityBuilder(false).withAmount(limitCores).build())
     }
+    val driverPort = submissionSparkConf.getInt("spark.driver.port", DEFAULT_DRIVER_PORT)
+    val driverBlockManagerPort = submissionSparkConf.getInt(
+        org.apache.spark.internal.config.DRIVER_BLOCK_MANAGER_PORT.key, DEFAULT_BLOCKMANAGER_PORT)
     val driverContainer = new ContainerBuilder(driverSpec.driverContainer)
       .withName(DRIVER_CONTAINER_NAME)
       .withImage(driverDockerImage)
       .withImagePullPolicy(dockerImagePullPolicy)
+      .addNewPort()
+        .withName(DRIVER_PORT_NAME)
+        .withContainerPort(driverPort)
+        .withProtocol("TCP")
+        .endPort()
+      .addNewPort()
+        .withName(BLOCK_MANAGER_PORT_NAME)
+        .withContainerPort(driverBlockManagerPort)
+        .withProtocol("TCP")
+        .endPort()
       .addAllToEnv(driverCustomEnvs.asJava)
       .addToEnv(driverExtraClasspathEnv.toSeq: _*)
       .addNewEnv()
