@@ -100,6 +100,7 @@ private[spark] class HadoopKerberosKeytabResolverStep(
       val initialTokenDataKeyName = s"$KERBEROS_SECRET_LABEL_PREFIX-$currentTime-$renewalInterval"
       val uniqueSecretName =
         s"$kubernetesResourceNamePrefix-$KERBEROS_DELEGEGATION_TOKEN_SECRET_NAME.$currentTime"
+        .toLowerCase
       val secretDT =
         new SecretBuilder()
           .withNewMetadata()
