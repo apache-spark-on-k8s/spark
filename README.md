@@ -1,3 +1,9 @@
+**DEPRECATED**. Work on this fork is discontinued. Further development is continuing on the mainline implementation of Apache Spark: https://github.com/apache/spark.
+
+You can run Spark on Kubernetes using Spark 2.3. Some features from this work need to be ported to mainline. If a feature is missing, please check https://issues.apache.org/jira/projects/SPARK/issues to see if we're tracking that work, and if we are not, please file a JIRA ticket indicating the missing behavior.
+
+All other bugs and feature requests should either be proposed through JIRA or sent to dev@spark.apache.org or user@spark.apache.org.
+
 # Apache Spark On Kubernetes
 
 This repository, located at https://github.com/apache-spark-on-k8s/spark, contains a fork of Apache Spark that enables running Spark jobs natively on a Kubernetes cluster.
