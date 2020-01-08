@@ -1,3 +1,5 @@
+**ARCHIVED** This repository is being archived, to prevent any future confusion: All development on the Kubernetes scheduler back-end for Apache Spark is now upstream at https://spark.apache.org/ and https://github.com/apache/spark/
+
 **DEPRECATED**. Work on this fork is discontinued. Further development is continuing on the mainline implementation of Apache Spark: https://github.com/apache/spark.
 
 You can run Spark on Kubernetes using Spark 2.3. Some features from this work need to be ported to mainline. If a feature is missing, please check https://issues.apache.org/jira/projects/SPARK/issues to see if we're tracking that work, and if we are not, please file a JIRA ticket indicating the missing behavior.
