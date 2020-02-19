@@ -35,7 +35,8 @@ private[spark] class HadoopConfMounterStep(
     hadoopConfigMapName: String,
     hadoopConfigurationFiles: Seq[File],
     hadoopConfBootstrapConf: HadoopConfBootstrap,
-    hadoopConfDir: String)
+    hadoopConfDir: Option[String],
+    noNeedUploadHadoopConf: Boolean = false)
   extends HadoopConfigurationStep {
 
    override def configureContainers(hadoopConfigSpec: HadoopConfigSpec): HadoopConfigSpec = {
@@ -48,10 +49,11 @@ private[spark] class HadoopConfMounterStep(
        driverPod = bootstrappedPodAndMainContainer.pod,
        driverContainer = bootstrappedPodAndMainContainer.mainContainer,
        configMapProperties =
-         hadoopConfigurationFiles.map(file =>
+         hadoopConfigurationFiles.filter(_ => !noNeedUploadHadoopConf).map(file =>
            (file.toPath.getFileName.toString, Files.toString(file, Charsets.UTF_8))).toMap,
-       additionalDriverSparkConf = hadoopConfigSpec.additionalDriverSparkConf ++
-        Map(HADOOP_CONF_DIR_LOC -> hadoopConfDir)
+       additionalDriverSparkConf = hadoopConfDir.filter(_ => !noNeedUploadHadoopConf)
+         .foldLeft(hadoopConfigSpec.additionalDriverSparkConf)((sparkConf, conf) =>
+           sparkConf ++ Map(HADOOP_CONF_DIR_LOC -> conf))
      )
   }
 }

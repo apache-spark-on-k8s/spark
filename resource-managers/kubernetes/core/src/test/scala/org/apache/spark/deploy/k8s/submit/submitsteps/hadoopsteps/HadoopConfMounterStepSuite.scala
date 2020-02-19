@@ -73,7 +73,7 @@ private[spark] class HadoopConfMounterStepSuite extends SparkFunSuite with Befor
       CONFIG_MAP_NAME,
       HADOOP_FILES,
       hadoopConfBootstrap,
-      HADOOP_CONF_DIR_VAL)
+      Some(HADOOP_CONF_DIR_VAL))
     val expectedDriverSparkConf = Map(HADOOP_CONF_DIR_LOC -> HADOOP_CONF_DIR_VAL)
     val expectedConfigMap = Map(
       TEMP_HADOOP_FILE.toPath.getFileName.toString ->

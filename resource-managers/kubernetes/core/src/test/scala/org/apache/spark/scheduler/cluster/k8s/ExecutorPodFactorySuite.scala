@@ -349,11 +349,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     when(hadoopUGI.getShortUserName).thenReturn("test-user")
     val conf = baseConf.clone()
     val configName = "hadoop-test"
-    val hadoopFile = createTempFile
-    val hadoopFiles = Seq(hadoopFile)
-    val hadoopBootsrap = new HadoopConfBootstrapImpl(
-      hadoopConfConfigMapName = configName,
-      hadoopConfigFiles = hadoopFiles)
+    val hadoopBootsrap = new HadoopConfBootstrapImpl(configName)
 
     val factory = new ExecutorPodFactoryImpl(
       conf,
@@ -376,8 +372,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     checkOwnerReferences(executor, driverPodUid)
     checkConfigMapVolumes(executor,
       HADOOP_FILE_VOLUME,
-      configName,
-      hadoopFile.toPath.getFileName.toString)
+      configName)
     checkVolumeMounts(executor, HADOOP_FILE_VOLUME, HADOOP_CONF_DIR_PATH)
   }
 
@@ -385,11 +380,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     when(hadoopUGI.getShortUserName).thenReturn("test-user")
     val conf = baseConf.clone()
     val configName = "hadoop-test"
-    val hadoopFile = createTempFile
-    val hadoopFiles = Seq(hadoopFile)
-    val hadoopBootstrap = new HadoopConfBootstrapImpl(
-      hadoopConfConfigMapName = configName,
-      hadoopConfigFiles = hadoopFiles)
+    val hadoopBootstrap = new HadoopConfBootstrapImpl(configName)
     val hadoopUserBootstrap = new HadoopConfSparkUserBootstrapImpl(hadoopUGI)
 
     val factory = new ExecutorPodFactoryImpl(
@@ -414,8 +405,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     checkOwnerReferences(executor, driverPodUid)
     checkConfigMapVolumes(executor,
       HADOOP_FILE_VOLUME,
-      configName,
-      hadoopFile.toPath.getFileName.toString)
+      configName)
     checkVolumeMounts(executor, HADOOP_FILE_VOLUME, HADOOP_CONF_DIR_PATH)
   }
 
@@ -423,11 +413,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     when(hadoopUGI.getShortUserName).thenReturn("test-user")
     val conf = baseConf.clone()
     val configName = "hadoop-test"
-    val hadoopFile = createTempFile
-    val hadoopFiles = Seq(hadoopFile)
-    val hadoopBootstrap = new HadoopConfBootstrapImpl(
-      hadoopConfConfigMapName = configName,
-      hadoopConfigFiles = hadoopFiles)
+    val hadoopBootstrap = new HadoopConfBootstrapImpl(configName)
     val secretName = "secret-test"
     val secretItemKey = "item-test"
     val userName = "sparkUser"
@@ -459,8 +445,7 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
     checkOwnerReferences(executor, driverPodUid)
     checkConfigMapVolumes(executor,
       HADOOP_FILE_VOLUME,
-      configName,
-      hadoopFile.toPath.getFileName.toString)
+      configName)
     checkSecretVolumes(executor, SPARK_APP_HADOOP_SECRET_VOLUME_NAME, secretName)
     checkVolumeMounts(executor, HADOOP_FILE_VOLUME, HADOOP_CONF_DIR_PATH)
     checkVolumeMounts(executor,
@@ -505,15 +490,10 @@ class ExecutorPodFactorySuite extends SparkFunSuite with BeforeAndAfter with Bef
 
   private def checkConfigMapVolumes(executor: Pod,
     volName: String,
-    configMapName: String,
-    content: String) : Unit = {
+    configMapName: String) : Unit = {
     val volume = executor.getSpec.getVolumes.asScala.find(_.getName == volName)
     assert(volume.nonEmpty)
     assert(volume.get.getConfigMap.getName == configMapName)
-    assert(volume.get.getConfigMap.getItems.asScala.find(_.getKey == content).get ==
-      new KeyToPathBuilder()
-        .withKey(content)
-        .withPath(content).build() )
   }
 
   private def checkSecretVolumes(executor: Pod, volName: String, secretName: String) : Unit = {

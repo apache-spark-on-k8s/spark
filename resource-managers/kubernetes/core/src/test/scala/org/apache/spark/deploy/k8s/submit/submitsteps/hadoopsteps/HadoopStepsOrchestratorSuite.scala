@@ -33,7 +33,7 @@ private[spark] class HadoopStepsOrchestratorSuite extends SparkFunSuite {
       NAMESPACE,
       HADOOP_CONFIG_MAP,
       sparkTestConf,
-      HADOOP_CONF_DIR_VAL)
+      Some(HADOOP_CONF_DIR_VAL))
     val steps = hadoopOrchestrator.getHadoopSteps()
     assert(steps.length === 2)
     assert(steps.head.isInstanceOf[HadoopConfMounterStep])
@@ -50,7 +50,7 @@ private[spark] class HadoopStepsOrchestratorSuite extends SparkFunSuite {
       NAMESPACE,
       HADOOP_CONFIG_MAP,
       sparkTestConf,
-      HADOOP_CONF_DIR_VAL)
+      Some(HADOOP_CONF_DIR_VAL))
     val steps = hadoopOrchestrator.getHadoopSteps()
     assert(steps.length === 2)
     assert(steps.head.isInstanceOf[HadoopConfMounterStep])
@@ -65,7 +65,7 @@ private[spark] class HadoopStepsOrchestratorSuite extends SparkFunSuite {
       NAMESPACE,
       HADOOP_CONFIG_MAP,
       sparkTestConf,
-      HADOOP_CONF_DIR_VAL)
+      Some(HADOOP_CONF_DIR_VAL))
     val steps = hadoopOrchestrator.getHadoopSteps()
     assert(steps.length === 2)
     assert(steps.head.isInstanceOf[HadoopConfMounterStep])
@@ -82,7 +82,7 @@ private[spark] class HadoopStepsOrchestratorSuite extends SparkFunSuite {
       NAMESPACE,
       HADOOP_CONFIG_MAP,
       sparkTestConf,
-      HADOOP_CONF_DIR_VAL)
+      Some(HADOOP_CONF_DIR_VAL))
     val steps = hadoopOrchestrator.getHadoopSteps()
     assert(steps.length === 2)
     assert(steps.head.isInstanceOf[HadoopConfMounterStep])
