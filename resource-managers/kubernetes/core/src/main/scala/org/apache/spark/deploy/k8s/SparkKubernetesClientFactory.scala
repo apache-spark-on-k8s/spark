@@ -81,6 +81,18 @@ private[spark] object SparkKubernetesClientFactory {
         }.withOption(namespace) {
           (ns, configBuilder) => configBuilder.withNamespace(ns)
         }.build()
+    val connTimeoutPropertiesMs = sparkConf.get(
+        KUBERNETES_CLIENT_CONNECTION_TIMEOUT_SYSTEM_PROPERTY)
+    config.setConnectionTimeout(connTimeoutPropertiesMs.toInt)
+    val reqTimeoutPropertiesMs = sparkConf.get(
+        KUBERNETES_CLIENT_REQUEST_TIMEOUT_SYSTEM_PROPERTY)
+    config.setRequestTimeout(reqTimeoutPropertiesMs.toInt)
+    val reconnectIntervalPropertiesMs = sparkConf.get(
+        KUBERNETES_CLIENT_WATCH_RECONNECT_INTERVAL_SYSTEM_PROPERTY)
+    config.setWatchReconnectInterval(reconnectIntervalPropertiesMs.toInt)
+    val reconnectLimitProperties = sparkConf.get(
+        KUBERNETES_CLIENT_WATCH_RECONNECT_LIMIT_SYSTEM_PROPERTY)
+    config.setWatchReconnectLimit(reconnectLimitProperties)
     val baseHttpClient = HttpClientUtils.createHttpClient(config)
     val httpClientWithCustomDispatcher = baseHttpClient.newBuilder()
       .dispatcher(dispatcher)

@@ -554,4 +554,28 @@ package object config extends Logging {
       resolvedURL
     }
   }
+
+  private[spark] val KUBERNETES_CLIENT_WATCH_RECONNECT_INTERVAL_SYSTEM_PROPERTY =
+    ConfigBuilder("spark.kubernetes.client.watch.reconnectIntervalInMs")
+      .doc("Connection retry interval for kubernetes client requests.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("1s")
+
+  private[spark] val KUBERNETES_CLIENT_WATCH_RECONNECT_LIMIT_SYSTEM_PROPERTY =
+    ConfigBuilder("spark.kubernetes.client.watch.reconnectLimit")
+      .doc("Limit of times connections can be attempted for kubernetes client requests.")
+      .intConf
+      .createWithDefault(-1)
+
+  private[spark] val KUBERNETES_CLIENT_CONNECTION_TIMEOUT_SYSTEM_PROPERTY =
+    ConfigBuilder("spark.kubernetes.client.connection.timeoutInMs")
+      .doc("Connection timeout for kubernetes client requests.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
+
+  private[spark] val KUBERNETES_CLIENT_REQUEST_TIMEOUT_SYSTEM_PROPERTY =
+    ConfigBuilder("spark.kubernetes.client.request.timeoutInMs")
+      .doc("Request timeout for kubernetes client requests.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
 }
