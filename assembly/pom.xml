@@ -150,6 +150,9 @@
     </profile>
     <profile>
       <id>kubernetes</id>
+      <!-- Not including extra Kubernetes artifacts such as token-refreh-server
+           because some of them are auxiliary services that should not be part
+           of the Spark distribution -->
       <dependencies>
         <dependency>
           <groupId>org.apache.spark</groupId>

@@ -2620,6 +2620,17 @@
     </profile>
 
     <profile>
+      <!-- Extra Kubernetes modules for HDFS support. They should be built
+           regularly, but may not need to be part of the Spark distribution. -->
+      <id>kubernetes-hdfs-extra</id>
+      <modules>
+        <!-- Auxiliary service for refreshing Hadoop tokens. This should not be
+             part of the Spark distribution -->
+        <module>resource-managers/kubernetes/token-refresh-server</module>
+      </modules>
+    </profile>
+
+    <profile>
       <id>kubernetes-integration-tests</id>
       <modules>
         <module>resource-managers/kubernetes/docker-minimal-bundle</module>

@@ -1,0 +1,74 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: hadoop-token-refresh-server
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        hadoop-token-refresh-server-instance: default
+    spec:
+      serviceAccountName: YOUR-SERVICE-ACCOUNT
+      volumes:
+        - name: application-conf
+          configMap:
+            name: hadoop-token-refresh-server-application-conf
+        - name: kerberos-config
+          configMap:
+            name: hadoop-token-refresh-server-kerberos-config
+        - name: hadoop-config
+          configMap:
+            name: hadoop-token-refresh-server-hadoop-config
+        - name: kerberos-keytab
+          secret:
+            secretName: hadoop-token-refresh-server-kerberos-keytab
+      containers:
+        - name: hadoop-token-refresh-server
+          image: YOUR-REPO:YOUR-TAG
+          env:
+            - name: APPLICATION_CONF_DIR
+              value: /etc/token-refresh-server/conf
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop/conf
+            - name: TOKEN_REFRESH_SERVER_ARGS
+              value: --verbose
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 100m
+              memory: 512Mi
+          volumeMounts:
+            - name: application-conf
+              mountPath: '/etc/token-refreh-server/conf
+              readOnly: true
+            - name: hadoop-config
+              mountPath: '/etc/hadoop/conf'
+              readOnly: true
+            - name: kerberos-config
+              mountPath: '/etc/krb5.conf'
+              subPath: krb5.conf
+              readOnly: true
+            - name: kerberos-keytab
+              mountPath: '/mnt/secrets/krb5.keytab'
+              subPath: krb5.keytab
+              readOnly: true

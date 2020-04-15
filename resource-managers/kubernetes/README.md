@@ -28,17 +28,33 @@ building Spark normally. For example, to build Spark against Hadoop 2.7 and Kube
 
     dev/make-distribution.sh --tgz -Phadoop-2.7 -Pkubernetes
 
-# Kubernetes Code Modules
+# Kubernetes Modules
 
 Below is a list of the submodules for this cluster manager and what they do.
 
 * `core`: Implementation of the Kubernetes cluster manager support.
+* `token-refresh-server`: Extra Kubernetes service that refreshes Hadoop
+  tokens for long-running Spark jobs that access secure data sources like
+  Kerberized HDFS.
 * `integration-tests`: Integration tests for the project.
 * `docker-minimal-bundle`: Base Dockerfiles for the driver and the executors. The Dockerfiles are used for integration
   tests as well as being provided in packaged distributions of Spark.
 * `integration-tests-spark-jobs`: Spark jobs that are only used in integration tests.
 * `integration-tests-spark-jobs-helpers`: Dependencies for the spark jobs used in integration tests. These dependencies
   are separated out to facilitate testing the shipping of jars to drivers running on Kubernetes clusters.
+
+# Building Extra Submodules for Spark with Kubernetes
+
+There are non-core extra submodules such as token-refresh-server. To build
+those, use the `kubernetes-*-extra` profiles like `kubernetes-hdfs-extra`
+when invoking Maven. For example, to build the token-refresh-server submodule:
+
+    build/mvn package -Pkubernetes-hdfs-extra  \
+        -pl resource-managers/kubernetes/token-refresh-server -am
+
+Some of these submodules are helper Kubernetes services. They need not be part
+of the Spark distribution. The distribution build script will not include
+artifacts from these submodules.
 
 # Running the Kubernetes Integration Tests
 
@@ -64,7 +80,7 @@ build/mvn integration-test \
     -pl resource-managers/kubernetes/integration-tests -am
 ```
 
-# Running against an arbitrary cluster
+## Running against an arbitrary cluster
 
 In order to run against any cluster, use the following:
 ```sh
@@ -74,7 +90,7 @@ build/mvn integration-test \
     -DextraScalaTestArgs="-Dspark.kubernetes.test.master=k8s://https://<master> -Dspark.docker.test.driverImage=<driver-image> -Dspark.docker.test.executorImage=<executor-image>"
 ```
 
-# Preserve the Minikube VM
+## Preserve the Minikube VM
 
 The integration tests make use of [Minikube](https://github.com/kubernetes/minikube), which fires up a virtual machine
 and setup a single-node kubernetes cluster within it. By default the vm is destroyed after the tests are finished.
