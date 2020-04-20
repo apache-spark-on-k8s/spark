@@ -339,6 +339,21 @@ private[spark] class KubernetesClusterSchedulerBackend(
         val clusterNodeName = pod.getSpec.getNodeName
         logDebug(s"Executor pod $pod ready, launched at $clusterNodeName as IP $podIP.")
           executorPodsByIPs.put(podIP, pod)
+      } else if (action == Action.MODIFIED && pod.getStatus.getPhase == "Failed"
+          && pod.getMetadata.getDeletionTimestamp == null) {
+        val podName = pod.getMetadata.getName
+        val podIP = pod.getStatus.getPodIP
+        if (podIP != null) {
+          executorPodsByIPs.remove(podIP)
+        }
+        RUNNING_EXECUTOR_PODS_LOCK.synchronized {
+          runningPodsToExecutors.get(podName).foreach { executorId =>
+            disconnectedPodsByExecutorIdPendingRemoval.put(executorId, pod)
+            logInfo(s"executor $executorId Failed")
+          }
+        }
+        logInfo(s"Received pod $podName failed event. Reason: " + pod.getStatus.getReason)
+        handleErroredPod(pod)
       } else if ((action == Action.MODIFIED && pod.getMetadata.getDeletionTimestamp != null) ||
           action == Action.DELETED || action == Action.ERROR) {
         val podName = pod.getMetadata.getName
@@ -393,7 +408,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
               " exited from explicit termination request.")
         } else {
           val containerExitReason = containerExitStatus match {
-            case VMEM_EXCEEDED_EXIT_CODE | PMEM_EXCEEDED_EXIT_CODE =>
+            case MEM_EXCEEDED_EXIT_CODE =>
               memLimitExceededLogMessage(pod.getStatus.getReason)
             case _ =>
               // Here we can't be sure that that exit was caused by the application but this seems
@@ -474,8 +489,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
 }
 
 private object KubernetesClusterSchedulerBackend {
-  private val VMEM_EXCEEDED_EXIT_CODE = -103
-  private val PMEM_EXCEEDED_EXIT_CODE = -104
+  private val MEM_EXCEEDED_EXIT_CODE = 137
   private val UNKNOWN_EXIT_CODE = -111
   // Number of times we are allowed check for the loss reason for an executor before we give up
   // and assume the executor failed for good, and attribute it to a framework fault.
