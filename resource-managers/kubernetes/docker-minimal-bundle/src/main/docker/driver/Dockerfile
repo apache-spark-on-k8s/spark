@@ -24,6 +24,7 @@ FROM spark-base
 COPY examples /opt/spark/examples
 
 CMD SPARK_CLASSPATH="${SPARK_HOME}/jars/*" && \
+    source "${SPARK_HOME}/bin/load-spark-env.sh" && \
     env | grep SPARK_JAVA_OPT_ | sed 's/[^=]*=\(.*\)/\1/g' > /tmp/java_opts.txt && \
     readarray -t SPARK_DRIVER_JAVA_OPTS < /tmp/java_opts.txt && \
     if ! [ -z ${SPARK_MOUNTED_CLASSPATH+x} ]; then SPARK_CLASSPATH="$SPARK_MOUNTED_CLASSPATH:$SPARK_CLASSPATH"; fi && \
