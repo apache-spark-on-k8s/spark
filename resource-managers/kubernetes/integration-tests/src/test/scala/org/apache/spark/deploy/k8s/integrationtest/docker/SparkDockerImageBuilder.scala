@@ -21,16 +21,12 @@ import java.net.URI
 import java.nio.file.Paths
 
 import scala.collection.JavaConverters._
-
-import com.spotify.docker.client.{DefaultDockerClient, DockerCertificates, LoggingBuildHandler}
+import com.spotify.docker.client.{DefaultDockerClient, DockerCertificates}
 import org.apache.http.client.utils.URIBuilder
+import org.apache.spark.deploy.k8s.integrationtest.Logging
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Minutes, Seconds, Span}
-
-import org.apache.spark.internal.Logging
 import org.apache.spark.util.RedirectThread
-
-
 
 private[spark] class SparkDockerImageBuilder
   (private val dockerEnv: Map[String, String]) extends Logging{
@@ -113,10 +109,13 @@ private[spark] class SparkDockerImageBuilder
   }
 
   private def buildImage(name: String, dockerFile: String): Unit = {
+    logInfo(s"Start building docker image $name from Dockerfile $dockerFile")
     dockerClient.build(
       DOCKER_BUILD_PATH,
       name,
       dockerFile,
       new LoggingBuildHandler())
+    logInfo(s"Built $name docker image")
   }
+
 }

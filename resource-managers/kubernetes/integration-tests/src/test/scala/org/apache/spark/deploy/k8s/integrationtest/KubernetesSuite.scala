@@ -38,6 +38,13 @@ import org.apache.spark.deploy.k8s.submit.{Client, ClientArguments, JavaMainAppR
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
+/**
+  * This is a long running Suite.
+  *
+  * Console output will be empty while docker images are built.
+  *
+  * More logs is printed in ./target/integration-tests.log
+  */
 private[spark] class KubernetesSuite extends SparkFunSuite with BeforeAndAfter {
   import KubernetesSuite._
   private val testBackend = IntegrationTestBackendFactory.getTestBackend()

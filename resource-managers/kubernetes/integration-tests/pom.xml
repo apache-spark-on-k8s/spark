@@ -26,6 +26,7 @@
 
   <artifactId>spark-kubernetes-integration-tests_2.11</artifactId>
   <properties>
+    <slf4j-log4j12.version>1.7.24</slf4j-log4j12.version>
     <sbt.project.name>kubernetes-integration-tests</sbt.project.name>
   </properties>
   <packaging>jar</packaging>
@@ -41,6 +42,16 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-log4j12</artifactId>
+      <version>${slf4j-log4j12.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
