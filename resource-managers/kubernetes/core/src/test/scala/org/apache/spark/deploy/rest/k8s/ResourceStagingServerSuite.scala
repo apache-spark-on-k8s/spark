@@ -75,22 +75,43 @@ class ResourceStagingServerSuite extends SparkFunSuite with BeforeAndAfter with 
     runUploadAndDownload(SSLOptions(), serverPort)
   }
 
+  /**
+    * This test will run only if the current classpath does not contain
+    * the shaded jetty classes.
+    *
+    * If you rely on the spark-core.jar in your classpath, this test will not run.
+    *
+    * If you rely on the spark-core module (without shading), this test will be run.
+    *
+    * @see https://github.com/apache-spark-on-k8s/spark/issues/463
+    *
+    */
   test("Enable SSL on the server") {
-    val keyStoreAndTrustStore = SSLUtils.generateKeyStoreTrustStorePair(
-      ipAddress = "127.0.0.1",
-      keyStorePassword = "keyStore",
-      keyPassword = "key",
-      trustStorePassword = "trustStore")
-    val sslOptions = SSLOptions(
-      enabled = true,
-      keyStore = Some(keyStoreAndTrustStore.keyStore),
-      keyStorePassword = Some("keyStore"),
-      keyPassword = Some("key"),
-      trustStore = Some(keyStoreAndTrustStore.trustStore),
-      trustStorePassword = Some("trustStore"))
-    sslOptionsProvider.setOptions(sslOptions)
-    val serverPort = startServer()
-    runUploadAndDownload(sslOptions, serverPort)
+
+    def testEnableSslOnServer(): Unit = {
+      val keyStoreAndTrustStore = SSLUtils.generateKeyStoreTrustStorePair(
+        ipAddress = "127.0.0.1",
+        keyStorePassword = "keyStore",
+        keyPassword = "key",
+        trustStorePassword = "trustStore")
+      val sslOptions = SSLOptions(
+        enabled = true,
+        keyStore = Some(keyStoreAndTrustStore.keyStore),
+        keyStorePassword = Some("keyStore"),
+        keyPassword = Some("key"),
+        trustStore = Some(keyStoreAndTrustStore.trustStore),
+        trustStorePassword = Some("trustStore"))
+      sslOptionsProvider.setOptions(sslOptions)
+      val serverPort = startServer()
+      runUploadAndDownload(sslOptions, serverPort)
+    }
+
+    try {
+      Utils.classForName("org.spark_project.jetty.util.ssl.SslContextFactory")
+    }
+    catch {
+      case e: ClassNotFoundException => testEnableSslOnServer()
+    }
   }
 
   private def runUploadAndDownload(sslOptions: SSLOptions, serverPort: Int): Unit = {
